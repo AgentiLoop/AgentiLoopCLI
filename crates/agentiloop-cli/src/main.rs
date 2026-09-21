@@ -57,7 +57,7 @@ async fn main() -> Result<()> {
         return agent.run(&cli.prompt.join(" "), render).await;
     }
 
-    eprintln!("AgentiLoop — cwd: {}  (type /exit to quit)", cwd.display());
+    eprintln!("AgentiLoop — cwd: {}  model: {}  (/help for commands)", cwd.display(), agent.model());
     let stdin = io::stdin();
     loop {
         eprint!("\n> ");
@@ -73,9 +73,63 @@ async fn main() -> Result<()> {
         if line == "/exit" || line == "/quit" {
             break;
         }
+        if line.starts_with('/') {
+            slash_command(line, &mut agent)?;
+            continue;
+        }
         if let Err(e) = agent.run(line, render).await {
             eprintln!("error: {e:#}");
         }
+    }
+    Ok(())
+}
+
+const MODELS: &[&str] = &[
+    "claude-opus-4-1",
+    "claude-sonnet-4-5",
+    "claude-sonnet-4",
+    "claude-haiku-4-5",
+    "claude-3-5-haiku-latest",
+];
+
+fn slash_command(line: &str, agent: &mut Agent) -> Result<()> {
+    let (cmd, arg) = line.split_once(' ').map_or((line, ""), |(c, a)| (c, a.trim()));
+    match cmd {
+        "/clear" => {
+            agent.clear();
+            eprintln!("context and tool history cleared");
+        }
+        "/model" if !arg.is_empty() => {
+            agent.set_model(arg);
+            eprintln!("model: {}", agent.model());
+        }
+        "/model" => {
+            for (i, m) in MODELS.iter().enumerate() {
+                let mark = if *m == agent.model() { "*" } else { " " };
+                eprintln!("{mark} {}. {m}", i + 1);
+            }
+            eprint!("select [1-{}] or type a model id (enter to keep {}): ", MODELS.len(), agent.model());
+            io::stderr().flush()?;
+            let mut pick = String::new();
+            io::stdin().lock().read_line(&mut pick)?;
+            let pick = pick.trim();
+            if pick.is_empty() {
+                return Ok(());
+            }
+            match pick.parse::<usize>() {
+                Ok(n) if (1..=MODELS.len()).contains(&n) => agent.set_model(MODELS[n - 1]),
+                Ok(_) => {
+                    eprintln!("out of range");
+                    return Ok(());
+                }
+                Err(_) => agent.set_model(pick),
+            }
+            eprintln!("model: {}", agent.model());
+        }
+        "/help" => {
+            eprintln!("/model [id]  show picker or set model\n/clear       clear context and tool history\n/exit        quit");
+        }
+        _ => eprintln!("unknown command {cmd} (try /help)"),
     }
     Ok(())
 }

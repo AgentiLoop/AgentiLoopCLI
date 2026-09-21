@@ -59,6 +59,19 @@ impl Agent {
         Self { provider, tools, policy, config, ctx, history: Vec::new() }
     }
 
+    pub fn model(&self) -> &str {
+        &self.config.model
+    }
+
+    pub fn set_model(&mut self, model: impl Into<String>) {
+        self.config.model = model.into();
+    }
+
+    /// Drop all conversation context and tool history.
+    pub fn clear(&mut self) {
+        self.history.clear();
+    }
+
     fn tool_specs(&self) -> Vec<ToolSpec> {
         self.tools
             .iter()
