@@ -125,29 +125,30 @@ async fn slash_command(line: &str, agent: &mut Agent, provider: &AnthropicProvid
             agent.clear();
             eprintln!("context and tool history cleared");
         }
-        "/model" if !arg.is_empty() => {
-            agent.set_model(arg);
-            eprintln!("model: {}", agent.model());
-        }
         "/model" => {
             let models = fetch_models(provider).await;
-            for (i, m) in models.iter().enumerate() {
-                let mark = if m.id == agent.model() { "*" } else { " " };
-                let date = m.created_at.get(..10).unwrap_or("");
-                eprintln!("{mark} {:>2}. {:<22} {:<28} {date}", i + 1, m.display_name, m.id);
-            }
-            eprint!("select [1-{}] or type a model id (enter to keep {}): ", models.len(), agent.model());
-            io::stderr().flush()?;
-            let mut pick = String::new();
-            io::stdin().lock().read_line(&mut pick)?;
-            let pick = pick.trim();
+            // `/model 2` picks entry #2 directly; `/model <id>` sets an id.
+            let pick = if arg.is_empty() {
+                for (i, m) in models.iter().enumerate() {
+                    let mark = if m.id == agent.model() { "*" } else { " " };
+                    let date = m.created_at.get(..10).unwrap_or("");
+                    eprintln!("{mark} {:>2}. {:<22} {:<28} {date}", i + 1, m.display_name, m.id);
+                }
+                eprint!("select [1-{}] or type a model id (enter to keep {}): ", models.len(), agent.model());
+                io::stderr().flush()?;
+                let mut line = String::new();
+                io::stdin().lock().read_line(&mut line)?;
+                line.trim().to_string()
+            } else {
+                arg.to_string()
+            };
             if pick.is_empty() {
                 return Ok(());
             }
             match pick.parse::<usize>() {
                 Ok(n) if (1..=models.len()).contains(&n) => agent.set_model(models[n - 1].id.clone()),
                 Ok(_) => {
-                    eprintln!("out of range");
+                    eprintln!("out of range [1-{}]", models.len());
                     return Ok(());
                 }
                 Err(_) => agent.set_model(pick),
@@ -155,7 +156,7 @@ async fn slash_command(line: &str, agent: &mut Agent, provider: &AnthropicProvid
             eprintln!("model: {}", agent.model());
         }
         "/help" => {
-            eprintln!("/model [id]  show picker or set model\n/clear       clear context and tool history\n/exit        quit");
+            eprintln!("/model [n|id]  show picker, or pick #n / set id directly\n/clear         clear context and tool history\n/exit          quit");
         }
         _ => eprintln!("unknown command {cmd} (try /help)"),
     }
