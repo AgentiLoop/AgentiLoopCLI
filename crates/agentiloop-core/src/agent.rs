@@ -32,6 +32,9 @@ Be concise. Prefer acting over asking. When the task is complete, reply with a s
 /// Events emitted during a run so the front-end can render progress.
 #[derive(Debug, Clone)]
 pub enum AgentEvent {
+    /// A streamed chunk of assistant text, emitted as it arrives.
+    AssistantTextDelta(String),
+    /// The complete assistant text for the turn (after all deltas).
     AssistantText(String),
     ToolCall { id: String, name: String, input: serde_json::Value },
     ToolResult { id: String, name: String, output: String, is_error: bool },
@@ -86,7 +89,7 @@ impl Agent {
     /// The core agentic loop: send → if tool_use, execute tools, append results, repeat.
     pub async fn run<F>(&mut self, user_input: &str, mut on_event: F) -> anyhow::Result<()>
     where
-        F: FnMut(AgentEvent),
+        F: FnMut(AgentEvent) + Send,
     {
         self.history.push(Message::user_text(user_input));
 
@@ -99,7 +102,10 @@ impl Agent {
                 max_tokens: self.config.max_tokens,
             };
 
-            let resp = self.provider.complete(req).await?;
+            let resp = self
+                .provider
+                .complete_stream(req, &mut |delta| on_event(AgentEvent::AssistantTextDelta(delta.to_string())))
+                .await?;
             on_event(AgentEvent::TurnComplete {
                 input_tokens: resp.input_tokens,
                 output_tokens: resp.output_tokens,

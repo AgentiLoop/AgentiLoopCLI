@@ -180,7 +180,12 @@ async fn slash_command(
 
 fn render(ev: AgentEvent) {
     match ev {
-        AgentEvent::AssistantText(t) => println!("{t}"),
+        AgentEvent::AssistantTextDelta(t) => {
+            print!("{t}");
+            let _ = io::stdout().flush();
+        }
+        // Deltas already printed the text; terminate the line.
+        AgentEvent::AssistantText(_) => println!(),
         AgentEvent::ToolCall { name, input, .. } => {
             eprintln!("\u{1f527} {name} {}", compact(&input));
         }

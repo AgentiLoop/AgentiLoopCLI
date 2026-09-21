@@ -37,7 +37,7 @@ Precedence: `--model` / `AGENTILOOP_MODEL` → settings.json → `claude-sonnet-
 
 ## Roadmap
 
-- [ ] Streaming (SSE) responses
+- [x] Streaming (SSE) responses
 - [ ] OpenAI-compatible provider
 - [ ] Context compaction when nearing the window limit
 - [ ] Session persistence / resume

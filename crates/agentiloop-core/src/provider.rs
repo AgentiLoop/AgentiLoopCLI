@@ -33,4 +33,20 @@ pub struct ProviderResponse {
 pub trait Provider: Send + Sync {
     fn name(&self) -> &str;
     async fn complete(&self, req: ProviderRequest) -> anyhow::Result<ProviderResponse>;
+
+    /// Streaming variant: text deltas are delivered through `on_text` as they
+    /// arrive; the assembled response is returned once the stream ends.
+    /// Default falls back to `complete` and emits the full text as one delta.
+    async fn complete_stream(
+        &self,
+        req: ProviderRequest,
+        on_text: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    ) -> anyhow::Result<ProviderResponse> {
+        let resp = self.complete(req).await?;
+        let text = resp.message.text();
+        if !text.is_empty() {
+            on_text(&text);
+        }
+        Ok(resp)
+    }
 }
