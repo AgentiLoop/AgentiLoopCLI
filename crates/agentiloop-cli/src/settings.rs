@@ -13,12 +13,20 @@ pub struct Settings {
     pub model: Option<String>,
 }
 
+fn home() -> Option<PathBuf> {
+    match std::env::var_os("AGENTILOOP_HOME") {
+        Some(h) => Some(PathBuf::from(h)),
+        None => Some(dirs::home_dir()?.join(".agentiloop")),
+    }
+}
+
 pub fn path() -> Option<PathBuf> {
-    let home = match std::env::var_os("AGENTILOOP_HOME") {
-        Some(h) => PathBuf::from(h),
-        None => dirs::home_dir()?.join(".agentiloop"),
-    };
-    Some(home.join("settings.json"))
+    Some(home()?.join("settings.json"))
+}
+
+/// REPL prompt history (one entry per line), used for up/down arrow recall.
+pub fn history_path() -> Option<PathBuf> {
+    Some(home()?.join("history.txt"))
 }
 
 pub fn load() -> Settings {

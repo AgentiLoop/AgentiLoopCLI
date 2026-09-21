@@ -8,6 +8,7 @@ use agentiloop_core::{Agent, AgentConfig, AgentEvent, ToolContext};
 use agentiloop_provider::{AnthropicProvider, ModelInfo};
 use anyhow::Result;
 use clap::Parser;
+use rustyline::error::ReadlineError;
 
 const DEFAULT_MODEL: &str = "claude-sonnet-5";
 
@@ -64,18 +65,23 @@ async fn main() -> Result<()> {
     }
 
     eprintln!("AgentiLoop — cwd: {}  model: {}  (/help for commands)", cwd.display(), agent.model());
-    let stdin = io::stdin();
+    // rustyline gives us line editing plus up/down arrow recall of earlier prompts.
+    let mut rl = rustyline::DefaultEditor::new()?;
+    let history = settings::history_path();
+    if let Some(p) = &history {
+        let _ = rl.load_history(p); // missing on first run
+    }
     loop {
-        eprint!("\n> ");
-        io::stderr().flush()?;
-        let mut line = String::new();
-        if stdin.lock().read_line(&mut line)? == 0 {
-            break;
-        }
+        let line = match rl.readline("\n> ") {
+            Ok(l) => l,
+            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break,
+            Err(e) => return Err(e.into()),
+        };
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
+        let _ = rl.add_history_entry(line);
         if line == "/exit" || line == "/quit" {
             break;
         }
@@ -85,6 +91,14 @@ async fn main() -> Result<()> {
         }
         if let Err(e) = agent.run(line, render).await {
             eprintln!("error: {e:#}");
+        }
+    }
+    if let Some(p) = &history {
+        if let Some(dir) = p.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if let Err(e) = rl.save_history(p) {
+            eprintln!("warning: could not save history: {e}");
         }
     }
     Ok(())
