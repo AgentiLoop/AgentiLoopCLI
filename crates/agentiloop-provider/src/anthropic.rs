@@ -6,36 +6,62 @@ use serde_json::Value;
 
 const DEFAULT_BASE_URL: &str = "https://api.anthropic.com";
 const API_VERSION: &str = "2023-06-01";
+const OAUTH_PREFIX: &str = "sk-ant-oat01-";
+const OAUTH_BETA: &str = "oauth-2025-04-20,prompt-caching-2024-07-31";
+/// OAuth tokens (from `claude setup-token`) are gated at the API to requests
+/// whose first system block is exactly this string.
+const CLAUDE_CODE_IDENTITY: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
 
 pub struct AnthropicProvider {
     client: reqwest::Client,
-    api_key: String,
+    credential: String,
     base_url: String,
 }
 
 impl AnthropicProvider {
-    pub fn new(api_key: impl Into<String>) -> Self {
+    /// Accepts either a standard API key (`sk-ant-api…`) or a Claude Code
+    /// OAuth token (`sk-ant-oat01-…`); the auth scheme is chosen automatically.
+    pub fn new(credential: impl Into<String>) -> Self {
         Self {
             client: reqwest::Client::new(),
-            api_key: api_key.into(),
+            credential: sanitize(&credential.into()),
             base_url: std::env::var("ANTHROPIC_BASE_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.into()),
         }
     }
 
+    /// Reads `ANTHROPIC_API_KEY` (API key or OAuth token), falling back to `ANTHROPIC_OAUTH_TOKEN`.
     pub fn from_env() -> anyhow::Result<Self> {
-        let key = std::env::var("ANTHROPIC_API_KEY").context("ANTHROPIC_API_KEY is not set")?;
+        let key = std::env::var("ANTHROPIC_API_KEY")
+            .or_else(|_| std::env::var("ANTHROPIC_OAUTH_TOKEN"))
+            .context("ANTHROPIC_API_KEY is not set (API key or sk-ant-oat01- OAuth token)")?;
         Ok(Self::new(key))
     }
+
+    pub fn is_oauth(&self) -> bool {
+        self.credential.starts_with(OAUTH_PREFIX)
+    }
+}
+
+/// Strip whitespace/control chars a terminal paste may have wrapped into the token.
+fn sanitize(raw: &str) -> String {
+    raw.chars().filter(|c| !c.is_whitespace() && !c.is_control()).collect()
 }
 
 #[derive(Serialize)]
 struct WireRequest<'a> {
     model: &'a str,
     max_tokens: u32,
-    system: &'a str,
+    system: Vec<WireSystem<'a>>,
     messages: &'a [Message],
     #[serde(skip_serializing_if = "Vec::is_empty")]
     tools: Vec<WireTool<'a>>,
+}
+
+#[derive(Serialize)]
+struct WireSystem<'a> {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    text: &'a str,
 }
 
 #[derive(Serialize)]
@@ -80,10 +106,16 @@ impl Provider for AnthropicProvider {
     }
 
     async fn complete(&self, req: ProviderRequest) -> anyhow::Result<ProviderResponse> {
+        let mut system = Vec::with_capacity(2);
+        if self.is_oauth() {
+            system.push(WireSystem { kind: "text", text: CLAUDE_CODE_IDENTITY });
+        }
+        system.push(WireSystem { kind: "text", text: &req.system });
+
         let body = WireRequest {
             model: &req.model,
             max_tokens: req.max_tokens,
-            system: &req.system,
+            system,
             messages: &req.messages,
             tools: req
                 .tools
@@ -92,11 +124,18 @@ impl Provider for AnthropicProvider {
                 .collect(),
         };
 
-        let resp = self
+        let mut http = self
             .client
             .post(format!("{}/v1/messages", self.base_url))
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", API_VERSION)
+            .header("anthropic-version", API_VERSION);
+        http = if self.is_oauth() {
+            http.header("authorization", format!("Bearer {}", self.credential))
+                .header("anthropic-beta", OAUTH_BETA)
+        } else {
+            http.header("x-api-key", &self.credential)
+        };
+
+        let resp = http
             .json(&body)
             .send()
             .await

@@ -15,6 +15,8 @@ crates/
 ## Build & run
 
 ```sh
+# Either a standard API key (sk-ant-api…) or a Claude Code OAuth token
+# (sk-ant-oat01-…, from `claude setup-token`) — auth scheme is auto-detected.
 export ANTHROPIC_API_KEY=sk-ant-...
 cargo run -- "list the files in this project and summarize the layout"   # one-shot
 cargo run                                                                # REPL
