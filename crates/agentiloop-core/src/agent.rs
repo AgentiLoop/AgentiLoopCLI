@@ -17,7 +17,7 @@ pub struct AgentConfig {
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
-            model: "claude-sonnet-4-5".into(),
+            model: "claude-sonnet-5".into(),
             system_prompt: DEFAULT_SYSTEM_PROMPT.into(),
             max_tokens: 8192,
             max_turns: 50,

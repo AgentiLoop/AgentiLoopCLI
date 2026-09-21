@@ -40,6 +40,43 @@ impl AnthropicProvider {
     pub fn is_oauth(&self) -> bool {
         self.credential.starts_with(OAUTH_PREFIX)
     }
+
+    /// Fetch the live model catalog from `GET /v1/models`, newest first
+    /// (the API already returns them sorted by `created_at` descending).
+    pub async fn list_models(&self) -> anyhow::Result<Vec<ModelInfo>> {
+        let mut http = self
+            .client
+            .get(format!("{}/v1/models?limit=100", self.base_url))
+            .header("anthropic-version", API_VERSION);
+        http = if self.is_oauth() {
+            http.header("authorization", format!("Bearer {}", self.credential))
+                .header("anthropic-beta", "oauth-2025-04-20")
+        } else {
+            http.header("x-api-key", &self.credential)
+        };
+        let resp = http.send().await.context("request to /v1/models failed")?;
+        let status = resp.status();
+        let text = resp.text().await?;
+        if !status.is_success() {
+            anyhow::bail!("Anthropic {}: {}", status, text);
+        }
+        let list: WireModelList = serde_json::from_str(&text).context("decoding /v1/models")?;
+        Ok(list.data)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ModelInfo {
+    pub id: String,
+    #[serde(default)]
+    pub display_name: String,
+    #[serde(default)]
+    pub created_at: String,
+}
+
+#[derive(Deserialize)]
+struct WireModelList {
+    data: Vec<ModelInfo>,
 }
 
 /// Strip whitespace/control chars a terminal paste may have wrapped into the token.

@@ -4,7 +4,7 @@ use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
 use agentiloop_core::{Agent, AgentConfig, AgentEvent, ToolContext};
-use agentiloop_provider::AnthropicProvider;
+use agentiloop_provider::{AnthropicProvider, ModelInfo};
 use anyhow::Result;
 use clap::Parser;
 
@@ -13,7 +13,7 @@ use clap::Parser;
 #[command(name = "agentiloop", version, about)]
 struct Cli {
     /// Model id to use.
-    #[arg(short, long, env = "AGENTILOOP_MODEL", default_value = "claude-sonnet-4-5")]
+    #[arg(short, long, env = "AGENTILOOP_MODEL", default_value = "claude-sonnet-5")]
     model: String,
 
     /// Skip all permission prompts (dangerous; intended for CI).
@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
     let policy = permission::policy(cli.yes);
     let config = AgentConfig { model: cli.model, max_turns: cli.max_turns, ..Default::default() };
 
-    let mut agent = Agent::new(provider, tools, policy, config, ToolContext { cwd: cwd.clone() });
+    let mut agent = Agent::new(provider.clone(), tools, policy, config, ToolContext { cwd: cwd.clone() });
 
     if !cli.prompt.is_empty() {
         return agent.run(&cli.prompt.join(" "), render).await;
@@ -74,7 +74,7 @@ async fn main() -> Result<()> {
             break;
         }
         if line.starts_with('/') {
-            slash_command(line, &mut agent)?;
+            slash_command(line, &mut agent, &provider).await?;
             continue;
         }
         if let Err(e) = agent.run(line, render).await {
@@ -84,15 +84,41 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-const MODELS: &[&str] = &[
-    "claude-opus-4-1",
-    "claude-sonnet-4-5",
-    "claude-sonnet-4",
-    "claude-haiku-4-5",
-    "claude-3-5-haiku-latest",
+/// Fallback catalog used when `/v1/models` can't be reached (newest first).
+const FALLBACK_MODELS: &[(&str, &str)] = &[
+    ("claude-fable-5-1", "Claude Fable 5.1"),
+    ("claude-opus-5", "Claude Opus 5"),
+    ("claude-sonnet-5", "Claude Sonnet 5"),
+    ("claude-fable-5", "Claude Fable 5"),
+    ("claude-opus-4-8", "Claude Opus 4.8"),
+    ("claude-opus-4-7", "Claude Opus 4.7"),
+    ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
+    ("claude-opus-4-6", "Claude Opus 4.6"),
+    ("claude-opus-4-5-20251101", "Claude Opus 4.5"),
+    ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
+    ("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5"),
 ];
 
-fn slash_command(line: &str, agent: &mut Agent) -> Result<()> {
+/// Live model list from the API, falling back to the static catalog.
+async fn fetch_models(provider: &AnthropicProvider) -> Vec<ModelInfo> {
+    match provider.list_models().await {
+        Ok(list) if !list.is_empty() => list,
+        Ok(_) => fallback_models(),
+        Err(e) => {
+            tracing::warn!("model list fetch failed, using fallback: {e:#}");
+            fallback_models()
+        }
+    }
+}
+
+fn fallback_models() -> Vec<ModelInfo> {
+    FALLBACK_MODELS
+        .iter()
+        .map(|(id, name)| ModelInfo { id: id.to_string(), display_name: name.to_string(), created_at: String::new() })
+        .collect()
+}
+
+async fn slash_command(line: &str, agent: &mut Agent, provider: &AnthropicProvider) -> Result<()> {
     let (cmd, arg) = line.split_once(' ').map_or((line, ""), |(c, a)| (c, a.trim()));
     match cmd {
         "/clear" => {
@@ -104,11 +130,13 @@ fn slash_command(line: &str, agent: &mut Agent) -> Result<()> {
             eprintln!("model: {}", agent.model());
         }
         "/model" => {
-            for (i, m) in MODELS.iter().enumerate() {
-                let mark = if *m == agent.model() { "*" } else { " " };
-                eprintln!("{mark} {}. {m}", i + 1);
+            let models = fetch_models(provider).await;
+            for (i, m) in models.iter().enumerate() {
+                let mark = if m.id == agent.model() { "*" } else { " " };
+                let date = m.created_at.get(..10).unwrap_or("");
+                eprintln!("{mark} {:>2}. {:<22} {:<28} {date}", i + 1, m.display_name, m.id);
             }
-            eprint!("select [1-{}] or type a model id (enter to keep {}): ", MODELS.len(), agent.model());
+            eprint!("select [1-{}] or type a model id (enter to keep {}): ", models.len(), agent.model());
             io::stderr().flush()?;
             let mut pick = String::new();
             io::stdin().lock().read_line(&mut pick)?;
@@ -117,7 +145,7 @@ fn slash_command(line: &str, agent: &mut Agent) -> Result<()> {
                 return Ok(());
             }
             match pick.parse::<usize>() {
-                Ok(n) if (1..=MODELS.len()).contains(&n) => agent.set_model(MODELS[n - 1]),
+                Ok(n) if (1..=models.len()).contains(&n) => agent.set_model(models[n - 1].id.clone()),
                 Ok(_) => {
                     eprintln!("out of range");
                     return Ok(());
