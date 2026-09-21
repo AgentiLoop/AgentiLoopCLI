@@ -43,3 +43,7 @@ Precedence: `--model` / `AGENTILOOP_MODEL` → settings.json → `claude-sonnet-
 - [ ] Session persistence / resume
 - [ ] TUI (ratatui)
 - [ ] MCP client
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE). You may use, modify, and share this software for noncommercial and personal purposes. Commercial use — including building or distributing commercial versions — is reserved exclusively to AgentiLoop. Contact AgentiLoop for a commercial license.

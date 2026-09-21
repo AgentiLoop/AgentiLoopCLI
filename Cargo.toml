@@ -10,8 +10,8 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
-repository = "https://github.com/toddbruss/AgentiLoopCLI"
+license = "PolyForm-Noncommercial-1.0.0"
+repository = "https://github.com/AgentiLoop/AgentiLoopCLI"
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }
