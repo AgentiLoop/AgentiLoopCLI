@@ -2,22 +2,24 @@ mod permission;
 mod settings;
 
 use std::io::{self, BufRead, Write};
-use std::sync::Arc;
 
-use agentiloop_core::{Agent, AgentConfig, AgentEvent, ToolContext};
-use agentiloop_provider::{AnthropicProvider, ModelInfo};
+use agentiloop_core::{Agent, AgentConfig, AgentEvent, ModelInfo, Provider, ToolContext};
 use anyhow::Result;
 use clap::Parser;
 use rustyline::error::ReadlineError;
-
-const DEFAULT_MODEL: &str = "claude-sonnet-5";
 
 /// AgentiLoop — a cross-platform agentic coding loop for your terminal.
 #[derive(Parser, Debug)]
 #[command(name = "agentiloop", version, about)]
 struct Cli {
-    /// Model id to use. Defaults to the last model picked with /model
-    /// (~/.agentiloop/settings.json), then claude-sonnet-5.
+    /// Model backend: `anthropic` or `openai` (OpenAI-compatible: OpenAI, Ollama,
+    /// LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL). Auto-detected from
+    /// which credentials are set when omitted.
+    #[arg(short, long, env = "AGENTILOOP_PROVIDER")]
+    provider: Option<String>,
+
+    /// Model id to use. Defaults to the last model picked with /model for this
+    /// provider (~/.agentiloop/settings.json), then the provider's default.
     #[arg(short, long, env = "AGENTILOOP_MODEL")]
     model: Option<String>,
 
@@ -51,11 +53,14 @@ async fn main() -> Result<()> {
         None => std::env::current_dir()?,
     };
 
-    let provider = Arc::new(AnthropicProvider::from_env()?);
+    let provider = agentiloop_provider::from_env(cli.provider.as_deref())?;
     let tools = agentiloop_tools::default_registry();
     let policy = permission::policy(cli.yes);
     let mut saved = settings::load();
-    let model = cli.model.or_else(|| saved.model.clone()).unwrap_or_else(|| DEFAULT_MODEL.into());
+    let model = cli
+        .model
+        .or_else(|| saved.model_for(provider.name()).map(str::to_string))
+        .unwrap_or_else(|| provider.default_model().to_string());
     let config = AgentConfig { model, max_turns: cli.max_turns, ..Default::default() };
 
     let mut agent = Agent::new(provider.clone(), tools, policy, config, ToolContext { cwd: cwd.clone() });
@@ -64,7 +69,12 @@ async fn main() -> Result<()> {
         return agent.run(&cli.prompt.join(" "), render).await;
     }
 
-    eprintln!("AgentiLoop — cwd: {}  model: {}  (/help for commands)", cwd.display(), agent.model());
+    eprintln!(
+        "AgentiLoop — cwd: {}  provider: {}  model: {}  (/help for commands)",
+        cwd.display(),
+        provider.name(),
+        agent.model()
+    );
     // rustyline gives us line editing plus up/down arrow recall of earlier prompts.
     let mut rl = rustyline::DefaultEditor::new()?;
     let history = settings::history_path();
@@ -86,7 +96,7 @@ async fn main() -> Result<()> {
             break;
         }
         if line.starts_with('/') {
-            slash_command(line, &mut agent, &provider, &mut saved).await?;
+            slash_command(line, &mut agent, &*provider, &mut saved).await?;
             continue;
         }
         if let Err(e) = agent.run(line, render).await {
@@ -119,14 +129,23 @@ const FALLBACK_MODELS: &[(&str, &str)] = &[
     ("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5"),
 ];
 
-/// Live model list from the API, falling back to the static catalog.
-async fn fetch_models(provider: &AnthropicProvider) -> Vec<ModelInfo> {
+/// Live model list from the provider. Anthropic falls back to the static
+/// catalog when `/v1/models` can't be reached; other providers report the error.
+async fn fetch_models(provider: &dyn Provider) -> Vec<ModelInfo> {
     match provider.list_models().await {
         Ok(list) if !list.is_empty() => list,
-        Ok(_) => fallback_models(),
-        Err(e) => {
+        Ok(_) if provider.name() == "anthropic" => fallback_models(),
+        Ok(_) => {
+            eprintln!("provider returned no models");
+            Vec::new()
+        }
+        Err(e) if provider.name() == "anthropic" => {
             tracing::warn!("model list fetch failed, using fallback: {e:#}");
             fallback_models()
+        }
+        Err(e) => {
+            eprintln!("could not list models: {e:#}");
+            Vec::new()
         }
     }
 }
@@ -141,7 +160,7 @@ fn fallback_models() -> Vec<ModelInfo> {
 async fn slash_command(
     line: &str,
     agent: &mut Agent,
-    provider: &AnthropicProvider,
+    provider: &dyn Provider,
     saved: &mut settings::Settings,
 ) -> Result<()> {
     let (cmd, arg) = line.split_once(' ').map_or((line, ""), |(c, a)| (c, a.trim()));
@@ -178,7 +197,7 @@ async fn slash_command(
                 }
                 Err(_) => agent.set_model(pick),
             }
-            saved.model = Some(agent.model().to_string());
+            saved.set_model(provider.name(), agent.model());
             if let Err(e) = settings::save(saved) {
                 eprintln!("warning: could not save settings: {e:#}");
             }

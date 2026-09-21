@@ -2,6 +2,7 @@
 //! Claude Code's `~/.claude/settings.json`). Override the location with
 //! `AGENTILOOP_HOME`.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -9,8 +10,26 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    /// Last model selected via `/model`; used when `--model` / `AGENTILOOP_MODEL` are absent.
+    /// Last model selected via `/model` (legacy, Anthropic-only); superseded by `models`.
     pub model: Option<String>,
+    /// Last model selected via `/model`, per provider name.
+    pub models: BTreeMap<String, String>,
+}
+
+impl Settings {
+    pub fn model_for(&self, provider: &str) -> Option<&str> {
+        self.models
+            .get(provider)
+            .map(String::as_str)
+            .or_else(|| (provider == "anthropic").then_some(self.model.as_deref()).flatten())
+    }
+
+    pub fn set_model(&mut self, provider: &str, model: &str) {
+        self.models.insert(provider.to_string(), model.to_string());
+        if provider == "anthropic" {
+            self.model = Some(model.to_string());
+        }
+    }
 }
 
 fn home() -> Option<PathBuf> {

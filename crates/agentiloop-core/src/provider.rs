@@ -28,11 +28,26 @@ pub struct ProviderResponse {
     pub output_tokens: u64,
 }
 
+/// One entry from a provider's model catalog.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ModelInfo {
+    pub id: String,
+    #[serde(default)]
+    pub display_name: String,
+    #[serde(default)]
+    pub created_at: String,
+}
+
 /// A model backend. Implementations live in `agentiloop-provider`.
 #[async_trait]
 pub trait Provider: Send + Sync {
     fn name(&self) -> &str;
+    /// Model id used when the user hasn't picked one.
+    fn default_model(&self) -> &str;
     async fn complete(&self, req: ProviderRequest) -> anyhow::Result<ProviderResponse>;
+
+    /// Live model catalog, newest first where the backend supports ordering.
+    async fn list_models(&self) -> anyhow::Result<Vec<ModelInfo>>;
 
     /// Streaming variant: text deltas are delivered through `on_text` as they
     /// arrive; the assembled response is returned once the stream ends.

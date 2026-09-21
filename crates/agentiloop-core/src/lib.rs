@@ -9,5 +9,5 @@ pub mod permission;
 pub use agent::{Agent, AgentConfig, AgentEvent};
 pub use message::{ContentBlock, Message, Role, StopReason};
 pub use permission::{Permission, PermissionPolicy};
-pub use provider::{Provider, ProviderRequest, ProviderResponse, ToolSpec};
+pub use provider::{ModelInfo, Provider, ProviderRequest, ProviderResponse, ToolSpec};
 pub use tool::{Tool, ToolContext, ToolError, ToolRegistry, ToolResult};
