@@ -1,0 +1,22 @@
+[package]
+name = "agentiloop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "agentiloop"
+path = "src/main.rs"
+
+[dependencies]
+agentiloop-core = { path = "../agentiloop-core" }
+agentiloop-provider = { path = "../agentiloop-provider" }
+agentiloop-tools = { path = "../agentiloop-tools" }
+tokio.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+dirs.workspace = true
