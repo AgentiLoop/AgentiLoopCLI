@@ -465,4 +465,127 @@ mod tests {
             ])
         );
     }
+
+    /// Serve one canned HTTP body on a local port in small chunks (splits SSE
+    /// lines mid-way to exercise the buffering), then close.
+    async fn serve_once(body: &'static str) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut req = vec![0u8; 8192];
+            let _ = sock.read(&mut req).await;
+            let head = "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\nconnection: close\r\n\r\n";
+            sock.write_all(head.as_bytes()).await.unwrap();
+            for chunk in body.as_bytes().chunks(41) {
+                sock.write_all(chunk).await.unwrap();
+                sock.flush().await.unwrap();
+            }
+            sock.shutdown().await.unwrap();
+        });
+        format!("http://{addr}")
+    }
+
+    fn req() -> ProviderRequest {
+        ProviderRequest {
+            model: "m".into(),
+            system: "s".into(),
+            messages: vec![Message::user_text("hi")],
+            tools: vec![],
+            max_tokens: 16,
+        }
+    }
+
+    // Shape captured from Ollama's /v1 endpoint: tool_call id+name in one chunk,
+    // arguments fragmented across later chunks, usage in a trailing choices-less chunk.
+    const SSE_TOOL: &str = "\
+data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Let me \"},\"finish_reason\":null}]}
+
+data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"look.\"},\"finish_reason\":null}]}
+
+data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"id\":\"call_abc\",\"index\":0,\"type\":\"function\",\"function\":{\"name\":\"list_dir\",\"arguments\":\"\"}}]},\"finish_reason\":null}]}
+
+data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"pa\"}}]},\"finish_reason\":null}]}
+
+data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"th\\\":\\\"/tmp\\\"}\"}}]},\"finish_reason\":null}]}
+
+data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}
+
+data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[],\"usage\":{\"prompt_tokens\":139,\"completion_tokens\":21,\"total_tokens\":160}}
+
+data: [DONE]
+
+";
+
+    #[tokio::test]
+    async fn stream_assembles_text_and_fragmented_tool_call() {
+        let base = serve_once(SSE_TOOL).await;
+        let p = OpenAIProvider::new("k", base);
+        let mut deltas = Vec::new();
+        let resp = p.complete_stream(req(), &mut |t| deltas.push(t.to_string())).await.unwrap();
+
+        assert_eq!(deltas, vec!["Let me ", "look."]);
+        assert_eq!(resp.message.text(), "Let me look.");
+        assert_eq!(resp.stop_reason, StopReason::ToolUse);
+        assert_eq!((resp.input_tokens, resp.output_tokens), (139, 21));
+        let calls: Vec<_> = resp.message.tool_uses().collect();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "call_abc");
+        assert_eq!(calls[0].1, "list_dir");
+        assert_eq!(calls[0].2, &serde_json::json!({"path": "/tmp"}));
+    }
+
+    const SSE_TEXT: &str = "\
+data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"},\"finish_reason\":null}]}
+
+data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}
+
+data: [DONE]
+
+";
+
+    #[tokio::test]
+    async fn stream_plain_text_ends_turn_without_usage() {
+        let base = serve_once(SSE_TEXT).await;
+        let p = OpenAIProvider::new("k", base);
+        let mut deltas = Vec::new();
+        let resp = p.complete_stream(req(), &mut |t| deltas.push(t.to_string())).await.unwrap();
+        assert_eq!(deltas, vec!["hi"]);
+        assert_eq!(resp.stop_reason, StopReason::EndTurn);
+        assert_eq!((resp.input_tokens, resp.output_tokens), (0, 0));
+        assert_eq!(resp.message.tool_uses().count(), 0);
+    }
+
+    const NON_STREAM: &str = "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"ls\\\"}\"}}]},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":7,\"completion_tokens\":3}}";
+
+    #[tokio::test]
+    async fn non_streaming_tool_call_with_stop_finish_reason_is_tool_use() {
+        let base = serve_once(NON_STREAM).await;
+        let p = OpenAIProvider::new("k", base);
+        let resp = p.complete(req()).await.unwrap();
+        // Some servers say "stop" even when tool_calls are present; we must still loop.
+        assert_eq!(resp.stop_reason, StopReason::ToolUse);
+        let calls: Vec<_> = resp.message.tool_uses().collect();
+        assert_eq!(calls[0].1, "bash");
+        assert_eq!(calls[0].2, &serde_json::json!({"command": "ls"}));
+        assert_eq!((resp.input_tokens, resp.output_tokens), (7, 3));
+    }
+
+    #[test]
+    fn finish_reason_mapping() {
+        assert_eq!(parse_finish(Some("stop"), false), StopReason::EndTurn);
+        assert_eq!(parse_finish(Some("stop"), true), StopReason::ToolUse);
+        assert_eq!(parse_finish(Some("tool_calls"), true), StopReason::ToolUse);
+        assert_eq!(parse_finish(Some("length"), false), StopReason::MaxTokens);
+        assert_eq!(parse_finish(None, false), StopReason::Other);
+        assert_eq!(parse_finish(None, true), StopReason::ToolUse);
+    }
+
+    #[test]
+    fn empty_tool_arguments_become_empty_object() {
+        assert_eq!(parse_tool_args("x", "").unwrap(), serde_json::json!({}));
+        assert_eq!(parse_tool_args("x", "  ").unwrap(), serde_json::json!({}));
+        assert!(parse_tool_args("x", "{not json").is_err());
+    }
 }
