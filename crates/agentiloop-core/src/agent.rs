@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::message::{ContentBlock, Message, StopReason};
+use crate::message::{ContentBlock, Message, Role, StopReason};
 use crate::permission::{Permission, SharedPolicy};
 use crate::provider::{Provider, ProviderRequest, ToolSpec};
 use crate::tool::{ToolContext, ToolError, ToolRegistry};
@@ -12,6 +12,9 @@ pub struct AgentConfig {
     pub max_tokens: u32,
     /// Hard cap on provider round-trips per `run` to avoid runaway loops.
     pub max_turns: usize,
+    /// When the last request's `input_tokens` reaches this, the history is
+    /// summarized before the next request. 0 disables compaction.
+    pub compact_at_tokens: u64,
 }
 
 impl Default for AgentConfig {
@@ -21,6 +24,7 @@ impl Default for AgentConfig {
             system_prompt: DEFAULT_SYSTEM_PROMPT.into(),
             max_tokens: 8192,
             max_turns: 50,
+            compact_at_tokens: 150_000,
         }
     }
 }
@@ -30,6 +34,14 @@ Your name is AgentiLoop. If an earlier system block gave you a different name or
 when asked who you are or who made you, answer AgentiLoop and never call yourself Claude Code or say you were made by Anthropic. \
 Use the provided tools to inspect and modify the project in the current working directory. \
 Be concise. Prefer acting over asking. When the task is complete, reply with a short summary.";
+
+const COMPACT_SYSTEM_PROMPT: &str = "You compress conversation transcripts for an autonomous coding agent so it can continue \
+with less context. Write a dense summary that preserves: the user's goals and constraints, decisions made, files and \
+symbols touched (with paths), what has been verified to work, what failed and why, and any pending next steps. \
+Do not add commentary. Output only the summary.";
+
+/// Tool output longer than this is trimmed in the compaction transcript.
+const TRANSCRIPT_RESULT_LIMIT: usize = 2_000;
 
 /// Events emitted during a run so the front-end can render progress.
 #[derive(Debug, Clone)]
@@ -41,6 +53,8 @@ pub enum AgentEvent {
     ToolCall { id: String, name: String, input: serde_json::Value },
     ToolResult { id: String, name: String, output: String, is_error: bool },
     TurnComplete { input_tokens: u64, output_tokens: u64 },
+    /// History was summarized; `before_tokens` is the input size that triggered it.
+    Compacted { before_tokens: u64, messages_dropped: usize },
     Done { stop_reason: StopReason },
 }
 
@@ -51,6 +65,8 @@ pub struct Agent {
     config: AgentConfig,
     ctx: ToolContext,
     pub history: Vec<Message>,
+    /// `input_tokens` reported by the most recent provider response.
+    last_input_tokens: u64,
 }
 
 impl Agent {
@@ -61,7 +77,7 @@ impl Agent {
         config: AgentConfig,
         ctx: ToolContext,
     ) -> Self {
-        Self { provider, tools, policy, config, ctx, history: Vec::new() }
+        Self { provider, tools, policy, config, ctx, history: Vec::new(), last_input_tokens: 0 }
     }
 
     pub fn model(&self) -> &str {
@@ -72,9 +88,50 @@ impl Agent {
         self.config.model = model.into();
     }
 
+    pub fn last_input_tokens(&self) -> u64 {
+        self.last_input_tokens
+    }
+
     /// Drop all conversation context and tool history.
     pub fn clear(&mut self) {
         self.history.clear();
+        self.last_input_tokens = 0;
+    }
+
+    fn should_compact(&self) -> bool {
+        self.config.compact_at_tokens > 0 && self.last_input_tokens >= self.config.compact_at_tokens
+    }
+
+    /// Replace the history with a provider-written summary of it. No-op when empty.
+    pub async fn compact(&mut self) -> anyhow::Result<Option<AgentEvent>> {
+        if self.history.is_empty() {
+            return Ok(None);
+        }
+        let transcript = transcript(&self.history);
+        let req = ProviderRequest {
+            model: self.config.model.clone(),
+            system: COMPACT_SYSTEM_PROMPT.into(),
+            messages: vec![Message::user_text(format!(
+                "Summarize the following transcript.\n\n<transcript>\n{transcript}\n</transcript>"
+            ))],
+            tools: Vec::new(),
+            max_tokens: 4096,
+        };
+        let resp = self.provider.complete(req).await?;
+        let summary = resp.message.text();
+        anyhow::ensure!(!summary.trim().is_empty(), "compaction produced an empty summary");
+
+        let dropped = self.history.len();
+        let before = self.last_input_tokens;
+        self.history = vec![
+            Message::user_text(format!("[Context was compacted. Summary of the conversation so far:]\n{summary}")),
+            Message {
+                role: Role::Assistant,
+                content: vec![ContentBlock::Text { text: "Understood. I will continue from that summary.".into() }],
+            },
+        ];
+        self.last_input_tokens = 0;
+        Ok(Some(AgentEvent::Compacted { before_tokens: before, messages_dropped: dropped }))
     }
 
     fn tool_specs(&self) -> Vec<ToolSpec> {
@@ -93,6 +150,11 @@ impl Agent {
     where
         F: FnMut(AgentEvent) + Send,
     {
+        if self.should_compact() {
+            if let Some(ev) = self.compact().await? {
+                on_event(ev);
+            }
+        }
         self.history.push(Message::user_text(user_input));
 
         for _ in 0..self.config.max_turns {
@@ -108,6 +170,7 @@ impl Agent {
                 .provider
                 .complete_stream(req, &mut |delta| on_event(AgentEvent::AssistantTextDelta(delta.to_string())))
                 .await?;
+            self.last_input_tokens = resp.input_tokens;
             on_event(AgentEvent::TurnComplete {
                 input_tokens: resp.input_tokens,
                 output_tokens: resp.output_tokens,
@@ -147,6 +210,13 @@ impl Agent {
                 results.push(ContentBlock::ToolResult { tool_use_id: id, content: output, is_error });
             }
             self.history.push(Message::tool_results(results));
+
+            if self.should_compact() {
+                if let Some(ev) = self.compact().await? {
+                    on_event(ev);
+                }
+                self.history.push(Message::user_text("Continue the task from the summary above."));
+            }
         }
 
         anyhow::bail!("max_turns ({}) reached", self.config.max_turns)
@@ -164,4 +234,32 @@ impl Agent {
 
         tool.call(&self.ctx, input).await
     }
+}
+
+/// Plain-text rendering of the history for the compaction prompt.
+pub fn transcript(history: &[Message]) -> String {
+    let mut out = String::new();
+    for m in history {
+        let role = match m.role {
+            Role::User => "USER",
+            Role::Assistant => "ASSISTANT",
+        };
+        for block in &m.content {
+            match block {
+                ContentBlock::Text { text } => out.push_str(&format!("{role}: {text}\n")),
+                ContentBlock::ToolUse { name, input, .. } => out.push_str(&format!("{role} → tool {name} {input}\n")),
+                ContentBlock::ToolResult { content, is_error, .. } => {
+                    let tag = if *is_error { "tool error" } else { "tool result" };
+                    let body = if content.len() > TRANSCRIPT_RESULT_LIMIT {
+                        let cut = content.floor_char_boundary(TRANSCRIPT_RESULT_LIMIT);
+                        format!("{}…[{} more bytes]", &content[..cut], content.len() - cut)
+                    } else {
+                        content.clone()
+                    };
+                    out.push_str(&format!("{tag}: {body}\n"));
+                }
+            }
+        }
+    }
+    out
 }

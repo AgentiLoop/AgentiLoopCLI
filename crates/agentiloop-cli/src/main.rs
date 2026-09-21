@@ -31,6 +31,10 @@ struct Cli {
     #[arg(long, default_value_t = 50)]
     max_turns: usize,
 
+    /// Summarize the conversation once a request reaches this many input tokens (0 = never).
+    #[arg(long, default_value_t = 150_000, env = "AGENTILOOP_COMPACT_AT")]
+    compact_at: u64,
+
     /// Working directory the agent operates in (defaults to cwd).
     #[arg(short = 'C', long)]
     cwd: Option<std::path::PathBuf>,
@@ -61,7 +65,7 @@ async fn main() -> Result<()> {
         .model
         .or_else(|| saved.model_for(provider.name()).map(str::to_string))
         .unwrap_or_else(|| provider.default_model().to_string());
-    let config = AgentConfig { model, max_turns: cli.max_turns, ..Default::default() };
+    let config = AgentConfig { model, max_turns: cli.max_turns, compact_at_tokens: cli.compact_at, ..Default::default() };
 
     let mut agent = Agent::new(provider.clone(), tools, policy, config, ToolContext { cwd: cwd.clone() });
 
@@ -203,8 +207,13 @@ async fn slash_command(
             }
             eprintln!("model: {}", agent.model());
         }
+        "/compact" => match agent.compact().await {
+            Ok(Some(ev)) => render(ev),
+            Ok(None) => eprintln!("nothing to compact"),
+            Err(e) => eprintln!("compaction failed: {e:#}"),
+        },
         "/help" => {
-            eprintln!("/model [n|id]  show picker, or pick #n / set id directly\n/clear         clear context and tool history\n/exit          quit");
+            eprintln!("/model [n|id]  show picker, or pick #n / set id directly\n/compact       summarize the conversation to free context\n/clear         clear context and tool history\n/exit          quit");
         }
         _ => eprintln!("unknown command {cmd} (try /help)"),
     }
@@ -229,6 +238,9 @@ fn render(ev: AgentEvent) {
         }
         AgentEvent::TurnComplete { input_tokens, output_tokens } => {
             tracing::debug!(input_tokens, output_tokens, "turn");
+        }
+        AgentEvent::Compacted { before_tokens, messages_dropped } => {
+            eprintln!("\u{1f4e6} context compacted ({before_tokens} tokens, {messages_dropped} messages → summary)");
         }
         AgentEvent::Done { .. } => {}
     }

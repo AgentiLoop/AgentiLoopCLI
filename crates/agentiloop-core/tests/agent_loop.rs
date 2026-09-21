@@ -206,3 +206,142 @@ fn clear_drops_history() {
     collect(&mut a, "two").0.unwrap();
     assert_eq!(a.history.len(), 2);
 }
+
+// ---- compaction -------------------------------------------------------------
+
+fn agent_with(provider: Arc<ScriptedProvider>, config: AgentConfig) -> Agent {
+    let mut tools = ToolRegistry::new();
+    tools.register(Echo);
+    Agent::new(provider, tools, Arc::new(agentiloop_core::permission::AllowAll), config, ToolContext {
+        cwd: std::env::temp_dir(),
+    })
+}
+
+fn big(t: &str, input_tokens: u64) -> ProviderResponse {
+    ProviderResponse { input_tokens, ..text(t) }
+}
+
+#[test]
+fn compact_replaces_history_with_summary_via_provider() {
+    let p = ScriptedProvider::new(vec![text("first"), text("SUMMARY")]);
+    let mut a = agent_with(p.clone(), AgentConfig { compact_at_tokens: 0, ..Default::default() });
+    collect(&mut a, "do a thing").0.unwrap();
+    assert_eq!(a.history.len(), 2);
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let ev = rt.block_on(a.compact()).unwrap().expect("event");
+    assert!(matches!(ev, AgentEvent::Compacted { messages_dropped: 2, .. }));
+
+    // summary user message + assistant ack
+    assert_eq!(a.history.len(), 2);
+    assert_eq!(a.history[0].role, Role::User);
+    assert!(a.history[0].text().contains("SUMMARY"), "{}", a.history[0].text());
+    assert_eq!(a.history[1].role, Role::Assistant);
+    assert_eq!(a.last_input_tokens(), 0);
+
+    // the summarization request carried no tools and a transcript of the old history
+    let reqs = p.requests.lock().unwrap();
+    let sum_req = &reqs[1];
+    assert!(sum_req.tools.is_empty());
+    assert_eq!(sum_req.messages.len(), 1);
+    let body = sum_req.messages[0].text();
+    assert!(body.contains("USER: do a thing"), "{body}");
+    assert!(body.contains("ASSISTANT: first"), "{body}");
+}
+
+#[test]
+fn compact_on_empty_history_is_noop() {
+    let p = ScriptedProvider::new(vec![]);
+    let mut a = agent_with(p.clone(), AgentConfig::default());
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    assert!(rt.block_on(a.compact()).unwrap().is_none());
+    assert!(p.requests.lock().unwrap().is_empty());
+}
+
+#[test]
+fn compact_fails_on_empty_summary_and_keeps_history() {
+    let p = ScriptedProvider::new(vec![text("first"), text("   ")]);
+    let mut a = agent_with(p, AgentConfig { compact_at_tokens: 0, ..Default::default() });
+    collect(&mut a, "x").0.unwrap();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let err = rt.block_on(a.compact()).unwrap_err().to_string();
+    assert!(err.contains("empty summary"), "{err}");
+    assert_eq!(a.history.len(), 2, "history must be untouched on failure");
+}
+
+#[test]
+fn auto_compacts_before_next_run_when_threshold_reached() {
+    // run 1 reports 1000 input tokens (>= threshold 500) → run 2 compacts first.
+    let p = ScriptedProvider::new(vec![big("first", 1000), text("SUMMARY"), text("second")]);
+    let mut a = agent_with(p.clone(), AgentConfig { compact_at_tokens: 500, ..Default::default() });
+    collect(&mut a, "one").0.unwrap();
+    assert_eq!(a.last_input_tokens(), 1000);
+
+    let (res, events) = collect(&mut a, "two");
+    res.unwrap();
+    assert!(matches!(events[0], AgentEvent::Compacted { before_tokens: 1000, messages_dropped: 2 }));
+
+    // summary, ack, "two", "second"
+    assert_eq!(a.history.len(), 4);
+    assert!(a.history[0].text().contains("SUMMARY"));
+    assert_eq!(a.history[2].text(), "two");
+    assert_eq!(a.history[3].text(), "second");
+
+    // the request for "two" was built from the compacted history
+    let reqs = p.requests.lock().unwrap();
+    assert_eq!(reqs.len(), 3);
+    assert_eq!(reqs[2].messages.len(), 3);
+    assert!(reqs[2].messages[0].text().contains("SUMMARY"));
+}
+
+#[test]
+fn auto_compacts_mid_loop_after_tool_results() {
+    let mut call = tool_call("t1", "echo", json!({"msg": "a"}));
+    call.input_tokens = 900;
+    let p = ScriptedProvider::new(vec![call, text("SUMMARY"), text("finished")]);
+    let mut a = agent_with(p.clone(), AgentConfig { compact_at_tokens: 500, ..Default::default() });
+    let (res, events) = collect(&mut a, "go");
+    res.unwrap();
+
+    let idx = events.iter().position(|e| matches!(e, AgentEvent::Compacted { before_tokens: 900, .. })).expect("compacted");
+    // compaction happened after the tool result and before the final answer
+    assert!(events[..idx].iter().any(|e| matches!(e, AgentEvent::ToolResult { .. })));
+    assert!(events[idx..].iter().any(|e| matches!(e, AgentEvent::AssistantText(t) if t == "finished")));
+
+    // summary, ack, continue-prompt, final
+    assert_eq!(a.history.len(), 4);
+    assert!(a.history[2].text().contains("Continue the task"));
+    assert_eq!(a.history[3].text(), "finished");
+    let reqs = p.requests.lock().unwrap();
+    assert_eq!(reqs.len(), 3);
+    assert!(reqs[2].messages.iter().all(|m| m.tool_uses().count() == 0), "old tool_use blocks must be gone");
+}
+
+#[test]
+fn compaction_disabled_when_threshold_is_zero() {
+    let p = ScriptedProvider::new(vec![big("first", 1_000_000), text("second")]);
+    let mut a = agent_with(p.clone(), AgentConfig { compact_at_tokens: 0, ..Default::default() });
+    collect(&mut a, "one").0.unwrap();
+    let (_, events) = collect(&mut a, "two");
+    assert!(!events.iter().any(|e| matches!(e, AgentEvent::Compacted { .. })));
+    assert_eq!(p.requests.lock().unwrap().len(), 2);
+}
+
+#[test]
+fn transcript_trims_long_tool_results() {
+    let long = "x".repeat(5_000);
+    let history = vec![
+        Message::user_text("hi"),
+        Message {
+            role: Role::Assistant,
+            content: vec![ContentBlock::ToolUse { id: "t".into(), name: "bash".into(), input: json!({"command": "ls"}) }],
+        },
+        Message::tool_results(vec![ContentBlock::ToolResult { tool_use_id: "t".into(), content: long, is_error: true }]),
+    ];
+    let t = agentiloop_core::agent::transcript(&history);
+    assert!(t.contains("USER: hi"));
+    assert!(t.contains("ASSISTANT → tool bash {\"command\":\"ls\"}"));
+    assert!(t.contains("tool error: "));
+    assert!(t.contains("…[3000 more bytes]"), "{t}");
+    assert!(t.len() < 2_500, "{}", t.len());
+}
