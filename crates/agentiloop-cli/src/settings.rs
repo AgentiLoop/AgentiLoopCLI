@@ -48,6 +48,11 @@ pub fn history_path() -> Option<PathBuf> {
     Some(home()?.join("history.txt"))
 }
 
+/// Saved conversations, one JSON file per session.
+pub fn sessions_dir() -> Option<PathBuf> {
+    Some(home()?.join("sessions"))
+}
+
 pub fn load() -> Settings {
     let Some(p) = path() else { return Settings::default() };
     match std::fs::read_to_string(&p) {

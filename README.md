@@ -31,7 +31,7 @@ cargo run -- -m qwen3:4b
 
 Provider is auto-detected from which credentials are set (`ANTHROPIC_API_KEY` wins); force one with `--provider` / `AGENTILOOP_PROVIDER`.
 
-Env: `AGENTILOOP_PROVIDER`, `AGENTILOOP_MODEL`, `AGENTILOOP_YES`, `AGENTILOOP_HOME`, `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `RUST_LOG=debug` for token usage.
+Env: `AGENTILOOP_PROVIDER`, `AGENTILOOP_MODEL`, `AGENTILOOP_YES`, `AGENTILOOP_HOME`, `AGENTILOOP_COMPACT_AT`, `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `RUST_LOG=debug` for token usage.
 
 ## Settings
 
@@ -41,14 +41,30 @@ Env: `AGENTILOOP_PROVIDER`, `AGENTILOOP_MODEL`, `AGENTILOOP_YES`, `AGENTILOOP_HO
 { "models": { "anthropic": "claude-opus-5", "openai": "qwen3:4b" } }
 ```
 
-Precedence: `--model` / `AGENTILOOP_MODEL` → settings.json → provider default (`claude-sonnet-5` / `gpt-4o-mini`).
+Precedence: `--model` / `AGENTILOOP_MODEL` → resumed session's model → settings.json → provider default (`claude-sonnet-5` / `gpt-4o-mini`).
+
+## Sessions
+
+Every turn is saved to `~/.agentiloop/sessions/<id>.json`. Resume with `-c` / `--continue` (latest session for this cwd) or `-r <id>` / `--resume <id>`; inside the REPL use `/sessions` and `/resume <id|n>`. `/clear` starts a new session.
+
+## Context compaction
+
+When a request reaches `--compact-at` input tokens (default 150 000, `AGENTILOOP_COMPACT_AT`, 0 disables) the history is summarized by the model and replaced with that summary — before the next prompt, or mid-task after tool results. `/compact` does it on demand.
+
+## Tests
+
+```sh
+cargo test --workspace
+```
+
+No network needed: the agent loop runs against a scripted mock provider, the SSE parsers against a local canned server, and the tools against temp dirs.
 
 ## Roadmap
 
 - [x] Streaming (SSE) responses
 - [x] OpenAI-compatible provider
-- [ ] Context compaction when nearing the window limit
-- [ ] Session persistence / resume
+- [x] Context compaction when nearing the window limit
+- [x] Session persistence / resume
 - [ ] TUI (ratatui)
 - [ ] MCP client
 

@@ -2,8 +2,9 @@ mod permission;
 mod settings;
 
 use std::io::{self, BufRead, Write};
+use std::path::{Path, PathBuf};
 
-use agentiloop_core::{Agent, AgentConfig, AgentEvent, ModelInfo, Provider, ToolContext};
+use agentiloop_core::{Agent, AgentConfig, AgentEvent, ModelInfo, Provider, Session, ToolContext};
 use anyhow::Result;
 use clap::Parser;
 use rustyline::error::ReadlineError;
@@ -37,7 +38,15 @@ struct Cli {
 
     /// Working directory the agent operates in (defaults to cwd).
     #[arg(short = 'C', long)]
-    cwd: Option<std::path::PathBuf>,
+    cwd: Option<PathBuf>,
+
+    /// Resume a saved session by id (see /sessions).
+    #[arg(short = 'r', long, conflicts_with = "continue_last")]
+    resume: Option<String>,
+
+    /// Resume the most recent session for this working directory.
+    #[arg(short = 'c', long = "continue")]
+    continue_last: bool,
 
     /// One-shot prompt. If omitted, starts an interactive REPL.
     prompt: Vec<String>,
@@ -61,23 +70,47 @@ async fn main() -> Result<()> {
     let tools = agentiloop_tools::default_registry();
     let policy = permission::policy(cli.yes);
     let mut saved = settings::load();
+    let sessions_dir = settings::sessions_dir();
+
+    // Resume, if asked: the session's model wins unless --model was given.
+    let resumed = match (&cli.resume, cli.continue_last, &sessions_dir) {
+        (Some(id), _, Some(dir)) => Some(Session::load(dir, id)?),
+        (None, true, Some(dir)) => Session::latest_for(dir, &cwd)?,
+        _ => None,
+    };
+    if cli.continue_last && resumed.is_none() {
+        eprintln!("no previous session for {}; starting fresh", cwd.display());
+    }
+
     let model = cli
         .model
+        .or_else(|| resumed.as_ref().map(|s| s.model.clone()))
         .or_else(|| saved.model_for(provider.name()).map(str::to_string))
         .unwrap_or_else(|| provider.default_model().to_string());
     let config = AgentConfig { model, max_turns: cli.max_turns, compact_at_tokens: cli.compact_at, ..Default::default() };
 
     let mut agent = Agent::new(provider.clone(), tools, policy, config, ToolContext { cwd: cwd.clone() });
+    let mut session = match resumed {
+        Some(s) => {
+            eprintln!("resumed session {} ({} messages): {}", s.id, s.history.len(), s.title());
+            agent.history = s.history.clone();
+            s
+        }
+        None => Session::new(cwd.clone(), provider.name(), agent.model()),
+    };
 
     if !cli.prompt.is_empty() {
-        return agent.run(&cli.prompt.join(" "), render).await;
+        let res = agent.run(&cli.prompt.join(" "), render).await;
+        persist(&mut session, &agent, sessions_dir.as_deref());
+        return res;
     }
 
     eprintln!(
-        "AgentiLoop — cwd: {}  provider: {}  model: {}  (/help for commands)",
+        "AgentiLoop — cwd: {}  provider: {}  model: {}  session: {}  (/help for commands)",
         cwd.display(),
         provider.name(),
-        agent.model()
+        agent.model(),
+        session.id
     );
     // rustyline gives us line editing plus up/down arrow recall of earlier prompts.
     let mut rl = rustyline::DefaultEditor::new()?;
@@ -100,12 +133,13 @@ async fn main() -> Result<()> {
             break;
         }
         if line.starts_with('/') {
-            slash_command(line, &mut agent, &*provider, &mut saved).await?;
+            slash_command(line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref()).await?;
             continue;
         }
         if let Err(e) = agent.run(line, render).await {
             eprintln!("error: {e:#}");
         }
+        persist(&mut session, &agent, sessions_dir.as_deref());
     }
     if let Some(p) = &history {
         if let Some(dir) = p.parent() {
@@ -116,6 +150,19 @@ async fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Snapshot the agent's history into the session file. Empty histories are not written.
+fn persist(session: &mut Session, agent: &Agent, dir: Option<&Path>) {
+    let Some(dir) = dir else { return };
+    session.history = agent.history.clone();
+    session.model = agent.model().to_string();
+    if session.history.is_empty() {
+        return;
+    }
+    if let Err(e) = session.save(dir) {
+        eprintln!("warning: could not save session: {e:#}");
+    }
 }
 
 /// Fallback catalog used when `/v1/models` can't be reached (newest first).
@@ -166,12 +213,15 @@ async fn slash_command(
     agent: &mut Agent,
     provider: &dyn Provider,
     saved: &mut settings::Settings,
+    session: &mut Session,
+    sessions_dir: Option<&Path>,
 ) -> Result<()> {
     let (cmd, arg) = line.split_once(' ').map_or((line, ""), |(c, a)| (c, a.trim()));
     match cmd {
         "/clear" => {
             agent.clear();
-            eprintln!("context and tool history cleared");
+            *session = Session::new(session.cwd.clone(), provider.name(), agent.model());
+            eprintln!("context and tool history cleared; new session {}", session.id);
         }
         "/model" => {
             let models = fetch_models(provider).await;
@@ -208,12 +258,67 @@ async fn slash_command(
             eprintln!("model: {}", agent.model());
         }
         "/compact" => match agent.compact().await {
-            Ok(Some(ev)) => render(ev),
+            Ok(Some(ev)) => {
+                render(ev);
+                persist(session, agent, sessions_dir);
+            }
             Ok(None) => eprintln!("nothing to compact"),
             Err(e) => eprintln!("compaction failed: {e:#}"),
         },
+        "/sessions" => {
+            let Some(dir) = sessions_dir else {
+                eprintln!("no home directory; sessions are not saved");
+                return Ok(());
+            };
+            let list = Session::list(dir)?;
+            if list.is_empty() {
+                eprintln!("no saved sessions");
+            }
+            for (i, s) in list.iter().take(20).enumerate() {
+                let mark = if s.id == session.id { "*" } else { " " };
+                eprintln!("{mark} {:>2}. {:<22} {:>3} msgs  {:<24} {}", i + 1, s.id, s.history.len(), s.model, s.title());
+            }
+        }
+        "/resume" => {
+            let Some(dir) = sessions_dir else {
+                eprintln!("no home directory; sessions are not saved");
+                return Ok(());
+            };
+            if arg.is_empty() {
+                eprintln!("usage: /resume <id|n>  (see /sessions)");
+                return Ok(());
+            }
+            // `/resume 2` picks entry #2 from the /sessions listing.
+            let id = match arg.parse::<usize>() {
+                Ok(n) => match Session::list(dir)?.into_iter().nth(n.saturating_sub(1)) {
+                    Some(s) if n >= 1 => s.id,
+                    _ => {
+                        eprintln!("no session #{n}");
+                        return Ok(());
+                    }
+                },
+                Err(_) => arg.to_string(),
+            };
+            match Session::load(dir, &id) {
+                Ok(s) => {
+                    agent.clear();
+                    agent.history = s.history.clone();
+                    agent.set_model(s.model.clone());
+                    eprintln!("resumed session {} ({} messages, model {}): {}", s.id, s.history.len(), s.model, s.title());
+                    *session = s;
+                }
+                Err(e) => eprintln!("{e:#}"),
+            }
+        }
         "/help" => {
-            eprintln!("/model [n|id]  show picker, or pick #n / set id directly\n/compact       summarize the conversation to free context\n/clear         clear context and tool history\n/exit          quit");
+            eprintln!(
+                "/model [n|id]   show picker, or pick #n / set id directly\n\
+                 /compact        summarize the conversation to free context\n\
+                 /sessions       list saved sessions (newest first)\n\
+                 /resume <id|n>  load a saved session into this REPL\n\
+                 /clear          clear context and start a new session\n\
+                 /exit           quit"
+            );
         }
         _ => eprintln!("unknown command {cmd} (try /help)"),
     }
