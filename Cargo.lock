@@ -13,6 +13,7 @@ dependencies = [
  "async-trait",
  "clap",
  "dirs",
+ "serde",
  "serde_json",
  "tokio",
  "tracing",

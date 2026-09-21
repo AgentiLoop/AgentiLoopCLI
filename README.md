@@ -23,7 +23,17 @@ cargo run                                                                # REPL
 cargo run -- --yes -C /path/to/repo "fix the failing test"               # no prompts
 ```
 
-Env: `AGENTILOOP_MODEL`, `AGENTILOOP_YES`, `ANTHROPIC_BASE_URL`, `RUST_LOG=debug` for token usage.
+Env: `AGENTILOOP_MODEL`, `AGENTILOOP_YES`, `AGENTILOOP_HOME`, `ANTHROPIC_BASE_URL`, `RUST_LOG=debug` for token usage.
+
+## Settings
+
+`~/.agentiloop/settings.json` (override dir with `AGENTILOOP_HOME`) remembers the last `/model` pick:
+
+```json
+{ "model": "claude-opus-5" }
+```
+
+Precedence: `--model` / `AGENTILOOP_MODEL` → settings.json → `claude-sonnet-5`.
 
 ## Roadmap
 

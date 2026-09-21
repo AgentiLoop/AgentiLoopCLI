@@ -1,4 +1,5 @@
 mod permission;
+mod settings;
 
 use std::io::{self, BufRead, Write};
 use std::sync::Arc;
@@ -8,13 +9,16 @@ use agentiloop_provider::{AnthropicProvider, ModelInfo};
 use anyhow::Result;
 use clap::Parser;
 
+const DEFAULT_MODEL: &str = "claude-sonnet-5";
+
 /// AgentiLoop — a cross-platform agentic coding loop for your terminal.
 #[derive(Parser, Debug)]
 #[command(name = "agentiloop", version, about)]
 struct Cli {
-    /// Model id to use.
-    #[arg(short, long, env = "AGENTILOOP_MODEL", default_value = "claude-sonnet-5")]
-    model: String,
+    /// Model id to use. Defaults to the last model picked with /model
+    /// (~/.agentiloop/settings.json), then claude-sonnet-5.
+    #[arg(short, long, env = "AGENTILOOP_MODEL")]
+    model: Option<String>,
 
     /// Skip all permission prompts (dangerous; intended for CI).
     #[arg(long, env = "AGENTILOOP_YES")]
@@ -49,7 +53,9 @@ async fn main() -> Result<()> {
     let provider = Arc::new(AnthropicProvider::from_env()?);
     let tools = agentiloop_tools::default_registry();
     let policy = permission::policy(cli.yes);
-    let config = AgentConfig { model: cli.model, max_turns: cli.max_turns, ..Default::default() };
+    let mut saved = settings::load();
+    let model = cli.model.or_else(|| saved.model.clone()).unwrap_or_else(|| DEFAULT_MODEL.into());
+    let config = AgentConfig { model, max_turns: cli.max_turns, ..Default::default() };
 
     let mut agent = Agent::new(provider.clone(), tools, policy, config, ToolContext { cwd: cwd.clone() });
 
@@ -74,7 +80,7 @@ async fn main() -> Result<()> {
             break;
         }
         if line.starts_with('/') {
-            slash_command(line, &mut agent, &provider).await?;
+            slash_command(line, &mut agent, &provider, &mut saved).await?;
             continue;
         }
         if let Err(e) = agent.run(line, render).await {
@@ -118,7 +124,12 @@ fn fallback_models() -> Vec<ModelInfo> {
         .collect()
 }
 
-async fn slash_command(line: &str, agent: &mut Agent, provider: &AnthropicProvider) -> Result<()> {
+async fn slash_command(
+    line: &str,
+    agent: &mut Agent,
+    provider: &AnthropicProvider,
+    saved: &mut settings::Settings,
+) -> Result<()> {
     let (cmd, arg) = line.split_once(' ').map_or((line, ""), |(c, a)| (c, a.trim()));
     match cmd {
         "/clear" => {
@@ -152,6 +163,10 @@ async fn slash_command(line: &str, agent: &mut Agent, provider: &AnthropicProvid
                     return Ok(());
                 }
                 Err(_) => agent.set_model(pick),
+            }
+            saved.model = Some(agent.model().to_string());
+            if let Err(e) = settings::save(saved) {
+                eprintln!("warning: could not save settings: {e:#}");
             }
             eprintln!("model: {}", agent.model());
         }
