@@ -2,6 +2,7 @@
 //! and a status bar. The agent loop runs on the tokio runtime and talks to the
 //! UI thread over channels; permission prompts appear as a modal.
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -9,7 +10,11 @@ use std::time::Duration;
 use agentiloop_core::permission::{Permission, PermissionPolicy};
 use agentiloop_core::AgentEvent;
 use async_trait::async_trait;
-use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
+    MouseEventKind,
+};
+use ratatui::crossterm::execute;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -119,12 +124,23 @@ pub struct App {
     streaming: bool,
     /// `path` argument of in-flight `read_file` calls, by tool-call id.
     pending_paths: HashMap<String, String>,
+    /// Screen cells occupied by links in the last frame, for click handling.
+    link_hits: RefCell<Vec<LinkHit>>,
 }
 
-/// Result of a key press that the event loop must act on.
+struct LinkHit {
+    x0: u16,
+    x1: u16,
+    y: u16,
+    url: String,
+}
+
+/// Result of a key press or mouse event that the event loop must act on.
 pub enum Action {
     Submit(String),
     Quit,
+    /// A link was clicked; open it in the system browser.
+    OpenUrl(String),
 }
 
 impl App {
@@ -142,6 +158,7 @@ impl App {
             hist_idx: None,
             streaming: false,
             pending_paths: HashMap::new(),
+            link_hits: RefCell::new(Vec::new()),
         }
     }
 
@@ -322,6 +339,21 @@ impl App {
         self.cursor = self.input.len();
     }
 
+    /// Wheel scrolls the transcript; a left click on a link opens it.
+    pub fn handle_mouse(&mut self, m: MouseEvent) -> Option<Action> {
+        match m.kind {
+            MouseEventKind::ScrollUp => self.scroll = self.scroll.saturating_add(3),
+            MouseEventKind::ScrollDown => self.scroll = self.scroll.saturating_sub(3),
+            MouseEventKind::Down(MouseButton::Left) if self.modal.is_none() => {
+                let hits = self.link_hits.borrow();
+                let hit = hits.iter().find(|h| h.y == m.row && m.column >= h.x0 && m.column < h.x1)?;
+                return Some(Action::OpenUrl(hit.url.clone()));
+            }
+            _ => {}
+        }
+        None
+    }
+
     pub fn draw(&self, frame: &mut Frame) {
         let [transcript, input, status] =
             Layout::vertical([Constraint::Min(1), Constraint::Length(3), Constraint::Length(1)]).areas(frame.area());
@@ -337,7 +369,7 @@ impl App {
             frame.set_cursor_position((inner.x + col.min(inner.width.saturating_sub(1)), inner.y));
         }
 
-        let help = "  Enter send · ↑↓ history · PgUp/PgDn scroll · Ctrl-C quit";
+        let help = "  Enter send · ↑↓ history · PgUp/PgDn scroll · click links · Ctrl-C quit";
         let bar = Line::from(vec![Span::raw(self.status.clone()), Span::styled(help, Style::default().fg(Color::DarkGray))]);
         frame.render_widget(Paragraph::new(bar).style(Style::default().add_modifier(Modifier::REVERSED)), status);
 
@@ -349,6 +381,8 @@ impl App {
     fn draw_transcript(&self, frame: &mut Frame, area: Rect) {
         let width = area.width.max(1) as usize;
         let mut lines: Vec<Line> = Vec::new();
+        // (transcript line, start col, end col, url) for every link.
+        let mut links: Vec<(usize, usize, usize, String)> = Vec::new();
         for e in &self.entries {
             if let Some(code) = &e.code {
                 for line in code {
@@ -362,7 +396,9 @@ impl App {
                 continue;
             }
             if e.kind == Kind::Assistant {
-                lines.extend(crate::markdown::render(&e.text, width));
+                let (md, md_links) = crate::markdown::render_links(&e.text, width);
+                links.extend(md_links.into_iter().map(|l| (lines.len() + l.line, l.start, l.end, l.url)));
+                lines.extend(md);
                 lines.push(Line::default());
                 continue;
             }
@@ -391,6 +427,16 @@ impl App {
         let height = area.height as usize;
         let end = lines.len().saturating_sub(self.scroll.min(lines.len().saturating_sub(height)));
         let start = end.saturating_sub(height);
+        *self.link_hits.borrow_mut() = links
+            .into_iter()
+            .filter(|(line, ..)| (start..end).contains(line))
+            .map(|(line, s, e, url)| LinkHit {
+                x0: area.x + s.min(width) as u16,
+                x1: area.x + e.min(width) as u16,
+                y: area.y + (line - start) as u16,
+                url,
+            })
+            .collect();
         frame.render_widget(Paragraph::new(lines[start..end].to_vec()), area);
     }
 
@@ -423,6 +469,8 @@ pub fn run(
     tx: mpsc::UnboundedSender<Input>,
 ) -> std::io::Result<()> {
     let mut terminal = ratatui::try_init()?;
+    // Mouse reporting so link clicks reach us (wheel scrolling is handled too).
+    execute!(std::io::stdout(), EnableMouseCapture)?;
     let result = (|| {
         loop {
             loop {
@@ -434,16 +482,23 @@ pub fn run(
             }
             terminal.draw(|f| app.draw(f))?;
             if event::poll(Duration::from_millis(50))? {
-                if let Event::Key(key) = event::read()? {
-                    match app.handle_key(key) {
-                        Some(Action::Quit) => return Ok(()),
-                        Some(Action::Submit(line)) => {
-                            if tx.send(Input::Submit(line)).is_err() {
-                                return Ok(());
-                            }
+                let action = match event::read()? {
+                    Event::Key(key) => app.handle_key(key),
+                    Event::Mouse(m) => app.handle_mouse(m),
+                    _ => None,
+                };
+                match action {
+                    Some(Action::Quit) => return Ok(()),
+                    Some(Action::Submit(line)) => {
+                        if tx.send(Input::Submit(line)).is_err() {
+                            return Ok(());
                         }
-                        None => {}
                     }
+                    Some(Action::OpenUrl(url)) => match open_url(&url) {
+                        Ok(()) => app.apply(UiMsg::Line(format!("↗ {url}"))),
+                        Err(e) => app.apply(UiMsg::Error(format!("could not open {url}: {e}"))),
+                    },
+                    None => {}
                 }
             }
             if app.quit() {
@@ -451,8 +506,32 @@ pub fn run(
             }
         }
     })();
+    let _ = execute!(std::io::stdout(), DisableMouseCapture);
     ratatui::restore();
     result
+}
+
+/// Open `url` with the platform's default handler.
+fn open_url(url: &str) -> std::io::Result<()> {
+    #[cfg(target_os = "macos")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("open");
+        c.arg(url);
+        c
+    };
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", "start", "", url]);
+        c
+    };
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let mut cmd = {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(url);
+        c
+    };
+    cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().map(drop)
 }
 
 #[cfg(test)]
@@ -551,6 +630,22 @@ mod tests {
         let s = screen(&app, 40, 8);
         assert!(s.contains("✓     1│fn main() {}"), "{s}");
         assert!(s.contains("      2│let x = 1;"), "{s}");
+    }
+
+    #[test]
+    fn clicking_a_link_opens_it_and_wheel_scrolls() {
+        let mut app = App::new("s");
+        app.apply(UiMsg::Event(AgentEvent::AssistantText("see [docs](https://a.io/x) now".into())));
+        let s = screen(&app, 40, 8);
+        assert!(s.contains("see docs now"), "{s}");
+        let click = |col, row| MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: col, row, modifiers: KeyModifiers::NONE };
+        // "docs" occupies columns 4..8 on the first transcript row.
+        assert!(matches!(app.handle_mouse(click(5, 0)), Some(Action::OpenUrl(u)) if u == "https://a.io/x"));
+        assert!(app.handle_mouse(click(1, 0)).is_none());
+        assert!(app.handle_mouse(click(5, 1)).is_none());
+        let wheel = MouseEvent { kind: MouseEventKind::ScrollUp, column: 0, row: 0, modifiers: KeyModifiers::NONE };
+        assert!(app.handle_mouse(wheel).is_none());
+        assert_eq!(app.scroll, 3);
     }
 
     #[test]

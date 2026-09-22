@@ -14,8 +14,18 @@ use unicode_width::UnicodeWidthStr;
 /// terminal on macOS, Linux and Windows.
 const LINK_BLUE: Color = Color::Rgb(10, 132, 255);
 
-/// Render `text` as markdown into lines no wider than `width` cells.
-pub fn render(text: &str, width: usize) -> Vec<Line<'static>> {
+/// A link's cell range on one rendered line, for click handling.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkPos {
+    pub line: usize,
+    pub start: usize,
+    pub end: usize,
+    pub url: String,
+}
+
+/// Render `text` as markdown into lines no wider than `width` cells, also
+/// returning where each link landed (for click handling).
+pub fn render_links(text: &str, width: usize) -> (Vec<Line<'static>>, Vec<LinkPos>) {
     let width = width.max(1);
     let text = unfence_markdown(text);
     let mut r = Renderer { width, ..Default::default() };
@@ -28,7 +38,7 @@ pub fn render(text: &str, width: usize) -> Vec<Line<'static>> {
     while r.out.last().is_some_and(|l| l.spans.is_empty()) {
         r.out.pop();
     }
-    r.out
+    (r.out, r.links)
 }
 
 /// Models often wrap a whole reply in a ```markdown fence when asked for
@@ -69,6 +79,23 @@ struct Renderer {
     table: Vec<Vec<Vec<Span<'static>>>>,
     /// Whether the next paragraph needs a blank line before it.
     need_gap: bool,
+    /// Link destinations in order of appearance; spans carry their index
+    /// in `underline_color` (see `link_tag`) until `flush_para` records them.
+    urls: Vec<String>,
+    links: Vec<LinkPos>,
+}
+
+/// Smuggle a link index through `Style` so it survives word-wrapping and
+/// span merging; stripped again before the line is emitted.
+fn link_tag(id: usize) -> Color {
+    Color::Rgb((id >> 16) as u8, (id >> 8) as u8, id as u8)
+}
+
+fn link_id(style: &Style) -> Option<usize> {
+    match style.underline_color {
+        Some(Color::Rgb(a, b, c)) => Some((a as usize) << 16 | (b as usize) << 8 | c as usize),
+        _ => None,
+    }
 }
 
 impl Renderer {
@@ -114,7 +141,24 @@ impl Renderer {
             Some(m) => format!("{}{m}", &cont[..cont.len().saturating_sub(2)]),
             None => cont.clone(),
         };
-        self.out.extend(wrap(spans, self.width, &first, &cont));
+        let mut lines = wrap(spans, self.width, &first, &cont);
+        for (i, line) in lines.iter_mut().enumerate() {
+            let mut col = 0;
+            for s in &mut line.spans {
+                let w = s.content.width();
+                if let Some(id) = link_id(&s.style) {
+                    s.style.underline_color = None;
+                    let url = &self.urls[id];
+                    // Same link continuing in the next span (e.g. `code` inside it).
+                    match self.links.last_mut() {
+                        Some(l) if l.line == self.out.len() + i && l.end == col && l.url == *url => l.end = col + w,
+                        _ => self.links.push(LinkPos { line: self.out.len() + i, start: col, end: col + w, url: url.clone() }),
+                    }
+                }
+                col += w;
+            }
+        }
+        self.out.extend(lines);
     }
 
     fn event(&mut self, ev: Event<'_>) {
@@ -207,7 +251,11 @@ impl Renderer {
             Tag::Emphasis => self.styles.push(Style::default().add_modifier(Modifier::ITALIC)),
             Tag::Strong => self.styles.push(Style::default().add_modifier(Modifier::BOLD)),
             Tag::Strikethrough => self.styles.push(Style::default().add_modifier(Modifier::CROSSED_OUT)),
-            Tag::Link { .. } => self.styles.push(Style::default().fg(LINK_BLUE).add_modifier(Modifier::UNDERLINED)),
+            Tag::Link { dest_url, .. } => {
+                let id = self.urls.len();
+                self.urls.push(dest_url.to_string());
+                self.styles.push(Style::default().fg(LINK_BLUE).add_modifier(Modifier::UNDERLINED).underline_color(link_tag(id)));
+            }
             Tag::Image { dest_url, .. } => {
                 self.text("[image: ");
                 self.text(&dest_url);
@@ -266,7 +314,9 @@ impl Renderer {
                 // A ```markdown fence is the model showing Markdown, not code:
                 // render its body instead of boxing it.
                 if lang == "markdown" || lang == "md" {
-                    let inner = render(&code, self.width.saturating_sub(ind.len()));
+                    let (inner, links) = render_links(&code, self.width.saturating_sub(ind.len()));
+                    let (base, off) = (self.out.len(), ind.width());
+                    self.links.extend(links.into_iter().map(|l| LinkPos { line: base + l.line, start: l.start + off, end: l.end + off, url: l.url }));
                     for l in inner {
                         let mut spans = vec![Span::raw(ind.clone())];
                         spans.extend(l.spans);
@@ -393,7 +443,10 @@ fn draw_table(rows: Vec<Vec<Vec<Span<'static>>>>, ind: &str) -> Vec<Line<'static
                             if i + 1 == n {
                                 t = t.trim_end();
                             }
-                            (t.to_string(), s.style)
+                            // Table links are styled but not clickable.
+                            let mut st = s.style;
+                            st.underline_color = None;
+                            (t.to_string(), st)
                         })
                         .collect()
                 })
@@ -467,6 +520,10 @@ fn trim_end(spans: &mut Vec<Span<'static>>) {
 mod tests {
     use super::*;
 
+    fn render(md: &str, width: usize) -> Vec<Line<'static>> {
+        render_links(md, width).0
+    }
+
     fn rows(md: &str, width: usize) -> Vec<String> {
         render(md, width).iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect()).collect()
     }
@@ -538,6 +595,25 @@ mod tests {
     #[test]
     fn paragraphs_separated_by_one_blank_row() {
         assert_eq!(rows("para one\n\npara two", 20), vec!["para one", "", "para two"]);
+    }
+
+    #[test]
+    fn link_positions_are_reported_and_tag_is_stripped() {
+        let (lines, links) = render_links("see [the docs](https://a.io/x) and [b](https://b.io)", 80);
+        assert_eq!(rows("see [the docs](https://a.io/x) and [b](https://b.io)", 80), vec!["see the docs and b"]);
+        assert_eq!(
+            links,
+            vec![
+                LinkPos { line: 0, start: 4, end: 12, url: "https://a.io/x".into() },
+                LinkPos { line: 0, start: 17, end: 18, url: "https://b.io".into() },
+            ]
+        );
+        assert!(lines[0].spans.iter().all(|s| s.style.underline_color.is_none()));
+        // A link that wraps reports one range per line, inside a list indent.
+        let (_, links) = render_links("- [alpha beta gamma](https://w.io)", 12);
+        let ranges: Vec<_> = links.iter().map(|l| (l.line, l.start, l.end)).collect();
+        assert_eq!(ranges, vec![(0, 2, 7), (1, 2, 12)]);
+        assert!(links.iter().all(|l| l.url == "https://w.io"));
     }
 
     #[test]
