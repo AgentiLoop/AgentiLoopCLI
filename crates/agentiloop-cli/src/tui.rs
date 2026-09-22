@@ -336,13 +336,12 @@ impl App {
             let opts = textwrap::Options::new(width.saturating_sub(prefix.len()).max(1));
             let mut first = true;
             for raw in e.text.split('\n') {
+                // textwrap yields one empty piece for an empty line, so blank
+                // lines in the text come through as exactly one blank row.
                 for piece in textwrap::wrap(raw, &opts) {
                     let p = if first { prefix } else { indent.as_str() };
                     first = false;
                     lines.push(Line::from(Span::styled(format!("{p}{piece}"), style)));
-                }
-                if raw.is_empty() {
-                    lines.push(Line::default());
                 }
             }
             lines.push(Line::default());
@@ -511,6 +510,17 @@ mod tests {
         app.handle_key(key(KeyCode::PageUp));
         let s2 = screen(&app, 30, 10);
         assert!(!s2.contains("line 29"), "{s2}");
+    }
+
+    #[test]
+    fn blank_line_in_text_renders_as_one_blank_row() {
+        let mut app = App::new("s");
+        app.apply(UiMsg::Event(AgentEvent::AssistantText("para one\n\npara two".into())));
+        let s = screen(&app, 20, 8);
+        let rows: Vec<&str> = s.lines().map(str::trim_end).collect();
+        let one = rows.iter().position(|r| *r == "para one").unwrap();
+        let two = rows.iter().position(|r| *r == "para two").unwrap();
+        assert_eq!(two - one, 2, "expected exactly one blank row between paragraphs:\n{s}");
     }
 
     #[test]
