@@ -2,7 +2,7 @@
 //!
 //! Supports headings, paragraphs, emphasis/strong/strikethrough, inline code,
 //! fenced code blocks, bullet and numbered lists (nested), block quotes,
-//! links and horizontal rules. Anything else falls through as plain text.
+//! tables, links and horizontal rules. Anything else falls through as plain text.
 
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use ratatui::style::{Color, Modifier, Style};
@@ -46,7 +46,7 @@ enum ListKind {
 struct Renderer {
     width: usize,
     out: Vec<Line<'static>>,
-    /// Inline spans of the paragraph/heading/list item being built.
+    /// Inline spans of the paragraph/heading/list item/table cell being built.
     para: Vec<Span<'static>>,
     /// Style modifiers from open inline tags (strong, emphasis, …).
     styles: Vec<Style>,
@@ -58,6 +58,10 @@ struct Renderer {
     code: String,
     /// Info string of the open fenced block ("rust", "markdown", …).
     code_lang: String,
+    /// Level of the heading being built (for the underline rule at its end).
+    heading: Option<HeadingLevel>,
+    /// Rows of cells collected for the open table; row 0 is the header.
+    table: Vec<Vec<Vec<Span<'static>>>>,
     /// Whether the next paragraph needs a blank line before it.
     need_gap: bool,
 }
@@ -146,14 +150,16 @@ impl Renderer {
             Tag::Heading { level, .. } => {
                 self.flush_para();
                 self.gap();
-                let color = match level {
-                    HeadingLevel::H1 => Color::Magenta,
-                    HeadingLevel::H2 => Color::Blue,
-                    _ => Color::Cyan,
+                // No font sizes in a terminal: signal level with color/weight
+                // and an underline rule for H1/H2 (the hashes are dropped).
+                let style = match level {
+                    HeadingLevel::H1 => Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+                    HeadingLevel::H2 => Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    HeadingLevel::H3 => Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                    _ => Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
                 };
-                self.styles.push(Style::default().fg(color).add_modifier(Modifier::BOLD));
-                let hashes = "#".repeat(level as usize);
-                self.para.push(Span::styled(format!("{hashes} "), self.style()));
+                self.styles.push(style);
+                self.heading = Some(level);
             }
             Tag::BlockQuote(_) => {
                 self.flush_para();
@@ -202,8 +208,13 @@ impl Renderer {
                 self.text(&dest_url);
                 self.text("]");
             }
-            Tag::Table(_) | Tag::TableHead | Tag::TableRow => {}
-            Tag::TableCell => self.text(" │ "),
+            Tag::Table(_) => {
+                self.flush_para();
+                self.gap();
+                self.table.clear();
+            }
+            Tag::TableHead | Tag::TableRow => self.table.push(Vec::new()),
+            Tag::TableCell => self.para.clear(),
             Tag::HtmlBlock | Tag::FootnoteDefinition(_) | Tag::DefinitionList | Tag::DefinitionListTitle | Tag::DefinitionListDefinition | Tag::MetadataBlock(_) | Tag::Superscript | Tag::Subscript => {}
         }
     }
@@ -215,8 +226,19 @@ impl Renderer {
                 self.need_gap = true;
             }
             TagEnd::Heading(_) => {
+                let title_w: usize = self.para.iter().map(|s| s.content.width()).sum();
                 self.flush_para();
                 self.styles.pop();
+                let rule = match self.heading.take() {
+                    Some(HeadingLevel::H1) => Some(("═", Color::Magenta)),
+                    Some(HeadingLevel::H2) => Some(("─", Color::Cyan)),
+                    _ => None,
+                };
+                if let Some((ch, color)) = rule {
+                    let ind = self.indent();
+                    let n = title_w.min(self.width.saturating_sub(ind.len())).max(1);
+                    self.out.push(Line::from(Span::styled(format!("{ind}{}", ch.repeat(n)), Style::default().fg(color))));
+                }
                 self.need_gap = true;
             }
             TagEnd::BlockQuote(_) => {
@@ -276,11 +298,18 @@ impl Renderer {
             TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough | TagEnd::Link => {
                 self.styles.pop();
             }
-            TagEnd::TableRow | TagEnd::TableHead => {
-                self.text(" │");
-                self.flush_para();
+            TagEnd::TableCell => {
+                let cell = std::mem::take(&mut self.para);
+                if let Some(row) = self.table.last_mut() {
+                    row.push(cell);
+                }
             }
-            TagEnd::Table => self.need_gap = true,
+            TagEnd::TableRow | TagEnd::TableHead => {}
+            TagEnd::Table => {
+                let rows = std::mem::take(&mut self.table);
+                self.out.extend(draw_table(rows, &self.indent()));
+                self.need_gap = true;
+            }
             _ => {}
         }
     }
@@ -318,6 +347,74 @@ fn wrap(spans: Vec<Span<'static>>, width: usize, first: &str, cont: &str) -> Vec
     trim_end(&mut cur);
     lines.push(Line::from(cur));
     lines
+}
+
+/// Box-draw a table with columns sized to their widest cell. The first row
+/// is the header (bold) and is separated from the body by a rule.
+fn draw_table(rows: Vec<Vec<Vec<Span<'static>>>>, ind: &str) -> Vec<Line<'static>> {
+    let ncols = rows.iter().map(Vec::len).max().unwrap_or(0);
+    if ncols == 0 {
+        return Vec::new();
+    }
+    // Cell text as one trimmed string per span (markdown leaves padding
+    // spaces around cell content).
+    let cells: Vec<Vec<Vec<(String, Style)>>> = rows
+        .iter()
+        .map(|r| {
+            r.iter()
+                .map(|c| {
+                    let n = c.len();
+                    c.iter()
+                        .enumerate()
+                        .map(|(i, s)| {
+                            let mut t = s.content.as_ref();
+                            if i == 0 {
+                                t = t.trim_start();
+                            }
+                            if i + 1 == n {
+                                t = t.trim_end();
+                            }
+                            (t.to_string(), s.style)
+                        })
+                        .collect()
+                })
+                .collect()
+        })
+        .collect();
+    let cell_w = |c: &Vec<(String, Style)>| c.iter().map(|(t, _)| t.width()).sum::<usize>();
+    let mut widths = vec![0usize; ncols];
+    for r in &cells {
+        for (i, c) in r.iter().enumerate() {
+            widths[i] = widths[i].max(cell_w(c));
+        }
+    }
+    let border = Style::default().fg(Color::DarkGray);
+    let rule = |l: &str, m: &str, r: &str| {
+        let body: Vec<String> = widths.iter().map(|w| "─".repeat(w + 2)).collect();
+        Line::from(Span::styled(format!("{ind}{l}{}{r}", body.join(m)), border))
+    };
+    let mut out = vec![rule("┌", "┬", "┐")];
+    for (ri, r) in cells.iter().enumerate() {
+        let mut spans = vec![Span::styled(format!("{ind}│"), border)];
+        for (i, w) in widths.iter().enumerate() {
+            let used = r.get(i).map_or(0, cell_w);
+            spans.push(Span::raw(" "));
+            if let Some(c) = r.get(i) {
+                for (t, st) in c {
+                    let st = if ri == 0 { st.add_modifier(Modifier::BOLD) } else { *st };
+                    spans.push(Span::styled(t.clone(), st));
+                }
+            }
+            spans.push(Span::raw(" ".repeat(w - used + 1)));
+            spans.push(Span::styled("│", border));
+        }
+        out.push(Line::from(spans));
+        if ri == 0 && cells.len() > 1 {
+            out.push(rule("├", "┼", "┤"));
+        }
+    }
+    out.push(rule("└", "┴", "┘"));
+    out
 }
 
 /// Split into words, each carrying its trailing whitespace.
@@ -362,7 +459,8 @@ mod tests {
         assert_eq!(
             r,
             vec![
-                "# Title",
+                "Title",
+                "═════",
                 "",
                 "Some em and strong text.",
                 "",
@@ -378,9 +476,30 @@ mod tests {
             ]
         );
         let lines = render(md, 40);
-        assert!(lines[0].spans.iter().any(|s| s.content == "# Title" && s.style.add_modifier.contains(Modifier::BOLD)));
-        assert!(lines[2].spans.iter().any(|s| s.content == "em" && s.style.add_modifier.contains(Modifier::ITALIC)));
-        assert!(lines[2].spans.iter().any(|s| s.content == "strong" && s.style.add_modifier.contains(Modifier::BOLD)));
+        assert!(lines[0].spans.iter().any(|s| s.content == "Title" && s.style.add_modifier.contains(Modifier::BOLD)));
+        assert!(lines[3].spans.iter().any(|s| s.content == "em" && s.style.add_modifier.contains(Modifier::ITALIC)));
+        assert!(lines[3].spans.iter().any(|s| s.content == "strong" && s.style.add_modifier.contains(Modifier::BOLD)));
+    }
+
+    #[test]
+    fn heading_levels_drop_hashes() {
+        assert_eq!(rows("## Two\n\n### Three\n\n#### Four", 40), vec!["Two", "───", "", "Three", "", "Four"]);
+    }
+
+    #[test]
+    fn tables_are_boxed_and_aligned() {
+        let md = "| Feature | Groovy? |\n|---|---|\n| Dynamic | ✅ |\n| **Scripting** | yes |";
+        assert_eq!(
+            rows(md, 60),
+            vec![
+                "┌───────────┬─────────┐",
+                "│ Feature   │ Groovy? │",
+                "├───────────┼─────────┤",
+                "│ Dynamic   │ ✅      │",
+                "│ Scripting │ yes     │",
+                "└───────────┴─────────┘",
+            ]
+        );
     }
 
     #[test]
@@ -406,9 +525,9 @@ mod tests {
     #[test]
     fn markdown_fences_render_as_markdown() {
         let r = rows("```markdown\n# Hi\n\n- a\n```\n", 20);
-        assert_eq!(r, vec!["# Hi", "", "• a"]);
+        assert_eq!(r, vec!["Hi", "══", "", "• a"]);
         // An embedded ```markdown block renders too; other languages stay code.
-        let r = rows("Intro\n\n```markdown\n# Hi\n```\n\n```rust\n# x\n```", 20);
-        assert_eq!(r, vec!["Intro", "", "# Hi", "", "▎rust", "▎ # x"]);
+        let r = rows("Intro\n\n```markdown\n### Hi\n```\n\n```rust\n# x\n```", 20);
+        assert_eq!(r, vec!["Intro", "", "Hi", "", "▎rust", "▎ # x"]);
     }
 }
