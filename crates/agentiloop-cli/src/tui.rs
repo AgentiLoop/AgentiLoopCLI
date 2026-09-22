@@ -3,6 +3,7 @@
 //! UI thread over channels; permission prompts appear as a modal.
 
 use std::cell::RefCell;
+use std::path::{Path, PathBuf};
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -120,6 +121,8 @@ pub struct App {
     status: String,
     history: Vec<String>,
     hist_idx: Option<usize>,
+    /// Where `history` is persisted (shared with the REPL's rustyline file).
+    history_file: Option<PathBuf>,
     /// Whether the last entry is assistant text still being streamed.
     streaming: bool,
     /// `path` argument of in-flight `read_file` calls, by tool-call id.
@@ -156,10 +159,21 @@ impl App {
             status: status.into(),
             history: Vec::new(),
             hist_idx: None,
+            history_file: None,
             streaming: false,
             pending_paths: HashMap::new(),
             link_hits: RefCell::new(Vec::new()),
         }
+    }
+
+    /// Load prompt history from `path` and keep appending to it, so ↑ recalls
+    /// prompts from earlier launches (TUI and REPL share the file).
+    pub fn with_history_file(mut self, path: Option<PathBuf>) -> Self {
+        if let Some(p) = &path {
+            self.history = load_history(p);
+        }
+        self.history_file = path;
+        self
     }
 
     pub fn quit(&self) -> bool {
@@ -274,6 +288,11 @@ impl App {
                 self.scroll = 0;
                 if self.history.last() != Some(&line) {
                     self.history.push(line.clone());
+                    if let Some(p) = &self.history_file {
+                        if let Err(e) = save_history(p, &self.history) {
+                            tracing::warn!("could not save history: {e}");
+                        }
+                    }
                 }
                 if line == "/exit" || line == "/quit" {
                     self.quit = true;
@@ -511,6 +530,55 @@ pub fn run(
     result
 }
 
+/// Entries kept in the history file.
+const HISTORY_MAX: usize = 1000;
+
+/// Read rustyline's `#V2` history format (`\\` and `\n` escaped); plain
+/// one-entry-per-line files are accepted too. Missing file → empty.
+fn load_history(path: &Path) -> Vec<String> {
+    let Ok(text) = std::fs::read_to_string(path) else { return Vec::new() };
+    let mut lines = text.lines().peekable();
+    let v2 = lines.peek() == Some(&"#V2");
+    if v2 {
+        lines.next();
+    }
+    lines
+        .filter(|l| !l.is_empty())
+        .map(|l| if v2 { unescape(l) } else { l.to_string() })
+        .collect()
+}
+
+/// Write the last `HISTORY_MAX` entries in rustyline's `#V2` format so the
+/// line REPL can read the same file.
+fn save_history(path: &Path, history: &[String]) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut out = String::from("#V2\n");
+    for h in &history[history.len().saturating_sub(HISTORY_MAX)..] {
+        out.push_str(&h.replace('\\', "\\\\").replace('\n', "\\n"));
+        out.push('\n');
+    }
+    std::fs::write(path, out)
+}
+
+fn unescape(l: &str) -> String {
+    let mut s = String::with_capacity(l.len());
+    let mut chars = l.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => s.push('\n'),
+                Some(o) => s.push(o),
+                None => s.push('\\'),
+            }
+        } else {
+            s.push(c);
+        }
+    }
+    s
+}
+
 /// Open `url` with the platform's default handler.
 fn open_url(url: &str) -> std::io::Result<()> {
     #[cfg(target_os = "macos")]
@@ -711,6 +779,27 @@ mod tests {
         let Some(UiMsg::Permission(req)) = rx.recv().await else { panic!() };
         drop(req);
         assert_eq!(check.await.unwrap(), Permission::Deny);
+    }
+
+    #[test]
+    fn history_persists_across_launches() {
+        let dir = std::env::temp_dir().join(format!("agentiloop-hist-{}", std::process::id()));
+        let path = dir.join("history.txt");
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut app = App::new("s").with_history_file(Some(path.clone()));
+        type_str(&mut app, "first \\ prompt");
+        app.handle_key(key(KeyCode::Enter));
+        app.apply(UiMsg::Idle);
+        type_str(&mut app, "second");
+        app.handle_key(key(KeyCode::Enter));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "#V2\nfirst \\\\ prompt\nsecond\n");
+        // A fresh launch recalls both, newest first.
+        let mut app2 = App::new("s").with_history_file(Some(path.clone()));
+        app2.handle_key(key(KeyCode::Up));
+        assert_eq!(app2.input, "second");
+        app2.handle_key(key(KeyCode::Up));
+        assert_eq!(app2.input, "first \\ prompt");
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[test]

@@ -140,7 +140,7 @@ async fn main() -> Result<()> {
             session.id
         );
         let (in_tx, mut in_rx) = tokio::sync::mpsc::unbounded_channel::<tui::Input>();
-        let app = tui::App::new(status);
+        let app = tui::App::new(status).with_history_file(settings::history_path());
         let ui = tokio::task::spawn_blocking(move || tui::run(app, ui_rx, in_tx));
         // Agent side: one prompt or slash command at a time, until the UI hangs up.
         while let Some(tui::Input::Submit(line)) = in_rx.recv().await {
