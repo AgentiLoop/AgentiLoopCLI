@@ -9,6 +9,11 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
 
+/// Link color: macOS system blue (dark-mode variant). ANSI `Blue` is far
+/// too dark on dark themes; truecolor is supported by every mainstream
+/// terminal on macOS, Linux and Windows.
+const LINK_BLUE: Color = Color::Rgb(10, 132, 255);
+
 /// Render `text` as markdown into lines no wider than `width` cells.
 pub fn render(text: &str, width: usize) -> Vec<Line<'static>> {
     let width = width.max(1);
@@ -202,7 +207,7 @@ impl Renderer {
             Tag::Emphasis => self.styles.push(Style::default().add_modifier(Modifier::ITALIC)),
             Tag::Strong => self.styles.push(Style::default().add_modifier(Modifier::BOLD)),
             Tag::Strikethrough => self.styles.push(Style::default().add_modifier(Modifier::CROSSED_OUT)),
-            Tag::Link { .. } => self.styles.push(Style::default().fg(Color::Blue).add_modifier(Modifier::UNDERLINED)),
+            Tag::Link { .. } => self.styles.push(Style::default().fg(LINK_BLUE).add_modifier(Modifier::UNDERLINED)),
             Tag::Image { dest_url, .. } => {
                 self.text("[image: ");
                 self.text(&dest_url);
