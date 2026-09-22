@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use syntect::easy::HighlightLines;
-use syntect::highlighting::{FontStyle, Theme, ThemeSet};
+use syntect::highlighting::{FontStyle, StyleModifier, Theme, ThemeItem};
 use syntect::parsing::{SyntaxDefinition, SyntaxReference, SyntaxSet};
 use syntect::util::LinesWithEndings;
 use unicode_width::UnicodeWidthChar;
@@ -30,11 +30,40 @@ fn syntaxes() -> &'static SyntaxSet {
     })
 }
 
+/// Xcode Dark palette (same hex values as AgentColorSyntax's CodeBlockTheme),
+/// mapped onto TextMate scopes. Keywords are bold like the Agent app.
 fn theme() -> &'static Theme {
     static T: OnceLock<Theme> = OnceLock::new();
     T.get_or_init(|| {
-        let mut ts = ThemeSet::load_defaults();
-        ts.themes.remove("base16-ocean.dark").expect("bundled theme")
+        let rgb = |h: u32| syntect::highlighting::Color { r: (h >> 16) as u8, g: (h >> 8) as u8, b: h as u8, a: 0xFF };
+        let item = |scope: &str, h: u32, bold: bool| ThemeItem {
+            scope: scope.parse().expect("valid scope selector"),
+            style: StyleModifier {
+                foreground: Some(rgb(h)),
+                background: None,
+                font_style: Some(if bold { FontStyle::BOLD } else { FontStyle::empty() }),
+            },
+        };
+        let mut t = Theme::default();
+        t.settings.foreground = Some(rgb(0xDFDFE0));
+        // Order matters: later, more specific rules win.
+        t.scopes = vec![
+            item("comment, punctuation.definition.comment", 0x6C9C5A, false),
+            item("keyword, storage, storage.type, storage.modifier, keyword.control, keyword.other", 0xFF7AB2, true),
+            item("keyword.operator, punctuation, punctuation.separator, punctuation.terminator, punctuation.accessor", 0xDFDFE0, false),
+            item("string, punctuation.definition.string, string.quoted, string.regexp", 0xFC6A5D, false),
+            item("constant.numeric, constant.language, constant.character", 0xD9C97C, false),
+            item("constant.other, support.constant, variable.other.constant", 0xD9C97C, false),
+            item("entity.name.type, entity.name.class, entity.name.struct, entity.name.enum, entity.name.trait, entity.name.impl, entity.other.inherited-class, support.type, support.class, storage.type.class", 0xD0A8FF, false),
+            item("entity.name.function, entity.name.method, meta.function-call, variable.function, meta.function-call.generic", 0x67B7A4, false),
+            item("support.function, support.macro, entity.name.macro, meta.macro", 0xB281EB, false),
+            item("meta.preprocessor, keyword.control.import, keyword.control.directive, keyword.other.import, keyword.other.use, keyword.other.preprocessor", 0xFFA14F, true),
+            item("meta.annotation, entity.other.attribute-name, meta.attribute, support.other.attribute, variable.annotation, punctuation.definition.annotation", 0xFD8F3F, false),
+            item("variable.other.member, variable.other.property, variable.other.object.property, meta.property, support.type.property-name, entity.name.tag", 0x4EB0CC, false),
+            item("variable.language, variable.language.self, variable.language.this, variable.parameter.self", 0xFF7AB2, true),
+            item("variable.parameter, variable.other", 0xDFDFE0, false),
+        ];
+        t
     })
 }
 
@@ -163,6 +192,24 @@ mod tests {
         assert!(hl[0].iter().any(|s| s.content == "let"));
         assert!(highlight("[package]\nname = \"a\"\n", "toml").is_some());
         assert!(highlight_numbered(&["    1│import SwiftUI"], "App/AgentApp.swift").is_some());
+    }
+
+    #[test]
+    fn xcode_dark_palette_is_applied() {
+        let hl = highlight("pub fn f() { let s = \"hi\"; } // note\n", "rust").unwrap();
+        let find = |t: &str| hl[0].iter().find(|s| s.content == t).unwrap().style;
+        let kw = find("fn");
+        assert_eq!(kw.fg, Some(Color::Rgb(0xFF, 0x7A, 0xB2)));
+        assert!(kw.add_modifier.contains(Modifier::BOLD));
+        assert_eq!(find("f").fg, Some(Color::Rgb(0x67, 0xB7, 0xA4)));
+        assert_eq!(find("hi").fg, Some(Color::Rgb(0xFC, 0x6A, 0x5D)));
+        assert_eq!(find(" note").fg, Some(Color::Rgb(0x6C, 0x9C, 0x5A)));
+        let sw = highlight("import SwiftUI\nstruct A { var x: Int = 1 }\n", "swift").unwrap();
+        // `import` is a preprocessor-class keyword → Xcode orange.
+        let imp = sw[0].iter().find(|s| s.content == "import").unwrap().style;
+        assert_eq!(imp.fg, Some(Color::Rgb(0xFF, 0xA1, 0x4F)));
+        assert_eq!(sw[1].iter().find(|s| s.content == "struct").unwrap().style.fg, Some(Color::Rgb(0xFF, 0x7A, 0xB2)));
+        assert_eq!(sw[1].iter().find(|s| s.content == "Int").unwrap().style.fg, Some(Color::Rgb(0xD0, 0xA8, 0xFF)));
     }
 
     #[test]
