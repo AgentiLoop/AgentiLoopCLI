@@ -179,7 +179,9 @@ impl App {
                 self.push(Kind::Tool, format!("\u{1f527} {name} {}", crate::compact(&input)));
             }
             AgentEvent::ToolResult { output, is_error, .. } => {
-                let preview: String = output.lines().take(8).collect::<Vec<_>>().join("\n");
+                // Continuation lines are indented past the mark so multi-line
+                // output (e.g. numbered file contents) stays column-aligned.
+                let preview: String = output.lines().take(8).collect::<Vec<_>>().join("\n  ");
                 let (kind, mark) = if is_error { (Kind::ToolError, "✖") } else { (Kind::Tool, "✓") };
                 self.push(kind, format!("{mark} {preview}"));
             }
