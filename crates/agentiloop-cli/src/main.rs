@@ -1,3 +1,4 @@
+mod markdown;
 mod permission;
 mod settings;
 mod tui;

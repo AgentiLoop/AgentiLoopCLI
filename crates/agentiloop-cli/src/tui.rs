@@ -324,6 +324,11 @@ impl App {
         let width = area.width.max(1) as usize;
         let mut lines: Vec<Line> = Vec::new();
         for e in &self.entries {
+            if e.kind == Kind::Assistant {
+                lines.extend(crate::markdown::render(&e.text, width));
+                lines.push(Line::default());
+                continue;
+            }
             let (prefix, style) = match e.kind {
                 Kind::User => ("> ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
                 Kind::Assistant => ("", Style::default()),

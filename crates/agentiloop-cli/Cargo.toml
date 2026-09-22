@@ -24,3 +24,5 @@ dirs.workspace = true
 rustyline = "15"
 ratatui = "0.30"
 textwrap = "0.16"
+pulldown-cmark = { version = "0.13", default-features = false }
+unicode-width = "0.2"
