@@ -141,14 +141,17 @@ async fn main() -> Result<()> {
         // Agent side: one prompt or slash command at a time, until the UI hangs up.
         while let Some(tui::Input::Submit(line)) = in_rx.recv().await {
             if line.starts_with('/') {
-                let tx = ui_tx.clone();
-                let mut say = |s: String| {
-                    let _ = tx.send(tui::UiMsg::Line(s));
-                };
-                if let Err(e) =
-                    slash_command(&line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), false, &mut say)
-                        .await
-                {
+                // Collect the command's output into one transcript entry so
+                // multi-line output (the /model list) isn't double-spaced.
+                let mut out: Vec<String> = Vec::new();
+                let res = slash_command(&line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), false, &mut |s| {
+                    out.push(s)
+                })
+                .await;
+                if !out.is_empty() {
+                    let _ = ui_tx.send(tui::UiMsg::Line(out.join("\n")));
+                }
+                if let Err(e) = res {
                     let _ = ui_tx.send(tui::UiMsg::Error(format!("{e:#}")));
                 }
                 // /model, /clear and /resume change the model or session id.
