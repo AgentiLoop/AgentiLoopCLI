@@ -185,6 +185,27 @@ fn denied_permission_becomes_error_result() {
 }
 
 #[test]
+fn cancelled_call_is_skipped_and_the_loop_continues() {
+    struct CancelAll;
+    #[async_trait]
+    impl PermissionPolicy for CancelAll {
+        async fn check(&self, _tool: &str, _is_mutating: bool, _input: &Value) -> Permission {
+            Permission::Cancel
+        }
+    }
+    let p = ScriptedProvider::new(vec![tool_call("t1", "echo", json!({"msg": "x"})), text("carried on")]);
+    let mut a = agent(p.clone(), Arc::new(CancelAll), 5);
+    let (res, events) = collect(&mut a, "go");
+    res.unwrap();
+    assert!(events.iter().any(
+        |e| matches!(e, AgentEvent::ToolResult { is_error: true, output, .. } if output.starts_with("cancelled") && output.contains("Continue"))
+    ));
+    // The model got the result and answered again.
+    assert_eq!(p.requests.lock().unwrap().len(), 2);
+    assert!(events.iter().any(|e| matches!(e, AgentEvent::AssistantText(t) if t == "carried on")));
+}
+
+#[test]
 fn max_turns_stops_runaway_loop() {
     let looping: Vec<_> = (0..10).map(|i| tool_call(&format!("t{i}"), "echo", json!({"msg": "again"}))).collect();
     let p = ScriptedProvider::new(looping);

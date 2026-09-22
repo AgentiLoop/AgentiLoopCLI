@@ -11,6 +11,9 @@ pub enum ToolError {
     InvalidInput(String),
     #[error("permission denied: {0}")]
     Denied(String),
+    /// The user skipped this one call; worded so the model carries on.
+    #[error("cancelled: the user skipped this `{0}` call. Continue with the rest of the task without it.")]
+    Cancelled(String),
     #[error("{0}")]
     Failed(String),
 }

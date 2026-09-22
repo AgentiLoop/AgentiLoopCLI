@@ -7,6 +7,8 @@ use serde_json::Value;
 pub enum Permission {
     Allow,
     Deny,
+    /// Skip just this call (e.g. Esc in the TUI); the agent keeps working.
+    Cancel,
 }
 
 /// Decides whether a tool call may run. The CLI supplies an interactive

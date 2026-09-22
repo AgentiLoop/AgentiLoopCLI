@@ -243,8 +243,10 @@ impl Agent {
             .get(name)
             .ok_or_else(|| ToolError::InvalidInput(format!("unknown tool `{name}`")))?;
 
-        if self.policy.check(name, tool.is_mutating(), &input).await == Permission::Deny {
-            return Err(ToolError::Denied(format!("user declined `{name}`")));
+        match self.policy.check(name, tool.is_mutating(), &input).await {
+            Permission::Allow => {}
+            Permission::Deny => return Err(ToolError::Denied(format!("user declined `{name}`"))),
+            Permission::Cancel => return Err(ToolError::Cancelled(name.to_string())),
         }
 
         tool.call(&self.ctx, input).await

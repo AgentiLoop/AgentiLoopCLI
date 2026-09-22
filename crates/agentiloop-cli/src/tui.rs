@@ -52,6 +52,8 @@ pub enum Answer {
     Allow,
     Always,
     Deny,
+    /// Esc: skip this call, keep the agent running.
+    Cancel,
 }
 
 /// Permission policy that asks the UI thread and awaits its answer.
@@ -87,6 +89,7 @@ impl PermissionPolicy for ChannelPolicy {
                 self.always.lock().unwrap().insert(tool.to_string());
                 Permission::Allow
             }
+            Ok(Answer::Cancel) => Permission::Cancel,
             _ => Permission::Deny,
         }
     }
@@ -265,7 +268,8 @@ impl App {
             let answer = match key.code {
                 KeyCode::Char('y') | KeyCode::Char('Y') => Answer::Allow,
                 KeyCode::Char('a') | KeyCode::Char('A') => Answer::Always,
-                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => Answer::Deny,
+                KeyCode::Char('n') | KeyCode::Char('N') => Answer::Deny,
+                KeyCode::Esc => Answer::Cancel,
                 _ => {
                     self.modal = Some(req);
                     return None;
@@ -481,7 +485,7 @@ impl App {
         let mut lines: Vec<Line> = body.iter().map(|l| Line::from(*l)).collect();
         lines.push(Line::default());
         lines.push(Line::from(Span::styled(
-            format!("[y]es  [n]o  [a]lways for `{}`", req.tool),
+            format!("[y]es  [n]o  [a]lways for `{}`  [esc] skip", req.tool),
             Style::default().add_modifier(Modifier::BOLD),
         )));
         let block = Block::default()
@@ -752,6 +756,18 @@ mod tests {
         let one = rows.iter().position(|r| *r == "para one").unwrap();
         let two = rows.iter().position(|r| *r == "para two").unwrap();
         assert_eq!(two - one, 2, "expected exactly one blank row between paragraphs:\n{s}");
+    }
+
+    #[test]
+    fn esc_in_permission_modal_cancels_just_that_call() {
+        let mut app = App::new("s");
+        let (reply, rx) = oneshot::channel();
+        app.apply(UiMsg::Permission(PermissionRequest { tool: "bash".into(), input: "{}".into(), reply }));
+        assert!(screen(&app, 70, 12).contains("[esc] skip"));
+        assert!(app.handle_key(key(KeyCode::Esc)).is_none());
+        assert!(app.modal.is_none());
+        assert!(!app.quit());
+        assert_eq!(rx.blocking_recv().unwrap(), Answer::Cancel);
     }
 
     #[test]
