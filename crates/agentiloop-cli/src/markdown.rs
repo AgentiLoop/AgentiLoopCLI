@@ -56,6 +56,8 @@ struct Renderer {
     marker: Option<String>,
     in_code: bool,
     code: String,
+    /// Info string of the open fenced block ("rust", "markdown", …).
+    code_lang: String,
     /// Whether the next paragraph needs a blank line before it.
     need_gap: bool,
 }
@@ -164,12 +166,10 @@ impl Renderer {
                 self.gap();
                 self.in_code = true;
                 self.code.clear();
-                if let CodeBlockKind::Fenced(lang) = kind {
-                    if !lang.is_empty() {
-                        let ind = self.indent();
-                        self.out.push(Line::from(Span::styled(format!("{ind}▎{lang}"), Style::default().fg(Color::DarkGray))));
-                    }
-                }
+                self.code_lang = match kind {
+                    CodeBlockKind::Fenced(lang) => lang.trim().to_string(),
+                    CodeBlockKind::Indented => String::new(),
+                };
             }
             Tag::List(start) => {
                 self.flush_para();
@@ -227,9 +227,25 @@ impl Renderer {
             }
             TagEnd::CodeBlock => {
                 self.in_code = false;
-                let ind = self.indent();
-                let st = Style::default().fg(Color::Green);
                 let code = std::mem::take(&mut self.code);
+                let lang = std::mem::take(&mut self.code_lang);
+                let ind = self.indent();
+                // A ```markdown fence is the model showing Markdown, not code:
+                // render its body instead of boxing it.
+                if lang == "markdown" || lang == "md" {
+                    let inner = render(&code, self.width.saturating_sub(ind.len()));
+                    for l in inner {
+                        let mut spans = vec![Span::raw(ind.clone())];
+                        spans.extend(l.spans);
+                        self.out.push(Line::from(spans));
+                    }
+                    self.need_gap = true;
+                    return;
+                }
+                if !lang.is_empty() {
+                    self.out.push(Line::from(Span::styled(format!("{ind}▎{lang}"), Style::default().fg(Color::DarkGray))));
+                }
+                let st = Style::default().fg(Color::Green);
                 for raw in code.strip_suffix('\n').unwrap_or(&code).split('\n') {
                     let opts = textwrap::Options::new(self.width.saturating_sub(ind.len() + 2).max(1));
                     for piece in textwrap::wrap(raw, &opts) {
@@ -388,11 +404,11 @@ mod tests {
     }
 
     #[test]
-    fn whole_reply_in_markdown_fence_is_unwrapped() {
+    fn markdown_fences_render_as_markdown() {
         let r = rows("```markdown\n# Hi\n\n- a\n```\n", 20);
         assert_eq!(r, vec!["# Hi", "", "• a"]);
-        // A real code block among other text stays a code block.
-        let r = rows("Intro\n\n```markdown\n# Hi\n```", 20);
-        assert_eq!(r, vec!["Intro", "", "▎markdown", "▎ # Hi"]);
+        // An embedded ```markdown block renders too; other languages stay code.
+        let r = rows("Intro\n\n```markdown\n# Hi\n```\n\n```rust\n# x\n```", 20);
+        assert_eq!(r, vec!["Intro", "", "# Hi", "", "▎rust", "▎ # x"]);
     }
 }
