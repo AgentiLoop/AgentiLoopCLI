@@ -15,6 +15,8 @@ pub struct OpenAIProvider {
     client: reqwest::Client,
     api_key: String,
     base_url: String,
+    name: &'static str,
+    default_model: String,
 }
 
 impl OpenAIProvider {
@@ -24,7 +26,18 @@ impl OpenAIProvider {
             client: reqwest::Client::new(),
             api_key: api_key.into().trim().to_string(),
             base_url: base_url.trim_end_matches('/').to_string(),
+            name: "openai",
+            default_model: "gpt-4o-mini".into(),
         }
+    }
+
+    /// Rebrand this backend for a server that speaks the OpenAI wire format
+    /// under its own name (e.g. `omlx`), so settings.json and the status line
+    /// key on that name. An empty `default_model` means "ask `/models`".
+    pub fn with_identity(mut self, name: &'static str, default_model: impl Into<String>) -> Self {
+        self.name = name;
+        self.default_model = default_model.into();
+        self
     }
 
     /// Reads `OPENAI_API_KEY` and `OPENAI_BASE_URL` (default `https://api.openai.com/v1`).
@@ -309,11 +322,11 @@ fn build_content(text: String, calls: Vec<WireToolCall>) -> anyhow::Result<Vec<C
 #[async_trait]
 impl Provider for OpenAIProvider {
     fn name(&self) -> &str {
-        "openai"
+        self.name
     }
 
     fn default_model(&self) -> &str {
-        "gpt-4o-mini"
+        &self.default_model
     }
 
     /// `GET /models`; sorted newest first by `created` when present.

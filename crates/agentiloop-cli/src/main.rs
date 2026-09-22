@@ -8,7 +8,7 @@ use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
 use agentiloop_core::{Agent, AgentConfig, AgentEvent, ModelInfo, Provider, Session, ToolContext};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use rustyline::error::ReadlineError;
 
@@ -16,9 +16,10 @@ use rustyline::error::ReadlineError;
 #[derive(Parser, Debug)]
 #[command(name = "agentiloop", version, about)]
 struct Cli {
-    /// Model backend: `anthropic` or `openai` (OpenAI-compatible: OpenAI, Ollama,
-    /// LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL). Auto-detected from
-    /// which credentials are set when omitted.
+    /// Model backend: `anthropic`, `openai` (OpenAI-compatible: OpenAI, Ollama,
+    /// LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL), or `omlx` (local
+    /// oMLX server, http://localhost:8000/v1). Auto-detected from which
+    /// credentials are set when omitted.
     #[arg(short, long, env = "AGENTILOOP_PROVIDER")]
     provider: Option<String>,
 
@@ -95,11 +96,23 @@ async fn main() -> Result<()> {
         eprintln!("no previous session for {}; starting fresh", cwd.display());
     }
 
-    let model = cli
+    let model = match cli
         .model
         .or_else(|| resumed.as_ref().map(|s| s.model.clone()))
         .or_else(|| saved.model_for(provider.name()).map(str::to_string))
-        .unwrap_or_else(|| provider.default_model().to_string());
+    {
+        Some(m) => m,
+        // Local servers (oMLX) have no fixed catalog: take whatever is served first.
+        None if provider.default_model().is_empty() => provider
+            .list_models()
+            .await
+            .with_context(|| format!("{} is not reachable; is the server running?", provider.name()))?
+            .into_iter()
+            .next()
+            .map(|m| m.id)
+            .with_context(|| format!("{} serves no models; load one or pass --model", provider.name()))?,
+        None => provider.default_model().to_string(),
+    };
     let config = AgentConfig { model, max_turns: cli.max_turns, compact_at_tokens: cli.compact_at, ..Default::default() };
 
     let mut agent = Agent::new(provider.clone(), tools, policy, config, ToolContext { cwd: cwd.clone() });

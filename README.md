@@ -7,7 +7,7 @@ A cross-platform (macOS / Linux / Windows) agentic coding loop in the spirit of 
 ```
 crates/
   agentiloop-core/      message model, Tool trait + registry, Provider trait, permission gate, the agent loop
-  agentiloop-provider/  model backends: Anthropic Messages API, OpenAI-compatible Chat Completions
+  agentiloop-provider/  model backends: Anthropic Messages API, OpenAI-compatible Chat Completions, oMLX
   agentiloop-tools/     built-in tools: read_file, write_file, edit_file, list_dir, bash
   agentiloop-cli/       `agentiloop` binary: REPL + one-shot mode, interactive permission prompts
 ```
@@ -27,25 +27,30 @@ export OPENAI_API_KEY=sk-...                                             # OpenA
 cargo run -- -p openai -m gpt-4o-mini "summarize the layout"
 export OPENAI_BASE_URL=http://localhost:11434/v1                         # local Ollama, no key needed
 cargo run -- -m qwen3:4b
+
+# oMLX (https://omlx.ai) — local MLX server on Apple Silicon, http://localhost:8000/v1
+# No key or model needed: the first model oMLX serves is used; /model lists the rest.
+cargo run -- -p omlx "summarize the layout"
+export OMLX_BASE_URL=http://localhost:8000/v1  OMLX_API_KEY=...            # optional overrides (OMLX_PORT also honoured)
 ```
 
-Provider is auto-detected from which credentials are set (`ANTHROPIC_API_KEY` wins); force one with `--provider` / `AGENTILOOP_PROVIDER`.
+Provider is auto-detected from which credentials are set (`ANTHROPIC_API_KEY` wins, then `OPENAI_*`, then `OMLX_*`); force one with `--provider` / `AGENTILOOP_PROVIDER`.
 
 ## TUI
 
 `agentiloop --tui` (or `AGENTILOOP_TUI=1`) opens a full-screen ratatui interface: scrolling transcript, prompt box, status bar. Permission prompts appear as a modal (`y` / `n` / `a`lways). Keys: Enter send, ↑/↓ prompt history, PgUp/PgDn scroll, Ctrl-U clear line, Ctrl-C quit. All slash commands work; `/model` with no argument lists models — pick with `/model <n|id>`.
 
-Env: `AGENTILOOP_PROVIDER`, `AGENTILOOP_MODEL`, `AGENTILOOP_YES`, `AGENTILOOP_TUI`, `AGENTILOOP_HOME`, `AGENTILOOP_COMPACT_AT`, `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `RUST_LOG=debug` for token usage.
+Env: `AGENTILOOP_PROVIDER`, `AGENTILOOP_MODEL`, `AGENTILOOP_YES`, `AGENTILOOP_TUI`, `AGENTILOOP_HOME`, `AGENTILOOP_COMPACT_AT`, `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `OMLX_BASE_URL`, `OMLX_PORT`, `OMLX_API_KEY`, `RUST_LOG=debug` for token usage.
 
 ## Settings
 
 `~/.agentiloop/settings.json` (override dir with `AGENTILOOP_HOME`) remembers the last `/model` pick per provider:
 
 ```json
-{ "models": { "anthropic": "claude-opus-5", "openai": "qwen3:4b" } }
+{ "models": { "anthropic": "claude-opus-5", "openai": "qwen3:4b", "omlx": "Qwen3-Coder-Next-8bit" } }
 ```
 
-Precedence: `--model` / `AGENTILOOP_MODEL` → resumed session's model → settings.json → provider default (`claude-sonnet-5` / `gpt-4o-mini`).
+Precedence: `--model` / `AGENTILOOP_MODEL` → resumed session's model → settings.json → provider default (`claude-sonnet-5` / `gpt-4o-mini` / first model listed by oMLX).
 
 ## Sessions
 
