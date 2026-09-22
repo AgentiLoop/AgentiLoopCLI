@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crate::message::{ContentBlock, Message, Role, StopReason};
 use crate::permission::{Permission, SharedPolicy};
@@ -55,7 +56,10 @@ pub enum AgentEvent {
     AssistantText(String),
     ToolCall { id: String, name: String, input: serde_json::Value },
     ToolResult { id: String, name: String, output: String, is_error: bool },
-    TurnComplete { input_tokens: u64, output_tokens: u64 },
+    /// One provider round-trip finished. `elapsed_ms` is the whole call;
+    /// `first_token_ms` is when the first text delta arrived (None when the
+    /// turn streamed no text, e.g. tool-call-only turns).
+    TurnComplete { input_tokens: u64, output_tokens: u64, elapsed_ms: u64, first_token_ms: Option<u64> },
     /// History was summarized; `before_tokens` is the input size that triggered it.
     Compacted { before_tokens: u64, messages_dropped: usize },
     Done { stop_reason: StopReason },
@@ -169,14 +173,22 @@ impl Agent {
                 max_tokens: self.config.max_tokens,
             };
 
+            let started = Instant::now();
+            let mut first_token: Option<Duration> = None;
             let resp = self
                 .provider
-                .complete_stream(req, &mut |delta| on_event(AgentEvent::AssistantTextDelta(delta.to_string())))
+                .complete_stream(req, &mut |delta| {
+                    first_token.get_or_insert_with(|| started.elapsed());
+                    on_event(AgentEvent::AssistantTextDelta(delta.to_string()))
+                })
                 .await?;
+            let elapsed = started.elapsed();
             self.last_input_tokens = resp.input_tokens;
             on_event(AgentEvent::TurnComplete {
                 input_tokens: resp.input_tokens,
                 output_tokens: resp.output_tokens,
+                elapsed_ms: elapsed.as_millis() as u64,
+                first_token_ms: first_token.map(|d| d.as_millis() as u64),
             });
 
             let text = resp.message.text();

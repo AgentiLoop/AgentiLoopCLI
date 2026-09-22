@@ -119,6 +119,8 @@ pub struct App {
     quit: bool,
     modal: Option<PermissionRequest>,
     status: String,
+    /// Speed of the most recent model call, shown in the status bar.
+    speed: Option<String>,
     history: Vec<String>,
     hist_idx: Option<usize>,
     /// Where `history` is persisted (shared with the REPL's rustyline file).
@@ -157,6 +159,7 @@ impl App {
             quit: false,
             modal: None,
             status: status.into(),
+            speed: None,
             history: Vec::new(),
             hist_idx: None,
             history_file: None,
@@ -240,8 +243,9 @@ impl App {
                 let preview = head.join("\n  ");
                 self.push(kind, format!("{mark} {preview}"));
             }
-            AgentEvent::TurnComplete { input_tokens, output_tokens } => {
-                tracing::debug!(input_tokens, output_tokens, "turn");
+            AgentEvent::TurnComplete { input_tokens, output_tokens, elapsed_ms, first_token_ms } => {
+                tracing::debug!(input_tokens, output_tokens, elapsed_ms, ?first_token_ms, "turn");
+                self.speed = Some(crate::speed_line(output_tokens, elapsed_ms, first_token_ms));
             }
             AgentEvent::Compacted { before_tokens, messages_dropped } => {
                 self.push(Kind::Info, crate::compacted_line(before_tokens, messages_dropped));
@@ -389,7 +393,12 @@ impl App {
         }
 
         let help = "  Enter send · ↑↓ history · PgUp/PgDn scroll · click links · Ctrl-C quit";
-        let bar = Line::from(vec![Span::raw(self.status.clone()), Span::styled(help, Style::default().fg(Color::DarkGray))]);
+        let mut bar = vec![Span::raw(self.status.clone())];
+        if let Some(s) = &self.speed {
+            bar.push(Span::styled(format!("⏱ {s} "), Style::default().fg(Color::Green)));
+        }
+        bar.push(Span::styled(help, Style::default().fg(Color::DarkGray)));
+        let bar = Line::from(bar);
         frame.render_widget(Paragraph::new(bar).style(Style::default().add_modifier(Modifier::REVERSED)), status);
 
         if let Some(req) = &self.modal {
@@ -800,6 +809,14 @@ mod tests {
         app2.handle_key(key(KeyCode::Up));
         assert_eq!(app2.input, "first \\ prompt");
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn status_bar_shows_tokens_per_second() {
+        let mut app = App::new("S");
+        app.apply(UiMsg::Event(AgentEvent::TurnComplete { input_tokens: 10, output_tokens: 100, elapsed_ms: 2500, first_token_ms: Some(500) }));
+        let s = screen(&app, 120, 8);
+        assert!(s.contains("50.0 tok/s · ttft 0.50s · 100 tok in 2.5s"), "{s}");
     }
 
     #[test]

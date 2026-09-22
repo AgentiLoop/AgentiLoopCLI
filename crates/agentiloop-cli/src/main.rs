@@ -424,13 +424,58 @@ fn render(ev: AgentEvent) {
             let preview: String = output.lines().take(8).collect::<Vec<_>>().join("\n   ");
             eprintln!("   {mark} {preview}");
         }
-        AgentEvent::TurnComplete { input_tokens, output_tokens } => {
-            tracing::debug!(input_tokens, output_tokens, "turn");
+        AgentEvent::TurnComplete { input_tokens, output_tokens, elapsed_ms, first_token_ms } => {
+            tracing::debug!(input_tokens, output_tokens, elapsed_ms, ?first_token_ms, "turn");
+            if std::env::var_os("AGENTILOOP_SPEED").is_some() {
+                // Leading newline: streamed text hasn't been terminated yet.
+                eprintln!("\n   ⏱ {}", speed_line(output_tokens, elapsed_ms, first_token_ms));
+            }
         }
         AgentEvent::Compacted { before_tokens, messages_dropped } => {
             eprintln!("{}", compacted_line(before_tokens, messages_dropped));
         }
         AgentEvent::Done { .. } => {}
+    }
+}
+
+/// Output tokens per second for one model call. With a first-token time the
+/// rate covers only the generation window (after TTFT); tool-call-only turns
+/// stream no text, so the whole call is used.
+pub(crate) fn tokens_per_sec(output_tokens: u64, elapsed_ms: u64, first_token_ms: Option<u64>) -> Option<f64> {
+    let gen_ms = match first_token_ms {
+        Some(t) if elapsed_ms > t => elapsed_ms - t,
+        _ => elapsed_ms,
+    };
+    (output_tokens > 0 && gen_ms > 0).then(|| output_tokens as f64 * 1000.0 / gen_ms as f64)
+}
+
+/// e.g. `42.3 tok/s · ttft 0.61s · 312 tok in 7.9s`
+pub(crate) fn speed_line(output_tokens: u64, elapsed_ms: u64, first_token_ms: Option<u64>) -> String {
+    let mut parts = Vec::new();
+    if let Some(r) = tokens_per_sec(output_tokens, elapsed_ms, first_token_ms) {
+        parts.push(format!("{r:.1} tok/s"));
+    }
+    if let Some(t) = first_token_ms {
+        parts.push(format!("ttft {:.2}s", t as f64 / 1000.0));
+    }
+    parts.push(format!("{output_tokens} tok in {:.1}s", elapsed_ms as f64 / 1000.0));
+    parts.join(" · ")
+}
+
+#[cfg(test)]
+mod speed_tests {
+    use super::*;
+
+    #[test]
+    fn rate_excludes_time_to_first_token() {
+        // 100 tokens, 500 ms to first token, 2500 ms total → 2 s generating → 50 tok/s.
+        assert_eq!(tokens_per_sec(100, 2500, Some(500)), Some(50.0));
+        // No text streamed: whole call.
+        assert_eq!(tokens_per_sec(100, 2000, None), Some(50.0));
+        assert_eq!(tokens_per_sec(0, 2000, None), None);
+        assert_eq!(tokens_per_sec(10, 0, None), None);
+        assert_eq!(speed_line(100, 2500, Some(500)), "50.0 tok/s · ttft 0.50s · 100 tok in 2.5s");
+        assert_eq!(speed_line(40, 2000, None), "20.0 tok/s · 40 tok in 2.0s");
     }
 }
 
