@@ -31,7 +31,11 @@ cargo run -- -m qwen3:4b
 
 Provider is auto-detected from which credentials are set (`ANTHROPIC_API_KEY` wins); force one with `--provider` / `AGENTILOOP_PROVIDER`.
 
-Env: `AGENTILOOP_PROVIDER`, `AGENTILOOP_MODEL`, `AGENTILOOP_YES`, `AGENTILOOP_HOME`, `AGENTILOOP_COMPACT_AT`, `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `RUST_LOG=debug` for token usage.
+## TUI
+
+`agentiloop --tui` (or `AGENTILOOP_TUI=1`) opens a full-screen ratatui interface: scrolling transcript, prompt box, status bar. Permission prompts appear as a modal (`y` / `n` / `a`lways). Keys: Enter send, ↑/↓ prompt history, PgUp/PgDn scroll, Ctrl-U clear line, Ctrl-C quit. All slash commands work; `/model` with no argument lists models — pick with `/model <n|id>`.
+
+Env: `AGENTILOOP_PROVIDER`, `AGENTILOOP_MODEL`, `AGENTILOOP_YES`, `AGENTILOOP_TUI`, `AGENTILOOP_HOME`, `AGENTILOOP_COMPACT_AT`, `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `RUST_LOG=debug` for token usage.
 
 ## Settings
 
@@ -65,7 +69,7 @@ No network needed: the agent loop runs against a scripted mock provider, the SSE
 - [x] OpenAI-compatible provider
 - [x] Context compaction when nearing the window limit
 - [x] Session persistence / resume
-- [ ] TUI (ratatui)
+- [x] TUI (ratatui)
 - [ ] MCP client
 
 ## License

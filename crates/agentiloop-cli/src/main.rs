@@ -1,5 +1,6 @@
 mod permission;
 mod settings;
+mod tui;
 
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -48,6 +49,10 @@ struct Cli {
     #[arg(short = 'c', long = "continue")]
     continue_last: bool,
 
+    /// Full-screen terminal UI (ratatui) instead of the line REPL.
+    #[arg(long, env = "AGENTILOOP_TUI", conflicts_with = "prompt")]
+    tui: bool,
+
     /// One-shot prompt. If omitted, starts an interactive REPL.
     prompt: Vec<String>,
 }
@@ -68,7 +73,13 @@ async fn main() -> Result<()> {
 
     let provider = agentiloop_provider::from_env(cli.provider.as_deref())?;
     let tools = agentiloop_tools::default_registry();
-    let policy = permission::policy(cli.yes);
+    // The TUI answers permission prompts through its own channel-backed policy.
+    let (ui_tx, ui_rx) = tokio::sync::mpsc::unbounded_channel::<tui::UiMsg>();
+    let policy: agentiloop_core::permission::SharedPolicy = if cli.tui && !cli.yes {
+        std::sync::Arc::new(tui::ChannelPolicy::new(ui_tx.clone()))
+    } else {
+        permission::policy(cli.yes)
+    };
     let mut saved = settings::load();
     let sessions_dir = settings::sessions_dir();
 
@@ -105,6 +116,49 @@ async fn main() -> Result<()> {
         return res;
     }
 
+    if cli.tui {
+        let status = format!(
+            " AgentiLoop  {}  {}  {}  session {} ",
+            cwd.display(),
+            provider.name(),
+            agent.model(),
+            session.id
+        );
+        let (in_tx, mut in_rx) = tokio::sync::mpsc::unbounded_channel::<tui::Input>();
+        let app = tui::App::new(status);
+        let ui = tokio::task::spawn_blocking(move || tui::run(app, ui_rx, in_tx));
+        // Agent side: one prompt or slash command at a time, until the UI hangs up.
+        while let Some(tui::Input::Submit(line)) = in_rx.recv().await {
+            if line.starts_with('/') {
+                let tx = ui_tx.clone();
+                let mut say = |s: String| {
+                    let _ = tx.send(tui::UiMsg::Line(s));
+                };
+                if let Err(e) =
+                    slash_command(&line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), false, &mut say)
+                        .await
+                {
+                    let _ = ui_tx.send(tui::UiMsg::Error(format!("{e:#}")));
+                }
+            } else {
+                let tx = ui_tx.clone();
+                if let Err(e) = agent
+                    .run(&line, move |ev| {
+                        let _ = tx.send(tui::UiMsg::Event(ev));
+                    })
+                    .await
+                {
+                    let _ = ui_tx.send(tui::UiMsg::Error(format!("{e:#}")));
+                }
+                persist(&mut session, &agent, sessions_dir.as_deref());
+            }
+            let _ = ui_tx.send(tui::UiMsg::Idle);
+        }
+        drop(ui_tx);
+        ui.await??;
+        return Ok(());
+    }
+
     eprintln!(
         "AgentiLoop — cwd: {}  provider: {}  model: {}  session: {}  (/help for commands)",
         cwd.display(),
@@ -133,7 +187,10 @@ async fn main() -> Result<()> {
             break;
         }
         if line.starts_with('/') {
-            slash_command(line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref()).await?;
+            slash_command(line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), true, &mut |s| {
+                eprintln!("{s}")
+            })
+            .await?;
             continue;
         }
         if let Err(e) = agent.run(line, render).await {
@@ -208,6 +265,9 @@ fn fallback_models() -> Vec<ModelInfo> {
         .collect()
 }
 
+/// Runs a `/command`. Output lines go through `say` so the REPL (stderr) and
+/// the TUI (transcript) share one implementation; `interactive` allows the
+/// `/model` picker to read a choice from stdin.
 async fn slash_command(
     line: &str,
     agent: &mut Agent,
@@ -215,13 +275,15 @@ async fn slash_command(
     saved: &mut settings::Settings,
     session: &mut Session,
     sessions_dir: Option<&Path>,
+    interactive: bool,
+    say: &mut dyn FnMut(String),
 ) -> Result<()> {
     let (cmd, arg) = line.split_once(' ').map_or((line, ""), |(c, a)| (c, a.trim()));
     match cmd {
         "/clear" => {
             agent.clear();
             *session = Session::new(session.cwd.clone(), provider.name(), agent.model());
-            eprintln!("context and tool history cleared; new session {}", session.id);
+            say(format!("context and tool history cleared; new session {}", session.id));
         }
         "/model" => {
             let models = fetch_models(provider).await;
@@ -230,7 +292,11 @@ async fn slash_command(
                 for (i, m) in models.iter().enumerate() {
                     let mark = if m.id == agent.model() { "*" } else { " " };
                     let date = m.created_at.get(..10).unwrap_or("");
-                    eprintln!("{mark} {:>2}. {:<22} {:<28} {date}", i + 1, m.display_name, m.id);
+                    say(format!("{mark} {:>2}. {:<22} {:<28} {date}", i + 1, m.display_name, m.id));
+                }
+                if !interactive {
+                    say(format!("current: {}  — pick with /model <n|id>", agent.model()));
+                    return Ok(());
                 }
                 eprint!("select [1-{}] or type a model id (enter to keep {}): ", models.len(), agent.model());
                 io::stderr().flush()?;
@@ -246,46 +312,46 @@ async fn slash_command(
             match pick.parse::<usize>() {
                 Ok(n) if (1..=models.len()).contains(&n) => agent.set_model(models[n - 1].id.clone()),
                 Ok(_) => {
-                    eprintln!("out of range [1-{}]", models.len());
+                    say(format!("out of range [1-{}]", models.len()));
                     return Ok(());
                 }
                 Err(_) => agent.set_model(pick),
             }
             saved.set_model(provider.name(), agent.model());
             if let Err(e) = settings::save(saved) {
-                eprintln!("warning: could not save settings: {e:#}");
+                say(format!("warning: could not save settings: {e:#}"));
             }
-            eprintln!("model: {}", agent.model());
+            say(format!("model: {}", agent.model()));
         }
         "/compact" => match agent.compact().await {
-            Ok(Some(ev)) => {
-                render(ev);
+            Ok(Some(AgentEvent::Compacted { before_tokens, messages_dropped })) => {
+                say(compacted_line(before_tokens, messages_dropped));
                 persist(session, agent, sessions_dir);
             }
-            Ok(None) => eprintln!("nothing to compact"),
-            Err(e) => eprintln!("compaction failed: {e:#}"),
+            Ok(_) => say("nothing to compact".into()),
+            Err(e) => say(format!("compaction failed: {e:#}")),
         },
         "/sessions" => {
             let Some(dir) = sessions_dir else {
-                eprintln!("no home directory; sessions are not saved");
+                say("no home directory; sessions are not saved".into());
                 return Ok(());
             };
             let list = Session::list(dir)?;
             if list.is_empty() {
-                eprintln!("no saved sessions");
+                say("no saved sessions".into());
             }
             for (i, s) in list.iter().take(20).enumerate() {
                 let mark = if s.id == session.id { "*" } else { " " };
-                eprintln!("{mark} {:>2}. {:<22} {:>3} msgs  {:<24} {}", i + 1, s.id, s.history.len(), s.model, s.title());
+                say(format!("{mark} {:>2}. {:<22} {:>3} msgs  {:<24} {}", i + 1, s.id, s.history.len(), s.model, s.title()));
             }
         }
         "/resume" => {
             let Some(dir) = sessions_dir else {
-                eprintln!("no home directory; sessions are not saved");
+                say("no home directory; sessions are not saved".into());
                 return Ok(());
             };
             if arg.is_empty() {
-                eprintln!("usage: /resume <id|n>  (see /sessions)");
+                say("usage: /resume <id|n>  (see /sessions)".into());
                 return Ok(());
             }
             // `/resume 2` picks entry #2 from the /sessions listing.
@@ -293,7 +359,7 @@ async fn slash_command(
                 Ok(n) => match Session::list(dir)?.into_iter().nth(n.saturating_sub(1)) {
                     Some(s) if n >= 1 => s.id,
                     _ => {
-                        eprintln!("no session #{n}");
+                        say(format!("no session #{n}"));
                         return Ok(());
                     }
                 },
@@ -304,25 +370,27 @@ async fn slash_command(
                     agent.clear();
                     agent.history = s.history.clone();
                     agent.set_model(s.model.clone());
-                    eprintln!("resumed session {} ({} messages, model {}): {}", s.id, s.history.len(), s.model, s.title());
+                    say(format!("resumed session {} ({} messages, model {}): {}", s.id, s.history.len(), s.model, s.title()));
                     *session = s;
                 }
-                Err(e) => eprintln!("{e:#}"),
+                Err(e) => say(format!("{e:#}")),
             }
         }
-        "/help" => {
-            eprintln!(
-                "/model [n|id]   show picker, or pick #n / set id directly\n\
-                 /compact        summarize the conversation to free context\n\
-                 /sessions       list saved sessions (newest first)\n\
-                 /resume <id|n>  load a saved session into this REPL\n\
-                 /clear          clear context and start a new session\n\
-                 /exit           quit"
-            );
-        }
-        _ => eprintln!("unknown command {cmd} (try /help)"),
+        "/help" => say(HELP.into()),
+        _ => say(format!("unknown command {cmd} (try /help)")),
     }
     Ok(())
+}
+
+const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
+/compact        summarize the conversation to free context\n\
+/sessions       list saved sessions (newest first)\n\
+/resume <id|n>  load a saved session into this REPL\n\
+/clear          clear context and start a new session\n\
+/exit           quit";
+
+pub(crate) fn compacted_line(before_tokens: u64, messages_dropped: usize) -> String {
+    format!("\u{1f4e6} context compacted ({before_tokens} tokens, {messages_dropped} messages → summary)")
 }
 
 fn render(ev: AgentEvent) {
@@ -345,13 +413,13 @@ fn render(ev: AgentEvent) {
             tracing::debug!(input_tokens, output_tokens, "turn");
         }
         AgentEvent::Compacted { before_tokens, messages_dropped } => {
-            eprintln!("\u{1f4e6} context compacted ({before_tokens} tokens, {messages_dropped} messages → summary)");
+            eprintln!("{}", compacted_line(before_tokens, messages_dropped));
         }
         AgentEvent::Done { .. } => {}
     }
 }
 
-fn compact(v: &serde_json::Value) -> String {
+pub(crate) fn compact(v: &serde_json::Value) -> String {
     let s = v.to_string();
     if s.len() > 120 { format!("{}…", &s[..s.floor_char_boundary(120)]) } else { s }
 }
