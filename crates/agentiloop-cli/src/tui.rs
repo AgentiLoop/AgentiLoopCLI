@@ -2,7 +2,7 @@
 //! and a status bar. The agent loop runs on the tokio runtime and talks to the
 //! UI thread over channels; permission prompts appear as a modal.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -97,6 +97,8 @@ enum Kind {
 struct Entry {
     kind: Kind,
     text: String,
+    /// Pre-styled lines (syntax-highlighted code); when set, `text` is ignored.
+    code: Option<Vec<Vec<Span<'static>>>>,
 }
 
 /// UI state; backend-agnostic so it can be driven by tests.
@@ -115,6 +117,8 @@ pub struct App {
     hist_idx: Option<usize>,
     /// Whether the last entry is assistant text still being streamed.
     streaming: bool,
+    /// `path` argument of in-flight `read_file` calls, by tool-call id.
+    pending_paths: HashMap<String, String>,
 }
 
 /// Result of a key press that the event loop must act on.
@@ -137,6 +141,7 @@ impl App {
             history: Vec::new(),
             hist_idx: None,
             streaming: false,
+            pending_paths: HashMap::new(),
         }
     }
 
@@ -146,7 +151,7 @@ impl App {
 
     fn push(&mut self, kind: Kind, text: impl Into<String>) {
         self.streaming = false;
-        self.entries.push(Entry { kind, text: text.into() });
+        self.entries.push(Entry { kind, text: text.into(), code: None });
     }
 
     pub fn apply(&mut self, msg: UiMsg) {
@@ -175,14 +180,33 @@ impl App {
                 }
                 self.streaming = false;
             }
-            AgentEvent::ToolCall { name, input, .. } => {
+            AgentEvent::ToolCall { id, name, input } => {
+                if name == "read_file" {
+                    if let Some(p) = input.get("path").and_then(|v| v.as_str()) {
+                        self.pending_paths.insert(id, p.to_string());
+                    }
+                }
                 self.push(Kind::Tool, format!("\u{1f527} {name} {}", crate::compact(&input)));
             }
-            AgentEvent::ToolResult { output, is_error, .. } => {
+            AgentEvent::ToolResult { id, output, is_error, .. } => {
+                let path = self.pending_paths.remove(&id);
+                let head: Vec<&str> = output.lines().take(8).collect();
+                let (kind, mark) = if is_error { (Kind::ToolError, "✖") } else { (Kind::Tool, "✓") };
+                // Numbered read_file output gets syntax-highlighted by extension.
+                if !is_error {
+                    if let Some(mut code) = path.and_then(|p| crate::highlight::highlight_numbered(&head, &p)) {
+                        let mark_style = Style::default().fg(Color::Yellow);
+                        for (i, line) in code.iter_mut().enumerate() {
+                            line.insert(0, Span::styled(if i == 0 { format!("{mark} ") } else { "  ".into() }, mark_style));
+                        }
+                        self.streaming = false;
+                        self.entries.push(Entry { kind, text: String::new(), code: Some(code) });
+                        return;
+                    }
+                }
                 // Continuation lines are indented past the mark so multi-line
                 // output (e.g. numbered file contents) stays column-aligned.
-                let preview: String = output.lines().take(8).collect::<Vec<_>>().join("\n  ");
-                let (kind, mark) = if is_error { (Kind::ToolError, "✖") } else { (Kind::Tool, "✓") };
+                let preview = head.join("\n  ");
                 self.push(kind, format!("{mark} {preview}"));
             }
             AgentEvent::TurnComplete { input_tokens, output_tokens } => {
@@ -326,6 +350,17 @@ impl App {
         let width = area.width.max(1) as usize;
         let mut lines: Vec<Line> = Vec::new();
         for e in &self.entries {
+            if let Some(code) = &e.code {
+                for line in code {
+                    for (i, piece) in crate::highlight::hard_wrap(line.clone(), width).into_iter().enumerate() {
+                        let mut spans = if i == 0 { Vec::new() } else { vec![Span::raw("  ")] };
+                        spans.extend(piece);
+                        lines.push(Line::from(spans));
+                    }
+                }
+                lines.push(Line::default());
+                continue;
+            }
             if e.kind == Kind::Assistant {
                 lines.extend(crate::markdown::render(&e.text, width));
                 lines.push(Line::default());
@@ -503,6 +538,19 @@ mod tests {
         let s = screen(&app, 50, 8);
         assert!(s.contains("\u{1f527}") && s.contains("bash {\"cmd\":\"ls\"}"), "{s}");
         assert!(s.contains("✖ boom"), "{s}");
+    }
+
+    #[test]
+    fn read_file_preview_is_highlighted_and_aligned() {
+        let mut app = App::new("s");
+        app.apply(UiMsg::Event(AgentEvent::ToolCall { id: "7".into(), name: "read_file".into(), input: serde_json::json!({"path":"src/a.rs"}) }));
+        app.apply(UiMsg::Event(AgentEvent::ToolResult { id: "7".into(), name: "read_file".into(), output: "    1│fn main() {}\n    2│let x = 1;".into(), is_error: false }));
+        let code = app.entries.last().unwrap().code.as_ref().expect("highlighted entry");
+        assert!(code[0].iter().any(|s| s.content == "fn" && matches!(s.style.fg, Some(Color::Rgb(..)))));
+        assert!(app.pending_paths.is_empty());
+        let s = screen(&app, 40, 8);
+        assert!(s.contains("✓     1│fn main() {}"), "{s}");
+        assert!(s.contains("      2│let x = 1;"), "{s}");
     }
 
     #[test]

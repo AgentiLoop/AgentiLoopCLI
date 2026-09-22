@@ -1,3 +1,4 @@
+mod highlight;
 mod markdown;
 mod permission;
 mod settings;

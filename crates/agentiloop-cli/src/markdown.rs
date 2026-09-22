@@ -278,14 +278,22 @@ impl Renderer {
                 if !lang.is_empty() {
                     self.out.push(Line::from(Span::styled(format!("{ind}▎{lang}"), Style::default().fg(Color::DarkGray))));
                 }
-                let st = Style::default().fg(Color::Green);
-                for raw in code.strip_suffix('\n').unwrap_or(&code).split('\n') {
-                    let opts = textwrap::Options::new(self.width.saturating_sub(ind.len() + 2).max(1));
-                    for piece in textwrap::wrap(raw, &opts) {
-                        self.out.push(Line::from(vec![
-                            Span::styled(format!("{ind}▎ "), Style::default().fg(Color::DarkGray)),
-                            Span::styled(piece.into_owned(), st),
-                        ]));
+                // Syntax-highlight when the fence language is known; plain
+                // green otherwise. Code is hard-wrapped, never word-wrapped.
+                let lines = crate::highlight::highlight(&code, &lang).unwrap_or_else(|| {
+                    let st = Style::default().fg(Color::Green);
+                    code.strip_suffix('\n')
+                        .unwrap_or(&code)
+                        .split('\n')
+                        .map(|l| vec![Span::styled(l.to_string(), st)])
+                        .collect()
+                });
+                let avail = self.width.saturating_sub(ind.len() + 2).max(1);
+                for line in lines {
+                    for piece in crate::highlight::hard_wrap(line, avail) {
+                        let mut spans = vec![Span::styled(format!("{ind}▎ "), Style::default().fg(Color::DarkGray))];
+                        spans.extend(piece);
+                        self.out.push(Line::from(spans));
                     }
                 }
                 self.need_gap = true;
