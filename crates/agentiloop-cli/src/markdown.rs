@@ -150,12 +150,12 @@ impl Renderer {
             Tag::Heading { level, .. } => {
                 self.flush_para();
                 self.gap();
-                // No font sizes in a terminal: signal level with color/weight
-                // and an underline rule for H1/H2 (the hashes are dropped).
+                // No font sizes in a terminal: H1 is a filled banner, H2 is
+                // bold with a rule under it, H3 bold yellow, H4+ plain bold.
                 let style = match level {
-                    HeadingLevel::H1 => Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+                    HeadingLevel::H1 => Style::default().fg(Color::White).bg(Color::Magenta).add_modifier(Modifier::BOLD),
                     HeadingLevel::H2 => Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-                    HeadingLevel::H3 => Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                    HeadingLevel::H3 => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
                     _ => Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
                 };
                 self.styles.push(style);
@@ -226,18 +226,24 @@ impl Renderer {
                 self.need_gap = true;
             }
             TagEnd::Heading(_) => {
-                let title_w: usize = self.para.iter().map(|s| s.content.width()).sum();
+                let level = self.heading.take();
+                let st = self.style();
+                if level == Some(HeadingLevel::H1) {
+                    // Banner: pad the text so the background reads as a block.
+                    self.para.insert(0, Span::styled(" ", st));
+                }
                 self.flush_para();
+                if level == Some(HeadingLevel::H1) {
+                    // Right pad goes on after wrapping, which trims trailing spaces.
+                    if let Some(l) = self.out.last_mut() {
+                        l.spans.push(Span::styled(" ", st));
+                    }
+                }
                 self.styles.pop();
-                let rule = match self.heading.take() {
-                    Some(HeadingLevel::H1) => Some(("═", Color::Magenta)),
-                    Some(HeadingLevel::H2) => Some(("─", Color::Cyan)),
-                    _ => None,
-                };
-                if let Some((ch, color)) = rule {
+                if level == Some(HeadingLevel::H2) {
                     let ind = self.indent();
-                    let n = title_w.min(self.width.saturating_sub(ind.len())).max(1);
-                    self.out.push(Line::from(Span::styled(format!("{ind}{}", ch.repeat(n)), Style::default().fg(color))));
+                    let n = self.width.saturating_sub(ind.len()).min(60).max(1);
+                    self.out.push(Line::from(Span::styled(format!("{ind}{}", "─".repeat(n)), Style::default().fg(Color::Cyan))));
                 }
                 self.need_gap = true;
             }
@@ -459,8 +465,7 @@ mod tests {
         assert_eq!(
             r,
             vec![
-                "Title",
-                "═════",
+                " Title ",
                 "",
                 "Some em and strong text.",
                 "",
@@ -476,14 +481,14 @@ mod tests {
             ]
         );
         let lines = render(md, 40);
-        assert!(lines[0].spans.iter().any(|s| s.content == "Title" && s.style.add_modifier.contains(Modifier::BOLD)));
-        assert!(lines[3].spans.iter().any(|s| s.content == "em" && s.style.add_modifier.contains(Modifier::ITALIC)));
-        assert!(lines[3].spans.iter().any(|s| s.content == "strong" && s.style.add_modifier.contains(Modifier::BOLD)));
+        assert!(lines[0].spans.iter().any(|s| s.content.contains("Title") && s.style.bg == Some(Color::Magenta)));
+        assert!(lines[2].spans.iter().any(|s| s.content == "em" && s.style.add_modifier.contains(Modifier::ITALIC)));
+        assert!(lines[2].spans.iter().any(|s| s.content == "strong" && s.style.add_modifier.contains(Modifier::BOLD)));
     }
 
     #[test]
     fn heading_levels_drop_hashes() {
-        assert_eq!(rows("## Two\n\n### Three\n\n#### Four", 40), vec!["Two", "───", "", "Three", "", "Four"]);
+        assert_eq!(rows("## Two\n\n### Three\n\n#### Four", 40), vec!["Two", &"─".repeat(40), "", "Three", "", "Four"]);
     }
 
     #[test]
@@ -525,7 +530,7 @@ mod tests {
     #[test]
     fn markdown_fences_render_as_markdown() {
         let r = rows("```markdown\n# Hi\n\n- a\n```\n", 20);
-        assert_eq!(r, vec!["Hi", "══", "", "• a"]);
+        assert_eq!(r, vec![" Hi ", "", "• a"]);
         // An embedded ```markdown block renders too; other languages stay code.
         let r = rows("Intro\n\n```markdown\n### Hi\n```\n\n```rust\n# x\n```", 20);
         assert_eq!(r, vec!["Intro", "", "Hi", "", "▎rust", "▎ # x"]);
