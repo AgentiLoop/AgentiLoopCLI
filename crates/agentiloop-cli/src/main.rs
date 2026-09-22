@@ -132,15 +132,11 @@ async fn main() -> Result<()> {
     }
 
     if cli.tui {
-        let status = format!(
-            " AgentiLoop  {}  {}  {}  session {} ",
-            cwd.display(),
-            provider.name(),
-            agent.model(),
-            session.id
-        );
+        let status = |agent: &Agent, session: &Session| {
+            format!(" AgentiLoop  {}  {}  {}  session {} ", cwd.display(), provider.name(), agent.model(), session.id)
+        };
         let (in_tx, mut in_rx) = tokio::sync::mpsc::unbounded_channel::<tui::Input>();
-        let app = tui::App::new(status).with_history_file(settings::history_path());
+        let app = tui::App::new(status(&agent, &session)).with_history_file(settings::history_path());
         let ui = tokio::task::spawn_blocking(move || tui::run(app, ui_rx, in_tx));
         // Agent side: one prompt or slash command at a time, until the UI hangs up.
         while let Some(tui::Input::Submit(line)) = in_rx.recv().await {
@@ -155,6 +151,8 @@ async fn main() -> Result<()> {
                 {
                     let _ = ui_tx.send(tui::UiMsg::Error(format!("{e:#}")));
                 }
+                // /model, /clear and /resume change the model or session id.
+                let _ = ui_tx.send(tui::UiMsg::Status(status(&agent, &session)));
             } else {
                 let tx = ui_tx.clone();
                 if let Err(e) = agent

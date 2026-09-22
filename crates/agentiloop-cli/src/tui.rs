@@ -30,6 +30,8 @@ pub enum UiMsg {
     Line(String),
     Error(String),
     Permission(PermissionRequest),
+    /// Replace the status-bar text (model or session changed).
+    Status(String),
     /// The agent finished the current prompt / command.
     Idle,
 }
@@ -194,6 +196,7 @@ impl App {
             UiMsg::Line(s) => self.push(Kind::Info, s),
             UiMsg::Error(s) => self.push(Kind::Error, s),
             UiMsg::Permission(req) => self.modal = Some(req),
+            UiMsg::Status(s) => self.status = s,
             UiMsg::Idle => self.busy = false,
         }
     }
@@ -809,6 +812,14 @@ mod tests {
         app2.handle_key(key(KeyCode::Up));
         assert_eq!(app2.input, "first \\ prompt");
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn status_update_replaces_model_in_bar() {
+        let mut app = App::new(" anthropic  claude-fable-5-1 ");
+        app.apply(UiMsg::Status(" anthropic  claude-opus-5-5 ".into()));
+        let s = screen(&app, 120, 8);
+        assert!(s.contains("claude-opus-5-5") && !s.contains("claude-fable-5-1"), "{s}");
     }
 
     #[test]
