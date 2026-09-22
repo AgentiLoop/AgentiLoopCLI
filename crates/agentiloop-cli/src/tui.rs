@@ -438,7 +438,8 @@ impl App {
                 Kind::Assistant => ("", Style::default()),
                 Kind::Tool => ("  ", Style::default().fg(Color::Yellow)),
                 Kind::ToolError => ("  ", Style::default().fg(Color::Red)),
-                Kind::Info => ("· ", Style::default().fg(Color::DarkGray)),
+                // Light gray: readable on dark themes, still distinct from replies.
+                Kind::Info => ("· ", Style::default().fg(Color::Rgb(0xC8, 0xC8, 0xCC))),
                 Kind::Error => ("! ", Style::default().fg(Color::Red)),
             };
             let indent = " ".repeat(prefix.len());
