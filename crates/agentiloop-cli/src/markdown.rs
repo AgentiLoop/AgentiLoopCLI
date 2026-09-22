@@ -12,6 +12,7 @@ use unicode_width::UnicodeWidthStr;
 /// Render `text` as markdown into lines no wider than `width` cells.
 pub fn render(text: &str, width: usize) -> Vec<Line<'static>> {
     let width = width.max(1);
+    let text = unfence_markdown(text);
     let mut r = Renderer { width, ..Default::default() };
     let opts = Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES;
     for ev in Parser::new_ext(text, opts) {
@@ -23,6 +24,17 @@ pub fn render(text: &str, width: usize) -> Vec<Line<'static>> {
         r.out.pop();
     }
     r.out
+}
+
+/// Models often wrap a whole reply in a ```markdown fence when asked for
+/// markdown. Rendering that as a code block defeats the purpose, so if the
+/// entire text is one such fence, return its body instead.
+fn unfence_markdown(text: &str) -> &str {
+    let t = text.trim();
+    t.strip_prefix("```markdown\n")
+        .or_else(|| t.strip_prefix("```md\n"))
+        .and_then(|b| b.strip_suffix("```"))
+        .unwrap_or(text)
 }
 
 enum ListKind {
@@ -373,5 +385,14 @@ mod tests {
     #[test]
     fn paragraphs_separated_by_one_blank_row() {
         assert_eq!(rows("para one\n\npara two", 20), vec!["para one", "", "para two"]);
+    }
+
+    #[test]
+    fn whole_reply_in_markdown_fence_is_unwrapped() {
+        let r = rows("```markdown\n# Hi\n\n- a\n```\n", 20);
+        assert_eq!(r, vec!["# Hi", "", "• a"]);
+        // A real code block among other text stays a code block.
+        let r = rows("Intro\n\n```markdown\n# Hi\n```", 20);
+        assert_eq!(r, vec!["Intro", "", "▎markdown", "▎ # Hi"]);
     }
 }
