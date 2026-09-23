@@ -1,0 +1,128 @@
+# Builds `agentiloop` for macOS, Linux and Windows.
+#
+# - Push a tag like `v0.1.0` → builds everything and publishes a GitHub Release.
+# - "Run workflow" on the Actions tab → builds everything; download from the run's Artifacts.
+#
+# macOS signing is optional: add these repo secrets and the mac binaries get
+# signed with your Developer ID and notarized. Without them they're ad-hoc signed.
+#   MACOS_CERT_P12        base64 of a "Developer ID Application" .p12
+#   MACOS_CERT_PASSWORD   password of that .p12
+#   MACOS_SIGN_IDENTITY   e.g. "Developer ID Application: Your Name (TEAMID)"
+#   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD   for notarization (app-specific password)
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    env:
+      # `secrets` can't be used in `if:`, so expose "is a cert configured?" as an env var.
+      HAS_MAC_CERT: ${{ secrets.MACOS_CERT_P12 != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macos-arm64,   os: macos-latest,     target: aarch64-apple-darwin }
+          - { name: macos-x86_64,  os: macos-latest,     target: x86_64-apple-darwin }
+          # Ubuntu 22.04 = older glibc (2.35), so the binary runs on more distros.
+          - { name: linux-x86_64,  os: ubuntu-22.04,     target: x86_64-unknown-linux-gnu }
+          - { name: linux-arm64,   os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu }
+          - { name: windows-x86_64, os: windows-latest,  target: x86_64-pc-windows-msvc }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Test
+        # Cross-compiled mac x86_64 can't run its tests on an arm64 runner.
+        if: matrix.target != 'x86_64-apple-darwin'
+        run: cargo test --workspace --target ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release -p agentiloop --target ${{ matrix.target }}
+
+      - name: Sign and notarize (macOS, optional)
+        if: runner.os == 'macOS' && env.HAS_MAC_CERT == 'true'
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          BIN=target/${{ matrix.target }}/release/agentiloop
+          KC=$RUNNER_TEMP/build.keychain
+          echo "$MACOS_CERT_P12" | base64 --decode > $RUNNER_TEMP/cert.p12
+          security create-keychain -p ci "$KC"
+          security set-keychain-settings -lut 3600 "$KC"
+          security unlock-keychain -p ci "$KC"
+          security import $RUNNER_TEMP/cert.p12 -k "$KC" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$KC"
+          security list-keychains -d user -s "$KC"
+          codesign --force --timestamp --options runtime --sign "$MACOS_SIGN_IDENTITY" "$BIN"
+          ditto -c -k "$BIN" $RUNNER_TEMP/notarize.zip
+          xcrun notarytool submit $RUNNER_TEMP/notarize.zip --wait \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+
+      - name: Package (macOS / Linux)
+        if: runner.os != 'Windows'
+        run: |
+          NAME=agentiloop-${{ matrix.name }}
+          mkdir -p dist/$NAME
+          cp target/${{ matrix.target }}/release/agentiloop README.md LICENSE dist/$NAME/
+          tar -C dist -czf dist/$NAME.tar.gz $NAME
+          cd dist && shasum -a 256 $NAME.tar.gz > $NAME.tar.gz.sha256
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $name = "agentiloop-${{ matrix.name }}"
+          New-Item -ItemType Directory -Force dist/$name | Out-Null
+          Copy-Item target/${{ matrix.target }}/release/agentiloop.exe, README.md, LICENSE dist/$name/
+          Compress-Archive -Path dist/$name -DestinationPath dist/$name.zip
+          $hash = (Get-FileHash dist/$name.zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  $name.zip" | Out-File -Encoding ascii dist/$name.zip.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agentiloop-${{ matrix.name }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+
+  release:
+    name: Publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
