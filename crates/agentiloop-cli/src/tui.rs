@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use agentiloop_core::permission::{Permission, PermissionPolicy};
 use agentiloop_core::AgentEvent;
@@ -121,6 +121,10 @@ pub struct App {
     /// Lines scrolled up from the bottom (0 = follow output).
     scroll: usize,
     busy: bool,
+    /// When the current prompt started, for the spinner and elapsed time.
+    busy_since: Instant,
+    /// What the agent is doing right now, shown next to the spinner.
+    activity: String,
     quit: bool,
     modal: Option<PermissionRequest>,
     status: String,
@@ -161,6 +165,8 @@ impl App {
             cursor: 0,
             scroll: 0,
             busy: false,
+            busy_since: Instant::now(),
+            activity: String::new(),
             quit: false,
             modal: None,
             status: status.into(),
@@ -198,13 +204,22 @@ impl App {
             UiMsg::Event(ev) => self.apply_event(ev),
             UiMsg::Line(s) => self.push(Kind::Info, s),
             UiMsg::Error(s) => self.push(Kind::Error, s),
-            UiMsg::Permission(req) => self.modal = Some(req),
+            UiMsg::Permission(req) => {
+                self.activity = "Waiting for approval".into();
+                self.modal = Some(req)
+            }
             UiMsg::Status(s) => self.status = s,
             UiMsg::Idle => self.busy = false,
         }
     }
 
     fn apply_event(&mut self, ev: AgentEvent) {
+        self.activity = match &ev {
+            AgentEvent::AssistantTextDelta(_) => "Writing".into(),
+            AgentEvent::ToolCall { name, .. } => format!("Running {name}"),
+            AgentEvent::Compacted { .. } => "Compacting".into(),
+            _ => "Thinking".into(),
+        };
         match ev {
             AgentEvent::AssistantTextDelta(t) => {
                 if !self.streaming {
@@ -313,6 +328,8 @@ impl App {
                     self.push(Kind::User, line.clone());
                 }
                 self.busy = true;
+                self.busy_since = Instant::now();
+                self.activity = if line.starts_with('/') { "Working" } else { "Thinking" }.into();
                 return Some(Action::Submit(line));
             }
             KeyCode::Char(c) => {
@@ -390,7 +407,7 @@ impl App {
 
         self.draw_transcript(frame, transcript);
 
-        let title = if self.busy { " working… " } else { " prompt " };
+        let title = if self.busy { self.busy_title() } else { Line::from(" prompt ") };
         let block = Block::default().borders(Borders::ALL).title(title);
         let inner = block.inner(input);
         frame.render_widget(Paragraph::new(self.input.as_str()).block(block), input);
@@ -411,6 +428,24 @@ impl App {
         if let Some(req) = &self.modal {
             self.draw_modal(frame, req);
         }
+    }
+
+    /// Animated prompt-box title while the agent works, e.g. ` ✻ Thinking...  12s `.
+    /// The UI loop redraws every 50 ms, so the frame is derived from elapsed time.
+    fn busy_title(&self) -> Line<'static> {
+        const SPINNER: [&str; 10] = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
+        const DOTS: [&str; 4] = ["   ", ".  ", ".. ", "..."];
+        let ms = self.busy_since.elapsed().as_millis();
+        let spin = SPINNER[(ms / 120) as usize % SPINNER.len()];
+        let dots = DOTS[(ms / 350) as usize % DOTS.len()];
+        let secs = ms / 1000;
+        let elapsed = if secs >= 60 { format!("{}m {:02}s", secs / 60, secs % 60) } else { format!("{secs}s") };
+        let accent = Style::default().fg(Color::Rgb(0xE0, 0x8A, 0x5B)).add_modifier(Modifier::BOLD);
+        Line::from(vec![
+            Span::styled(format!(" {spin} "), accent),
+            Span::styled(format!("{}{dots} ", self.activity), accent),
+            Span::styled(format!("{elapsed} "), Style::default().fg(Color::DarkGray)),
+        ])
     }
 
     fn draw_transcript(&self, frame: &mut Frame, area: Rect) {
@@ -659,7 +694,7 @@ mod tests {
         assert!(app.input.is_empty());
         let s = screen(&app, 40, 8);
         assert!(s.contains("> hello there"), "{s}");
-        assert!(s.contains("working"), "{s}");
+        assert!(s.contains("Thinking") && s.contains("0s"), "{s}");
     }
 
     #[test]
