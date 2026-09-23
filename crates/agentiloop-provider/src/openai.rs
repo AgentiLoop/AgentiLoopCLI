@@ -57,6 +57,24 @@ impl OpenAIProvider {
         req.header("authorization", format!("Bearer {}", self.api_key))
     }
 
+    /// Error for a non-2xx reply, named after this backend. 401/403 say
+    /// outright that the API key is missing or wrong and where to set it.
+    fn http_error(&self, status: reqwest::StatusCode, text: &str) -> anyhow::Error {
+        let detail = match serde_json::from_str::<WireError>(text) {
+            Ok(err) => format!("({}): {}", err.error.kind.unwrap_or_default(), err.error.message),
+            Err(_) => format!(": {text}"),
+        };
+        let mut msg = format!("{} {status} {detail}", self.name);
+        if matches!(status.as_u16(), 401 | 403) {
+            let hint = match self.name {
+                "omlx" => "set OMLX_API_KEY or auth.api_key in ~/.omlx/settings.json",
+                _ => "set OPENAI_API_KEY",
+            };
+            msg.push_str(&format!(" — API key missing or invalid; {hint}"));
+        }
+        anyhow::anyhow!(msg)
+    }
+
     async fn send_chat(&self, req: &ProviderRequest, stream: bool) -> anyhow::Result<reqwest::Response> {
         let body = WireRequest {
             model: &req.model,
@@ -84,10 +102,7 @@ impl OpenAIProvider {
         let status = resp.status();
         if !status.is_success() {
             let text = resp.text().await.context("reading error body")?;
-            if let Ok(err) = serde_json::from_str::<WireError>(&text) {
-                anyhow::bail!("OpenAI {} ({}): {}", status, err.error.kind.unwrap_or_default(), err.error.message);
-            }
-            anyhow::bail!("OpenAI {}: {}", status, text);
+            return Err(self.http_error(status, &text));
         }
         Ok(resp)
     }
@@ -339,7 +354,7 @@ impl Provider for OpenAIProvider {
         let status = resp.status();
         let text = resp.text().await?;
         if !status.is_success() {
-            anyhow::bail!("OpenAI {}: {}", status, text);
+            return Err(self.http_error(status, &text));
         }
         let mut list: WireModelList = serde_json::from_str(&text).context("decoding /models")?;
         list.data.sort_by(|a, b| b.created.cmp(&a.created).then_with(|| a.id.cmp(&b.id)));

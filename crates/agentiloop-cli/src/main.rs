@@ -106,7 +106,7 @@ async fn main() -> Result<()> {
         None if provider.default_model().is_empty() => provider
             .list_models()
             .await
-            .with_context(|| format!("{} is not reachable; is the server running?", provider.name()))?
+            .with_context(|| format!("could not get the model list from {}", provider.name()))?
             .into_iter()
             .next()
             .map(|m| m.id)
