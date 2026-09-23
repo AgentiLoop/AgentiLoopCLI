@@ -14,8 +14,25 @@ crates/
   agentiloop-provider/  model backends: Anthropic Messages API, OpenAI-compatible Chat Completions, oMLX
   agentiloop-tools/     built-in tools: read_file, write_file, edit_file, list_dir, bash
   agentiloop-mcp/       MCP client (stdio, Streamable HTTP, legacy HTTP+SSE), ported from Agent!'s AgentMCP
-  agentiloop-cli/       `agentiloop` binary: REPL + one-shot mode, interactive permission prompts
+  agentiloop-cli/       `agentiloop` binary: REPL, TUI and one-shot mode, interactive permission prompts
 ```
+
+### Dependencies
+
+The workspace uses 18 external crates directly, and every crate lists only the ones it actually uses:
+
+| Crate | Used for | Used by |
+|---|---|---|
+| `tokio`, `futures`, `async-trait` | async runtime, streams, async traits | all |
+| `serde`, `serde_json` | JSON messages, sessions, settings, MCP JSON-RPC | all |
+| `reqwest` (rustls) | HTTP to model providers and MCP servers | provider, mcp |
+| `anyhow`, `thiserror` | error handling | cli, core, provider, mcp / core |
+| `tracing`, `tracing-subscriber` | logging (`RUST_LOG`) | cli, core, mcp / cli |
+| `dirs` | home directory (`~/.agentiloop`, `~/.omlx`) | cli, provider, mcp |
+| `clap` | command-line options | cli |
+| `rustyline` | line REPL editing and history | cli |
+| `ratatui`, `unicode-width`, `textwrap` | TUI rendering and wrapping | cli |
+| `pulldown-cmark`, `syntect` | Markdown and syntax highlighting (pure-Rust regex, no C build) | cli |
 
 ## Compile
 
@@ -143,9 +160,9 @@ Slash commands (REPL and TUI):
 
 ## TUI
 
-`agentiloop --tui` (or `AGENTILOOP_TUI=1`) opens a full-screen ratatui interface: scrolling transcript, prompt box, status bar. Permission prompts appear as a modal (`y` / `n` / `a`lways). Keys: Enter send, ↑/↓ prompt history, PgUp/PgDn scroll, Ctrl-U clear line, Ctrl-C quit. All slash commands work; `/model` with no argument lists models — pick with `/model <n|id>`.
+`agentiloop --tui` (or `AGENTILOOP_TUI=1`) opens a full-screen ratatui interface: scrolling transcript, prompt box, status bar. While the agent works, the prompt box title shows an animated indicator like ` ✻ Thinking...  12s `: a spinner, what the agent is doing (Thinking, Writing, Running `<tool>`, Waiting for approval, Compacting) and the elapsed time. Permission prompts appear as a modal (`y` / `n` / `a`lways). Keys: Enter send, ↑/↓ prompt history, PgUp/PgDn scroll, Ctrl-U clear line, Ctrl-C quit. All slash commands work; `/model` with no argument lists models — pick with `/model <n|id>`.
 
-Env: `AGENTILOOP_PROVIDER`, `AGENTILOOP_MODEL`, `AGENTILOOP_YES`, `AGENTILOOP_TUI`, `AGENTILOOP_HOME`, `AGENTILOOP_COMPACT_AT`, `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `OMLX_BASE_URL`, `OMLX_PORT`, `OMLX_API_KEY`, `RUST_LOG=debug` for token usage.
+Env: `AGENTILOOP_PROVIDER`, `AGENTILOOP_MODEL`, `AGENTILOOP_YES`, `AGENTILOOP_TUI`, `AGENTILOOP_HOME`, `AGENTILOOP_COMPACT_AT`, `AGENTILOOP_NO_MCP`, `ANTHROPIC_API_KEY` (or `ANTHROPIC_OAUTH_TOKEN`), `ANTHROPIC_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OMLX_BASE_URL`, `OMLX_PORT`, `OMLX_API_KEY`, `RUST_LOG=debug` for token usage.
 
 ## MCP servers
 
@@ -191,6 +208,14 @@ cargo test --workspace
 ```
 
 No network needed: the agent loop runs against a scripted mock provider, the SSE parsers against a local canned server, and the tools against temp dirs.
+
+The MCP tests run the bundled example server (`crates/agentiloop-mcp/examples/mcp-example-server.rs`) over all three transports: stdio, Streamable HTTP and legacy HTTP+SSE. To try MCP by hand, run it yourself:
+
+```sh
+cargo run -p agentiloop-mcp --example mcp-example-server -- --http 8791   # or --sse 8792 / --stdio
+```
+
+`tests/live_servers.rs` also calls AgentMCP's HelloWorld and DemoHttp servers when they're installed in `~/bin`, and skips them otherwise.
 
 ## Roadmap
 
