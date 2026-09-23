@@ -37,9 +37,18 @@ AgentiLoop needs a model to talk to. Pick one of these:
 | **Claude** (Anthropic) | `export ANTHROPIC_API_KEY=sk-ant-...` |
 | **OpenAI** | `export OPENAI_API_KEY=sk-...` |
 | **Ollama, LM Studio**, or any OpenAI-compatible server | `export OPENAI_BASE_URL=http://localhost:11434/v1` (use your server's address; no key needed for local servers) |
-| **oMLX** (local models on Apple Silicon) | Nothing to set. Start oMLX, then run AgentiLoop with `-p omlx` |
+| **oMLX** (local models on Apple Silicon) | Usually nothing. Start oMLX, then run AgentiLoop with `-p omlx` (see below) |
 
 For Claude you can use a normal API key (`sk-ant-api…`) or a Claude Code token (`sk-ant-oat01-…`, which you get from `claude setup-token`). AgentiLoop detects which kind it is.
+
+**oMLX details.** When oMLX runs on the same Mac, AgentiLoop reads the server port and API key from oMLX's own settings file (`~/.omlx/settings.json`), so you don't need to export anything. If oMLX runs on another machine, or you want to override those settings, export them yourself:
+
+```sh
+export OMLX_BASE_URL=http://192.168.1.50:7777/v1   # the oMLX server's address (or OMLX_PORT=7777 for localhost)
+export OMLX_API_KEY=...                            # the API key from oMLX's settings
+```
+
+If oMLX has API key verification turned off, no key is needed.
 
 An `export` only lasts for the terminal tab you typed it in. To make it permanent, add the line to your shell profile (`~/.zshrc` on macOS). On a Mac you can keep the key in the Keychain rather than in the file:
 
@@ -227,7 +236,7 @@ You'll rarely need these:
 |---|---|
 | `ANTHROPIC_BASE_URL` | Send Anthropic requests to a proxy or compatible server |
 | `ANTHROPIC_OAUTH_TOKEN` | Alternative to `ANTHROPIC_API_KEY` for a Claude Code token |
-| `OMLX_BASE_URL`, `OMLX_PORT`, `OMLX_API_KEY` | Point to an oMLX server that isn't on `localhost:8000` (by default AgentiLoop also reads `~/.omlx/settings.json`) |
+| `OMLX_BASE_URL`, `OMLX_PORT`, `OMLX_API_KEY` | oMLX server address and key. They override `~/.omlx/settings.json`, which is read by default (port 8000 if neither is set) |
 | `RUST_LOG=debug` | Show debug logs, including token usage per request |
 
 ---
