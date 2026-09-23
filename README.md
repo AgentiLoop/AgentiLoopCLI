@@ -1,6 +1,6 @@
 # AgentiLoop CLI
 
-A cross-platform (macOS / Linux / Windows) agentic coding loop in the spirit of Claude Code, written in Rust. Created by AgentiLoop Agent!
+A cross-platform (macOS / Linux / Windows) agentic coding loop in the spirit of Claude Code, written in Rust. Created with AgentiLoop Agent!
 
 This is still a baby. No binaries are available at this time. Compile from source. Rust / Cargo is required.
 
