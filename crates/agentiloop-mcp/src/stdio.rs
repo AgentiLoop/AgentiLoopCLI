@@ -112,6 +112,7 @@ impl Transport for StdioTransport {
     }
 
     async fn close(&self) {
+        self.alive.store(false, Ordering::SeqCst);
         self.pending.lock().unwrap().clear();
         let _ = self.child.lock().unwrap().start_kill();
     }
