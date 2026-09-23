@@ -94,7 +94,8 @@ No network needed: the agent loop runs against a scripted mock provider, the SSE
 - [x] Context compaction when nearing the window limit
 - [x] Session persistence / resume
 - [x] TUI (ratatui)
-- [ ] MCP client
+- [x] MCP client
+- [ ] What's NeXT?
 
 ## License
 
