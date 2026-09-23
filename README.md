@@ -81,14 +81,47 @@ cargo run -- -C ../other-repo --yes "run the tests and fix failures"
 agentiloop -p openai -m gpt-4o-mini --no-mcp "explain src/main.rs"
 ```
 
-### Remembered launch
+### Remembered launch: set it once, then just run `agentiloop`
 
-Every interactive launch saves its provider, `--tui`, `--max-turns` and `--compact-at` to `~/.agentiloop/settings.json`. It also saves the model for each provider, including one-shot runs. After that, a bare `agentiloop` starts the same way and continues the most recent session in the current directory, as long as that session used the same provider. Flags and env vars always override the remembered values. Use `--no-tui` to switch back to the REPL and `--new` for a fresh session. `--yes` and `--no-mcp` are never remembered.
+agentiloop remembers how you launched it last time. Pass your options once, and from then on a bare `agentiloop` (or `cargo run`) starts the same way and picks up your last conversation.
 
 ```sh
-agentiloop -p omlx --tui     # first time
-agentiloop                   # later: oMLX, same model, TUI, previous session
+agentiloop -p anthropic --tui    # first time: choose provider + UI
+agentiloop                       # every time after: Anthropic, same model, TUI, previous session
 ```
+
+| Remembered | Saved when | Stored in |
+|---|---|---|
+| Provider (`-p`) | every interactive launch | `settings.json` → `last.provider` |
+| TUI on/off (`--tui` / `--no-tui`) | every interactive launch | `last.tui` |
+| `--max-turns`, `--compact-at` | every interactive launch | `last.max_turns`, `last.compact_at` |
+| Model (`-m` or `/model` pick) | every launch and `/model` change, per provider | `models.<provider>` |
+| Conversation | every turn | `sessions/<id>.json`, continued automatically in the same directory |
+
+**Not remembered, on purpose:** `--yes` (skipping permission prompts has to be chosen each time), `--no-mcp`, `-C`, one-shot prompts, and API keys. Keep keys in your shell profile. For example, add this to `~/.zshrc` to load a key stored in the macOS Keychain:
+
+```sh
+export ANTHROPIC_API_KEY="$(security find-generic-password -a "$USER" -s ANTHROPIC_API_KEY -w 2>/dev/null)"
+```
+
+**Changing or overriding.** Any flag or env var you pass takes priority for that run and becomes the new remembered value:
+
+```sh
+agentiloop -p omlx               # switch provider; oMLX's own last model is used
+agentiloop -m claude-sonnet-5    # switch model (also remembered per provider via /model)
+agentiloop --no-tui              # back to the line REPL from now on
+agentiloop --new                 # fresh session (sessions stay listed under /sessions)
+agentiloop -r <id>               # a specific older session
+```
+
+The previous session is continued only when it's the latest one in the current directory **and** it used the same provider. Switching provider starts a fresh session. One-shot runs (`agentiloop "prompt"`) save their session and model, but they don't change the remembered provider or UI.
+
+**Resolution order**, highest first:
+- provider: `-p` / `AGENTILOOP_PROVIDER` → `last.provider` → auto-detect from credentials
+- model: `-m` / `AGENTILOOP_MODEL` → resumed session's model → `models.<provider>` → provider default
+- UI and limits: flag / env → `last.*` → built-in defaults (REPL, 50 turns, 150000 tokens)
+
+**Reset:** delete `~/.agentiloop/settings.json`, or just its `"last"` block, to forget launch options. Delete `~/.agentiloop/sessions/` to forget conversations. To keep a separate profile, for example for testing, point `AGENTILOOP_HOME` at another directory: `AGENTILOOP_HOME=/tmp/agl-test agentiloop -p omlx`.
 
 Slash commands (REPL and TUI):
 
@@ -129,7 +162,7 @@ Servers listed under `mcpServers` in `~/.agentiloop/mcp.json` and the project's 
 
 ## Settings
 
-`~/.agentiloop/settings.json` (override dir with `AGENTILOOP_HOME`) remembers the last model per provider and the last launch options (see [Remembered launch](#remembered-launch)):
+`~/.agentiloop/settings.json` (override dir with `AGENTILOOP_HOME`) remembers the last model per provider and the last launch options (see [Remembered launch](#remembered-launch-set-it-once-then-just-run-agentiloop)):
 
 ```json
 { "models": { "anthropic": "claude-opus-5", "openai": "qwen3:4b", "omlx": "Qwen3-Coder-Next-8bit" },
