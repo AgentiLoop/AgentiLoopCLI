@@ -11,7 +11,13 @@ use serde_json::json;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 
-const EXAMPLE: &str = env!("CARGO_BIN_EXE_mcp-example-server");
+/// `examples/mcp-example-server.rs`, which `cargo test` builds into target/<profile>/examples/.
+fn example() -> String {
+    let exe = std::env::current_exe().unwrap(); // target/<profile>/deps/transports-<hash>
+    let p = exe.parent().unwrap().parent().unwrap().join("examples").join(format!("mcp-example-server{}", std::env::consts::EXE_SUFFIX));
+    assert!(p.is_file(), "{} missing; run `cargo build -p agentiloop-mcp --example mcp-example-server`", p.display());
+    p.display().to_string()
+}
 
 /// Every test gets a hard deadline so a transport bug fails instead of hanging CI.
 async fn deadline<F: std::future::Future>(f: F) -> F::Output {
@@ -20,7 +26,7 @@ async fn deadline<F: std::future::Future>(f: F) -> F::Output {
 
 /// Start the example server in an HTTP mode; returns the child (killed on drop) and its port.
 async fn start_http(mode: &str) -> (Child, u16) {
-    let mut child = Command::new(EXAMPLE)
+    let mut child = Command::new(example())
         .args([mode, "0"])
         .stdout(Stdio::piped())
         .kill_on_drop(true)
@@ -33,7 +39,7 @@ async fn start_http(mode: &str) -> (Child, u16) {
 }
 
 fn stdio_cfg() -> ServerConfig {
-    ServerConfig { command: EXAMPLE.into(), args: vec!["--stdio".into()], ..Default::default() }
+    ServerConfig { command: example().into(), args: vec!["--stdio".into()], ..Default::default() }
 }
 
 fn url_cfg(url: String) -> ServerConfig {
@@ -202,10 +208,10 @@ async fn manager_registers_tools_from_all_transports() {
         let cfg = write_config(
             &dir,
             json!({ "mcpServers": {
-                "Local": { "command": EXAMPLE, "args": ["--stdio"] },
+                "Local": { "command": example(), "args": ["--stdio"] },
                 "Web": { "type": "http", "url": format!("http://127.0.0.1:{hp}/mcp") },
                 "Legacy": { "url": "http://127.0.0.1:${AGL_MCP_TEST_PORT}/sse" },
-                "Off": { "command": EXAMPLE, "args": ["--stdio"], "disabled": true },
+                "Off": { "command": example(), "args": ["--stdio"], "disabled": true },
                 "Broken": { "command": "/no/such/binary" }
             }}),
         );

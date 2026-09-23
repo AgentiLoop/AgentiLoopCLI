@@ -1,9 +1,9 @@
 //! Minimal example MCP server used by the transport tests. One binary, three transports:
 //!
 //! ```text
-//! mcp-example-server --stdio          newline-delimited JSON-RPC on stdin/stdout
-//! mcp-example-server --http <port>    Streamable HTTP on http://127.0.0.1:<port>/mcp
-//! mcp-example-server --sse  <port>    legacy HTTP+SSE: GET /sse, POST /messages?session_id=…
+//! cargo run -p agentiloop-mcp --example mcp-example-server -- --stdio          newline-delimited JSON-RPC on stdin/stdout
+//! cargo run -p agentiloop-mcp --example mcp-example-server -- --http <port>    Streamable HTTP on http://127.0.0.1:<port>/mcp
+//! cargo run -p agentiloop-mcp --example mcp-example-server -- --sse  <port>    legacy HTTP+SSE: GET /sse, POST /messages?session_id=…
 //! ```
 //!
 //! Port 0 picks a free port; HTTP modes print `listening on <port>` as the first stdout line.
