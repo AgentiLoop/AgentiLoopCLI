@@ -34,6 +34,10 @@ pub enum UiMsg {
     Status(String),
     /// The agent finished the current prompt / command.
     Idle,
+    /// A user prompt from a resumed session being replayed.
+    User(String),
+    /// Wipe the transcript (a different session was loaded, or /clear).
+    Clear,
 }
 
 /// What the UI sends to the agent task.
@@ -210,6 +214,13 @@ impl App {
             }
             UiMsg::Status(s) => self.status = s,
             UiMsg::Idle => self.busy = false,
+            UiMsg::User(s) => self.push(Kind::User, s),
+            UiMsg::Clear => {
+                self.entries.clear();
+                self.streaming = false;
+                self.pending_paths.clear();
+                self.scroll = 0;
+            }
         }
     }
 
@@ -695,6 +706,17 @@ mod tests {
         let s = screen(&app, 40, 8);
         assert!(s.contains("> hello there"), "{s}");
         assert!(s.contains("Thinking") && s.contains("0s"), "{s}");
+    }
+
+    #[test]
+    fn replayed_session_shows_and_clear_wipes() {
+        let mut app = App::new("s");
+        app.apply(UiMsg::User("earlier question".into()));
+        app.apply(UiMsg::Event(AgentEvent::AssistantText("earlier answer".into())));
+        let s = screen(&app, 40, 8);
+        assert!(s.contains("> earlier question") && s.contains("earlier answer"), "{s}");
+        app.apply(UiMsg::Clear);
+        assert!(!screen(&app, 40, 8).contains("earlier"));
     }
 
     #[test]

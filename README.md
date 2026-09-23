@@ -106,7 +106,7 @@ What it remembers:
 - **Provider** (`-p`) and **TUI on/off** (`--tui` / `--no-tui`)
 - **Model**: the last one you used, separately for each provider. Switching back to a provider brings back its model.
 - **Limits**: `--max-turns` and `--compact-at`
-- **Your conversation**: it picks up the last conversation in the current folder, if that conversation used the same provider
+- **Your conversation**: it picks up the last conversation in the current folder, if that conversation used the same provider. The earlier messages are shown again on screen, so you can scroll back and see where you left off
 
 To change something, pass the new option. It applies right away and is remembered from then on:
 

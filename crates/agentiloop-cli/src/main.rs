@@ -7,7 +7,7 @@ mod tui;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
-use agentiloop_core::{Agent, AgentConfig, AgentEvent, ModelInfo, Provider, Session, ToolContext};
+use agentiloop_core::{Agent, AgentConfig, AgentEvent, ContentBlock, Message, ModelInfo, Provider, Role, Session, ToolContext};
 use anyhow::{Context, Result};
 use clap::Parser;
 use rustyline::error::ReadlineError;
@@ -190,6 +190,8 @@ async fn main() -> Result<()> {
         };
         let (in_tx, mut in_rx) = tokio::sync::mpsc::unbounded_channel::<tui::Input>();
         let app = tui::App::new(status(&agent, &session)).with_history_file(settings::history_path());
+        // A continued session shows its earlier conversation, not an empty screen.
+        replay_tui(&ui_tx, &agent.history);
         let ui = tokio::task::spawn_blocking(move || tui::run(app, ui_rx, in_tx));
         // Agent side: one prompt or slash command at a time, until the UI hangs up.
         while let Some(tui::Input::Submit(line)) = in_rx.recv().await {
@@ -197,10 +199,16 @@ async fn main() -> Result<()> {
                 // Collect the command's output into one transcript entry so
                 // multi-line output (the /model list) isn't double-spaced.
                 let mut out: Vec<String> = Vec::new();
+                let before = session.id.clone();
                 let res = slash_command(&line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), &mcp, false, &mut |s| {
                     out.push(s)
                 })
                 .await;
+                // /resume and /clear switch sessions: show the new one's conversation.
+                if session.id != before {
+                    let _ = ui_tx.send(tui::UiMsg::Clear);
+                    replay_tui(&ui_tx, &agent.history);
+                }
                 if !out.is_empty() {
                     let _ = ui_tx.send(tui::UiMsg::Line(out.join("\n")));
                 }
@@ -236,6 +244,7 @@ async fn main() -> Result<()> {
         agent.model(),
         session.id
     );
+    replay_repl(&agent.history);
     // rustyline gives us line editing plus up/down arrow recall of earlier prompts.
     let mut rl = rustyline::DefaultEditor::new()?;
     let history = settings::history_path();
@@ -257,10 +266,14 @@ async fn main() -> Result<()> {
             break;
         }
         if line.starts_with('/') {
+            let before = session.id.clone();
             slash_command(line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), &mcp, true, &mut |s| {
                 eprintln!("{s}")
             })
             .await?;
+            if session.id != before {
+                replay_repl(&agent.history);
+            }
             continue;
         }
         if let Err(e) = agent.run(line, render).await {
@@ -278,6 +291,50 @@ async fn main() -> Result<()> {
     }
     mcp.shutdown().await;
     Ok(())
+}
+
+/// Turn saved history back into what was on screen: user prompts (via `user`)
+/// and assistant text / tool calls / tool results (via `event`).
+fn replay(history: &[Message], mut user: impl FnMut(String), mut event: impl FnMut(AgentEvent)) {
+    let mut names = std::collections::HashMap::new();
+    for msg in history {
+        for block in &msg.content {
+            match block {
+                ContentBlock::Text { text } if text.trim().is_empty() => {}
+                ContentBlock::Text { text } if msg.role == Role::User => user(text.clone()),
+                ContentBlock::Text { text } => event(AgentEvent::AssistantText(text.clone())),
+                ContentBlock::ToolUse { id, name, input } => {
+                    names.insert(id.clone(), name.clone());
+                    event(AgentEvent::ToolCall { id: id.clone(), name: name.clone(), input: input.clone() });
+                }
+                ContentBlock::ToolResult { tool_use_id, content, is_error } => event(AgentEvent::ToolResult {
+                    id: tool_use_id.clone(),
+                    name: names.get(tool_use_id).cloned().unwrap_or_default(),
+                    output: content.clone(),
+                    is_error: *is_error,
+                }),
+            }
+        }
+    }
+}
+
+fn replay_tui(tx: &tokio::sync::mpsc::UnboundedSender<tui::UiMsg>, history: &[Message]) {
+    replay(history, |s| drop(tx.send(tui::UiMsg::User(s))), |ev| drop(tx.send(tui::UiMsg::Event(ev))));
+}
+
+fn replay_repl(history: &[Message]) {
+    replay(
+        history,
+        |s| eprintln!("\n> {s}"),
+        |ev| match ev {
+            // `render` expects deltas before AssistantText; print whole text here.
+            AgentEvent::AssistantText(t) => println!("{t}"),
+            other => render(other),
+        },
+    );
+    if !history.is_empty() {
+        eprintln!("\n── end of previous conversation ──");
+    }
 }
 
 /// Snapshot the agent's history into the session file. Empty histories are not written.
