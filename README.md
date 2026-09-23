@@ -12,6 +12,19 @@ crates/
   agentiloop-cli/       `agentiloop` binary: REPL + one-shot mode, interactive permission prompts
 ```
 
+## Compile
+
+You need a stable Rust toolchain from [rustup](https://rustup.rs). It builds the same way on macOS, Linux and Windows.
+
+```sh
+git clone https://github.com/AgentiLoop/AgentiLoopCLI.git
+cd AgentiLoopCLI
+cargo build --release                          # → target/release/agentiloop
+cargo install --path crates/agentiloop-cli     # optional: puts `agentiloop` in ~/.cargo/bin
+```
+
+From source you can run it as `cargo run -- <options>`. Everything after `--` goes to agentiloop. You can also run the built binary directly: `target/release/agentiloop <options>`, or `agentiloop <options>` after `cargo install`.
+
 ## Build & run
 
 ```sh
@@ -35,6 +48,49 @@ export OMLX_BASE_URL=http://localhost:8000/v1  OMLX_API_KEY=...            # opt
 ```
 
 Provider is auto-detected from which credentials are set (`ANTHROPIC_API_KEY` wins, then `OPENAI_*`, then `OMLX_*`); force one with `--provider` / `AGENTILOOP_PROVIDER`.
+
+## Command-line options
+
+```
+agentiloop [OPTIONS] [PROMPT]...
+```
+
+If you pass a prompt, agentiloop runs it once and exits. With no prompt it starts the interactive REPL, or the full-screen TUI when you add `--tui`.
+
+| Option | Env var | Description |
+|---|---|---|
+| `-p, --provider <PROVIDER>` | `AGENTILOOP_PROVIDER` | `anthropic`, `openai` (any OpenAI-compatible server) or `omlx`. Auto-detected when omitted |
+| `-m, --model <MODEL>` | `AGENTILOOP_MODEL` | Model id. Defaults to the last `/model` pick for this provider, then the provider default |
+| `--tui` | `AGENTILOOP_TUI` | Full-screen terminal UI (ratatui) instead of the line REPL. Can't be combined with a one-shot prompt |
+| `--yes` | `AGENTILOOP_YES` | Skip all permission prompts (dangerous; meant for CI) |
+| `--max-turns <N>` | | Max provider round-trips per prompt (default 50) |
+| `--compact-at <TOKENS>` | `AGENTILOOP_COMPACT_AT` | Summarize the conversation once a request reaches this many input tokens (default 150000, 0 = never) |
+| `-C, --cwd <DIR>` | | Working directory the agent operates in (defaults to the current directory) |
+| `-c, --continue` | | Resume the most recent session for this working directory |
+| `-r, --resume <ID>` | | Resume a saved session by id (see `/sessions`) |
+| `--no-mcp` | `AGENTILOOP_NO_MCP` | Don't start MCP servers from `~/.agentiloop/mcp.json` / `./.mcp.json` |
+| `-h, --help` / `-V, --version` | | Print help / version |
+
+```sh
+cargo run -- --tui                          # TUI, provider auto-detected
+cargo run -- -p omlx --tui                  # TUI on a local oMLX server
+cargo run -- -c                             # continue the last session here
+cargo run -- -C ../other-repo --yes "run the tests and fix failures"
+agentiloop -p openai -m gpt-4o-mini --no-mcp "explain src/main.rs"
+```
+
+Slash commands (REPL and TUI):
+
+| Command | Description |
+|---|---|
+| `/model [n\|id]` | Show the model picker, or pick #n / set an id directly |
+| `/mcp` | List MCP servers and their tools |
+| `/compact` | Summarize the conversation to free context |
+| `/sessions` | List saved sessions (newest first) |
+| `/resume <id\|n>` | Load a saved session |
+| `/clear` | Clear context and start a new session |
+| `/help` | List commands |
+| `/exit` | Quit |
 
 ## TUI
 
