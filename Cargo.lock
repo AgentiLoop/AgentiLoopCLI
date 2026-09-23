@@ -13,6 +13,7 @@ name = "agentiloop"
 version = "0.1.0"
 dependencies = [
  "agentiloop-core",
+ "agentiloop-mcp",
  "agentiloop-provider",
  "agentiloop-tools",
  "anyhow",
@@ -41,6 +42,22 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "agentiloop-mcp"
+version = "0.1.0"
+dependencies = [
+ "agentiloop-core",
+ "anyhow",
+ "async-trait",
+ "dirs",
+ "futures",
+ "reqwest",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
 ]

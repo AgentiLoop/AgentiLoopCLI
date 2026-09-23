@@ -12,6 +12,7 @@ path = "src/main.rs"
 agentiloop-core = { path = "../agentiloop-core" }
 agentiloop-provider = { path = "../agentiloop-provider" }
 agentiloop-tools = { path = "../agentiloop-tools" }
+agentiloop-mcp = { path = "../agentiloop-mcp" }
 tokio.workspace = true
 clap.workspace = true
 anyhow.workspace = true

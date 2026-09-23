@@ -53,6 +53,11 @@ pub fn sessions_dir() -> Option<PathBuf> {
     Some(home()?.join("sessions"))
 }
 
+/// User-level MCP servers (`mcpServers` JSON); the project's `.mcp.json` is merged on top.
+pub fn mcp_config_path() -> Option<PathBuf> {
+    Some(home()?.join("mcp.json"))
+}
+
 pub fn load() -> Settings {
     let Some(p) = path() else { return Settings::default() };
     match std::fs::read_to_string(&p) {

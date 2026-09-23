@@ -56,6 +56,10 @@ struct Cli {
     #[arg(long, env = "AGENTILOOP_TUI", conflicts_with = "prompt")]
     tui: bool,
 
+    /// Don't start MCP servers from ~/.agentiloop/mcp.json / ./.mcp.json.
+    #[arg(long, env = "AGENTILOOP_NO_MCP")]
+    no_mcp: bool,
+
     /// One-shot prompt. If omitted, starts an interactive REPL.
     prompt: Vec<String>,
 }
@@ -75,7 +79,20 @@ async fn main() -> Result<()> {
     };
 
     let provider = agentiloop_provider::from_env(cli.provider.as_deref())?;
-    let tools = agentiloop_tools::default_registry();
+    let mut tools = agentiloop_tools::default_registry();
+    let mcp = if cli.no_mcp {
+        agentiloop_mcp::McpManager::default()
+    } else {
+        let paths = agentiloop_mcp::config::default_paths(settings::mcp_config_path(), &cwd);
+        agentiloop_mcp::McpManager::start(&paths, &cwd).await
+    };
+    mcp.register_tools(&mut tools);
+    if !mcp.is_empty() {
+        eprintln!("mcp: {} server(s) connected, {} tool(s)", mcp.servers.len(), mcp.tool_count());
+        for (name, err) in &mcp.errors {
+            eprintln!("mcp: {name} failed: {err}");
+        }
+    }
     // The TUI answers permission prompts through its own channel-backed policy.
     let (ui_tx, ui_rx) = tokio::sync::mpsc::unbounded_channel::<tui::UiMsg>();
     let policy: agentiloop_core::permission::SharedPolicy = if cli.tui && !cli.yes {
@@ -128,6 +145,7 @@ async fn main() -> Result<()> {
     if !cli.prompt.is_empty() {
         let res = agent.run(&cli.prompt.join(" "), render).await;
         persist(&mut session, &agent, sessions_dir.as_deref());
+        mcp.shutdown().await;
         return res;
     }
 
@@ -144,7 +162,7 @@ async fn main() -> Result<()> {
                 // Collect the command's output into one transcript entry so
                 // multi-line output (the /model list) isn't double-spaced.
                 let mut out: Vec<String> = Vec::new();
-                let res = slash_command(&line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), false, &mut |s| {
+                let res = slash_command(&line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), &mcp, false, &mut |s| {
                     out.push(s)
                 })
                 .await;
@@ -171,6 +189,7 @@ async fn main() -> Result<()> {
             let _ = ui_tx.send(tui::UiMsg::Idle);
         }
         drop(ui_tx);
+        mcp.shutdown().await;
         ui.await??;
         return Ok(());
     }
@@ -203,7 +222,7 @@ async fn main() -> Result<()> {
             break;
         }
         if line.starts_with('/') {
-            slash_command(line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), true, &mut |s| {
+            slash_command(line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), &mcp, true, &mut |s| {
                 eprintln!("{s}")
             })
             .await?;
@@ -222,6 +241,7 @@ async fn main() -> Result<()> {
             eprintln!("warning: could not save history: {e}");
         }
     }
+    mcp.shutdown().await;
     Ok(())
 }
 
@@ -291,6 +311,7 @@ async fn slash_command(
     saved: &mut settings::Settings,
     session: &mut Session,
     sessions_dir: Option<&Path>,
+    mcp: &agentiloop_mcp::McpManager,
     interactive: bool,
     say: &mut dyn FnMut(String),
 ) -> Result<()> {
@@ -392,6 +413,14 @@ async fn slash_command(
                 Err(e) => say(format!("{e:#}")),
             }
         }
+        "/mcp" => {
+            if mcp.is_empty() {
+                say("no MCP servers configured (add `mcpServers` to ~/.agentiloop/mcp.json or ./.mcp.json)".into());
+            }
+            for l in mcp.status_lines() {
+                say(l);
+            }
+        }
         "/help" => say(HELP.into()),
         _ => say(format!("unknown command {cmd} (try /help)")),
     }
@@ -399,6 +428,7 @@ async fn slash_command(
 }
 
 const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
+/mcp            list MCP servers and their tools\n\
 /compact        summarize the conversation to free context\n\
 /sessions       list saved sessions (newest first)\n\
 /resume <id|n>  load a saved session into this REPL\n\

@@ -9,6 +9,7 @@ crates/
   agentiloop-core/      message model, Tool trait + registry, Provider trait, permission gate, the agent loop
   agentiloop-provider/  model backends: Anthropic Messages API, OpenAI-compatible Chat Completions, oMLX
   agentiloop-tools/     built-in tools: read_file, write_file, edit_file, list_dir, bash
+  agentiloop-mcp/       MCP client (stdio, Streamable HTTP, legacy HTTP+SSE), ported from Agent!'s AgentMCP
   agentiloop-cli/       `agentiloop` binary: REPL + one-shot mode, interactive permission prompts
 ```
 
@@ -41,6 +42,24 @@ Provider is auto-detected from which credentials are set (`ANTHROPIC_API_KEY` wi
 `agentiloop --tui` (or `AGENTILOOP_TUI=1`) opens a full-screen ratatui interface: scrolling transcript, prompt box, status bar. Permission prompts appear as a modal (`y` / `n` / `a`lways). Keys: Enter send, ↑/↓ prompt history, PgUp/PgDn scroll, Ctrl-U clear line, Ctrl-C quit. All slash commands work; `/model` with no argument lists models — pick with `/model <n|id>`.
 
 Env: `AGENTILOOP_PROVIDER`, `AGENTILOOP_MODEL`, `AGENTILOOP_YES`, `AGENTILOOP_TUI`, `AGENTILOOP_HOME`, `AGENTILOOP_COMPACT_AT`, `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `OMLX_BASE_URL`, `OMLX_PORT`, `OMLX_API_KEY`, `RUST_LOG=debug` for token usage.
+
+## MCP servers
+
+Servers listed under `mcpServers` in `~/.agentiloop/mcp.json` and the project's `./.mcp.json` start with the CLI. The format matches Agent!, Claude Code and Claude Desktop. If a server name appears in both files, the project entry wins. Each tool a server exposes becomes an agent tool named `mcp_<server>_<tool>`. If a server has resources, `mcp_read_resource` is added too.
+
+```json
+{ "mcpServers": {
+    "HelloWorld": { "command": "mcp-server-hello", "args": [], "env": {} },
+    "DemoHttp":   { "transport": "http", "url": "http://localhost:8085/mcp", "headers": { "Authorization": "Bearer ${DEMO_TOKEN}" } },
+    "Search":     { "url": "https://example.com/api/sse" }
+} }
+```
+
+- **stdio**: bare command names are looked up in `~/.local/bin`, Homebrew, `~/.cargo/bin` and then `PATH`. The server runs in the project folder, and `DYLD_*` / `LD_PRELOAD` entries in `env` are ignored.
+- **http**: Streamable HTTP (POST JSON-RPC, JSON or SSE replies, `Mcp-Session-Id`). A URL ending in `/sse`, `"transport": "sse"` or a non-empty `sseEndpoint` switches to the legacy HTTP+SSE transport. Plain `http://` is only allowed for localhost.
+- `${VAR}` / `${VAR:-default}` in `command`, `args`, `env`, `url` and `headers` is filled in from the environment.
+- `"enabled": false` or `"disabled": true` skips a server. `--no-mcp` / `AGENTILOOP_NO_MCP=1` turns MCP off.
+- MCP tools ask for permission like other mutating tools, unless the server marks them `readOnlyHint`. `/mcp` lists servers, tools and connection errors.
 
 ## Settings
 

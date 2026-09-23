@@ -4,6 +4,7 @@ members = [
     "crates/agentiloop-core",
     "crates/agentiloop-provider",
     "crates/agentiloop-tools",
+    "crates/agentiloop-mcp",
     "crates/agentiloop-cli",
 ]
 
