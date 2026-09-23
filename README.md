@@ -62,11 +62,13 @@ If you pass a prompt, agentiloop runs it once and exits. With no prompt it start
 | `-p, --provider <PROVIDER>` | `AGENTILOOP_PROVIDER` | `anthropic`, `openai` (any OpenAI-compatible server) or `omlx`. Auto-detected when omitted |
 | `-m, --model <MODEL>` | `AGENTILOOP_MODEL` | Model id. Defaults to the last `/model` pick for this provider, then the provider default |
 | `--tui` | `AGENTILOOP_TUI` | Full-screen terminal UI (ratatui) instead of the line REPL. Can't be combined with a one-shot prompt |
+| `--no-tui` | | Use the line REPL even if the TUI was used last time |
 | `--yes` | `AGENTILOOP_YES` | Skip all permission prompts (dangerous; meant for CI) |
 | `--max-turns <N>` | | Max provider round-trips per prompt (default 50) |
 | `--compact-at <TOKENS>` | `AGENTILOOP_COMPACT_AT` | Summarize the conversation once a request reaches this many input tokens (default 150000, 0 = never) |
 | `-C, --cwd <DIR>` | | Working directory the agent operates in (defaults to the current directory) |
-| `-c, --continue` | | Resume the most recent session for this working directory |
+| `-c, --continue` | | Resume the most recent session for this working directory (already the default for interactive launches) |
+| `--new` | | Start a new session instead of continuing the last one |
 | `-r, --resume <ID>` | | Resume a saved session by id (see `/sessions`) |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | Don't start MCP servers from `~/.agentiloop/mcp.json` / `./.mcp.json` |
 | `-h, --help` / `-V, --version` | | Print help / version |
@@ -77,6 +79,15 @@ cargo run -- -p omlx --tui                  # TUI on a local oMLX server
 cargo run -- -c                             # continue the last session here
 cargo run -- -C ../other-repo --yes "run the tests and fix failures"
 agentiloop -p openai -m gpt-4o-mini --no-mcp "explain src/main.rs"
+```
+
+### Remembered launch
+
+Every interactive launch saves its provider, `--tui`, `--max-turns` and `--compact-at` to `~/.agentiloop/settings.json`. It also saves the model for each provider, including one-shot runs. After that, a bare `agentiloop` starts the same way and continues the most recent session in the current directory, as long as that session used the same provider. Flags and env vars always override the remembered values. Use `--no-tui` to switch back to the REPL and `--new` for a fresh session. `--yes` and `--no-mcp` are never remembered.
+
+```sh
+agentiloop -p omlx --tui     # first time
+agentiloop                   # later: oMLX, same model, TUI, previous session
 ```
 
 Slash commands (REPL and TUI):
@@ -118,10 +129,11 @@ Servers listed under `mcpServers` in `~/.agentiloop/mcp.json` and the project's 
 
 ## Settings
 
-`~/.agentiloop/settings.json` (override dir with `AGENTILOOP_HOME`) remembers the last `/model` pick per provider:
+`~/.agentiloop/settings.json` (override dir with `AGENTILOOP_HOME`) remembers the last model per provider and the last launch options (see [Remembered launch](#remembered-launch)):
 
 ```json
-{ "models": { "anthropic": "claude-opus-5", "openai": "qwen3:4b", "omlx": "Qwen3-Coder-Next-8bit" } }
+{ "models": { "anthropic": "claude-opus-5", "openai": "qwen3:4b", "omlx": "Qwen3-Coder-Next-8bit" },
+  "last":   { "provider": "omlx", "tui": true, "max_turns": 50, "compact_at": 150000 } }
 ```
 
 Precedence: `--model` / `AGENTILOOP_MODEL` → resumed session's model → settings.json → provider default (`claude-sonnet-5` / `gpt-4o-mini` / first model listed by oMLX).

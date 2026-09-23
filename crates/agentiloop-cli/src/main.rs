@@ -18,27 +18,28 @@ use rustyline::error::ReadlineError;
 struct Cli {
     /// Model backend: `anthropic`, `openai` (OpenAI-compatible: OpenAI, Ollama,
     /// LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL), or `omlx` (local
-    /// oMLX server, http://localhost:8000/v1). Auto-detected from which
-    /// credentials are set when omitted.
+    /// oMLX server, http://localhost:8000/v1). Defaults to the last one used,
+    /// then auto-detected from which credentials are set.
     #[arg(short, long, env = "AGENTILOOP_PROVIDER")]
     provider: Option<String>,
 
-    /// Model id to use. Defaults to the last model picked with /model for this
-    /// provider (~/.agentiloop/settings.json), then the provider's default.
+    /// Model id to use. Defaults to the last model used with this provider
+    /// (~/.agentiloop/settings.json), then the provider's default.
     #[arg(short, long, env = "AGENTILOOP_MODEL")]
     model: Option<String>,
 
-    /// Skip all permission prompts (dangerous; intended for CI).
+    /// Skip all permission prompts (dangerous; intended for CI). Never remembered.
     #[arg(long, env = "AGENTILOOP_YES")]
     yes: bool,
 
-    /// Max provider round-trips per prompt.
-    #[arg(long, default_value_t = 50)]
-    max_turns: usize,
+    /// Max provider round-trips per prompt [default: last used, then 50].
+    #[arg(long)]
+    max_turns: Option<usize>,
 
-    /// Summarize the conversation once a request reaches this many input tokens (0 = never).
-    #[arg(long, default_value_t = 150_000, env = "AGENTILOOP_COMPACT_AT")]
-    compact_at: u64,
+    /// Summarize the conversation once a request reaches this many input tokens (0 = never)
+    /// [default: last used, then 150000].
+    #[arg(long, env = "AGENTILOOP_COMPACT_AT")]
+    compact_at: Option<u64>,
 
     /// Working directory the agent operates in (defaults to cwd).
     #[arg(short = 'C', long)]
@@ -48,13 +49,22 @@ struct Cli {
     #[arg(short = 'r', long, conflicts_with = "continue_last")]
     resume: Option<String>,
 
-    /// Resume the most recent session for this working directory.
+    /// Resume the most recent session for this working directory
+    /// (the default for interactive launches; kept for scripts).
     #[arg(short = 'c', long = "continue")]
     continue_last: bool,
 
-    /// Full-screen terminal UI (ratatui) instead of the line REPL.
+    /// Start a new session instead of continuing the last one in this directory.
+    #[arg(long, conflicts_with_all = ["resume", "continue_last"])]
+    new: bool,
+
+    /// Full-screen terminal UI (ratatui) instead of the line REPL. Remembered.
     #[arg(long, env = "AGENTILOOP_TUI", conflicts_with = "prompt")]
     tui: bool,
+
+    /// Use the line REPL even if the TUI was used last time.
+    #[arg(long, conflicts_with = "tui")]
+    no_tui: bool,
 
     /// Don't start MCP servers from ~/.agentiloop/mcp.json / ./.mcp.json.
     #[arg(long, env = "AGENTILOOP_NO_MCP")]
@@ -78,7 +88,16 @@ async fn main() -> Result<()> {
         None => std::env::current_dir()?,
     };
 
-    let provider = agentiloop_provider::from_env(cli.provider.as_deref())?;
+    // Anything not given on the command line comes from the last interactive launch,
+    // so a bare `agentiloop` reopens with the same provider, model, UI and session.
+    let mut saved = settings::load();
+    let interactive = cli.prompt.is_empty();
+    let last = saved.last.clone();
+    let use_tui = interactive && !cli.no_tui && (cli.tui || last.tui);
+    let max_turns = cli.max_turns.or(last.max_turns).unwrap_or(50);
+    let compact_at = cli.compact_at.or(last.compact_at).unwrap_or(150_000);
+
+    let provider = agentiloop_provider::from_env(cli.provider.as_deref().or(last.provider.as_deref()))?;
     let mut tools = agentiloop_tools::default_registry();
     let mcp = if cli.no_mcp {
         agentiloop_mcp::McpManager::default()
@@ -95,20 +114,22 @@ async fn main() -> Result<()> {
     }
     // The TUI answers permission prompts through its own channel-backed policy.
     let (ui_tx, ui_rx) = tokio::sync::mpsc::unbounded_channel::<tui::UiMsg>();
-    let policy: agentiloop_core::permission::SharedPolicy = if cli.tui && !cli.yes {
+    let policy: agentiloop_core::permission::SharedPolicy = if use_tui && !cli.yes {
         std::sync::Arc::new(tui::ChannelPolicy::new(ui_tx.clone()))
     } else {
         permission::policy(cli.yes)
     };
-    let mut saved = settings::load();
     let sessions_dir = settings::sessions_dir();
 
-    // Resume, if asked: the session's model wins unless --model was given.
-    let resumed = match (&cli.resume, cli.continue_last, &sessions_dir) {
+    // Resume, if asked — or automatically for a plain interactive launch, as long as the
+    // last session here used the same provider. The session's model wins unless --model was given.
+    let auto_continue = interactive && cli.resume.is_none() && !cli.continue_last && !cli.new;
+    let resumed = match (&cli.resume, cli.continue_last || auto_continue, &sessions_dir) {
         (Some(id), _, Some(dir)) => Some(Session::load(dir, id)?),
         (None, true, Some(dir)) => Session::latest_for(dir, &cwd)?,
         _ => None,
-    };
+    }
+    .filter(|s| !auto_continue || s.provider == provider.name());
     if cli.continue_last && resumed.is_none() {
         eprintln!("no previous session for {}; starting fresh", cwd.display());
     }
@@ -130,7 +151,21 @@ async fn main() -> Result<()> {
             .with_context(|| format!("{} serves no models; load one or pass --model", provider.name()))?,
         None => provider.default_model().to_string(),
     };
-    let config = AgentConfig { model, max_turns: cli.max_turns, compact_at_tokens: cli.compact_at, ..Default::default() };
+    let config = AgentConfig { model, max_turns, compact_at_tokens: compact_at, ..Default::default() };
+
+    // Remember this launch (model per provider always; UI options only for interactive runs).
+    saved.set_model(provider.name(), &config.model);
+    if interactive {
+        saved.last = settings::LastLaunch {
+            provider: Some(provider.name().to_string()),
+            tui: use_tui,
+            max_turns: Some(max_turns),
+            compact_at: Some(compact_at),
+        };
+    }
+    if let Err(e) = settings::save(&saved) {
+        tracing::warn!("could not save settings: {e:#}");
+    }
 
     let mut agent = Agent::new(provider.clone(), tools, policy, config, ToolContext { cwd: cwd.clone() });
     let mut session = match resumed {
@@ -149,7 +184,7 @@ async fn main() -> Result<()> {
         return res;
     }
 
-    if cli.tui {
+    if use_tui {
         let status = |agent: &Agent, session: &Session| {
             format!(" AgentiLoop  {}  {}  {}  session {} ", cwd.display(), provider.name(), agent.model(), session.id)
         };

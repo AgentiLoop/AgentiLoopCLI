@@ -14,6 +14,18 @@ pub struct Settings {
     pub model: Option<String>,
     /// Last model selected via `/model`, per provider name.
     pub models: BTreeMap<String, String>,
+    /// Options from the last interactive launch, reused when not given on the command line.
+    pub last: LastLaunch,
+}
+
+/// Remembered launch options. `--yes` and `--no-mcp` are deliberately never remembered.
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LastLaunch {
+    pub provider: Option<String>,
+    pub tui: bool,
+    pub max_turns: Option<usize>,
+    pub compact_at: Option<u64>,
 }
 
 impl Settings {
