@@ -3,7 +3,8 @@
 A cross-platform (macOS / Linux / Windows) agentic coding loop in the spirit of Claude Code, written in Rust. Created with AgentiLoop Agent! This is our baby. No binaries are available at this time. Compile from source. Rust / Cargo is required.
 
 ## AgentiLoop Coding already in Action
-<img width="2048" height="1152" alt="image" src="https://github.com/user-attachments/assets/6a825e7e-df64-4874-9a3a-4eafc773dce4" />
+<img width="2048" height="1152" alt="image" src="https://github.com/user-attachments/assets/d910bbd2-b47d-4c4a-89af-ac0753ccf279" />
+
 
 ## Layout
 
