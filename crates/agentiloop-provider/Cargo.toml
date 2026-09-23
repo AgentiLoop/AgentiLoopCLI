@@ -12,7 +12,6 @@ reqwest.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 futures.workspace = true
-tracing.workspace = true
 dirs.workspace = true
 
 [dev-dependencies]

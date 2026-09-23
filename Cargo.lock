@@ -75,7 +75,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -83,12 +82,10 @@ name = "agentiloop-tools"
 version = "0.1.0"
 dependencies = [
  "agentiloop-core",
- "anyhow",
  "async-trait",
  "serde",
  "serde_json",
  "tokio",
- "tracing",
 ]
 
 [[package]]
