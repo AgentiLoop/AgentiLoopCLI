@@ -1,5 +1,7 @@
 # AgentiLoopCLI
 
+🌐 [English](README.md) · [Español](README_es.md) · [Français](README_fr.md) · [Deutsch](README_de.md) · [中文 (简体)](README_zh.md) · [Русский](README_ru.md) · [한국어](README_ko.md) · [日本語](README_ja.md)
+
 ### We put out a pre-release v0.0.1 build for Mac, Windows and Linux! 
 
 ---
