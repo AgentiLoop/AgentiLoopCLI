@@ -1,6 +1,6 @@
 # AgentiLoopCLI
 
-### Attn: Early Daring Adopters! We put out a pre-release v0.0.1 build for Mac, Windows and Linux! 
+### We put out a pre-release v0.0.1 build for Mac, Windows and Linux! 
 
 ---
 
