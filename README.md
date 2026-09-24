@@ -1,4 +1,4 @@
-# AgentiLoop CLI
+# AgentiLoopCLI
 
 AgentiLoop is an AI coding agent that runs in your terminal, in the spirit of Claude Code. You describe what you want in plain language. The agent reads your files, edits code and runs commands to get it done, and it asks your permission before it changes anything.
 
