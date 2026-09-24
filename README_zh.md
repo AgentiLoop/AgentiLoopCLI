@@ -166,8 +166,11 @@ $env:ANTHROPIC_API_KEY.Substring(0,10)  # Windows PowerShell
 
 进入一个项目文件夹，启动全屏界面：
 
+先新建一个空的测试文件夹，放心地试一试。如果要用于真实项目，请改用 `cd` 进入该项目的文件夹（例如 `cd ~/code/my-app`）。
+
 ```sh
-cd ~/my-project
+mkdir -p ~/agentiloop-test
+cd ~/agentiloop-test
 agentiloop --tui
 ```
 
@@ -189,7 +192,7 @@ agentiloop --tui
 只想得到一个答案，而不进入聊天？把问题作为参数传入：
 
 ```sh
-agentiloop "what does src/main.rs do?"
+agentiloop "explain what this project does"
 ```
 
 ### 它能做什么？（工具）

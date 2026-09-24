@@ -166,8 +166,11 @@ $env:ANTHROPIC_API_KEY.Substring(0,10)  # Windows PowerShell
 
 프로젝트 폴더로 이동해서 전체 화면 인터페이스를 시작하세요:
 
+먼저 새로 만든 빈 테스트 폴더에서 안전하게 사용해 보세요. 실제 프로젝트에서는 대신 `cd`로 해당 프로젝트 폴더로 이동하세요 (예: `cd ~/code/my-app`).
+
 ```sh
-cd ~/my-project
+mkdir -p ~/agentiloop-test
+cd ~/agentiloop-test
 agentiloop --tui
 ```
 
@@ -189,7 +192,7 @@ TODO 주석을 찾아서 요약해 줘
 대화 없이 답변 하나만 원하시나요? 질문을 인수로 전달하세요:
 
 ```sh
-agentiloop "what does src/main.rs do?"
+agentiloop "explain what this project does"
 ```
 
 ### 무엇을 할 수 있나요? (도구)

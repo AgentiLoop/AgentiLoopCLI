@@ -166,8 +166,11 @@ $env:ANTHROPIC_API_KEY.Substring(0,10)  # Windows PowerShell
 
 プロジェクトフォルダーに移動して、フルスクリーンのインターフェースを起動します:
 
+まずは新しい空のテスト用フォルダーで、安心して試してみましょう。実際のプロジェクトで使うときは、代わりに `cd` でそのプロジェクトのフォルダーに移動してください（例：`cd ~/code/my-app`）。
+
 ```sh
-cd ~/my-project
+mkdir -p ~/agentiloop-test
+cd ~/agentiloop-test
 agentiloop --tui
 ```
 
@@ -189,7 +192,7 @@ TODO コメントを探して要約して
 チャットなしで答えを 1 つだけ知りたいですか？ 質問を引数として渡してください:
 
 ```sh
-agentiloop "what does src/main.rs do?"
+agentiloop "explain what this project does"
 ```
 
 ### 何ができますか？ (ツール)

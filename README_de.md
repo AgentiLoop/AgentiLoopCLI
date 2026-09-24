@@ -166,8 +166,11 @@ Wenn nichts ausgegeben wird, geh zurück zu Schritt 3. Der Schlüssel ist noch n
 
 Wechsle in einen Projektordner und starte die Vollbild-Oberfläche:
 
+Fang mit einem neuen, leeren Testordner an, dann kannst du gefahrlos ausprobieren. Für ein echtes Projekt wechselst du stattdessen mit `cd` in dessen Ordner (zum Beispiel `cd ~/code/my-app`).
+
 ```sh
-cd ~/my-project
+mkdir -p ~/agentiloop-test
+cd ~/agentiloop-test
 agentiloop --tui
 ```
 
@@ -189,7 +192,7 @@ Bevor der Agent eine Datei ändert oder einen Befehl ausführt, fragt er dich. D
 Du willst nur eine Antwort ohne Chat? Übergib die Frage als Argument:
 
 ```sh
-agentiloop "what does src/main.rs do?"
+agentiloop "explain what this project does"
 ```
 
 ### Was kann er? (Tools)

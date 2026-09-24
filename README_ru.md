@@ -166,8 +166,11 @@ $env:ANTHROPIC_API_KEY.Substring(0,10)  # Windows PowerShell
 
 Перейдите в папку проекта и запустите полноэкранный интерфейс:
 
+Начните с новой пустой тестовой папки, чтобы спокойно всё попробовать. Для настоящего проекта вместо этого перейдите в его папку с помощью `cd` (например, `cd ~/code/my-app`).
+
 ```sh
-cd ~/my-project
+mkdir -p ~/agentiloop-test
+cd ~/agentiloop-test
 agentiloop --tui
 ```
 
@@ -189,7 +192,7 @@ agentiloop --tui
 Нужен всего один ответ без чата? Передайте вопрос в качестве аргумента:
 
 ```sh
-agentiloop "what does src/main.rs do?"
+agentiloop "explain what this project does"
 ```
 
 ### Что он умеет? (инструменты)

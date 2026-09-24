@@ -166,8 +166,11 @@ Si no muestra nada, vuelve al paso 3. La clave todavía no está cargada.
 
 Ve a una carpeta de proyecto y abre la interfaz a pantalla completa:
 
+Empieza con una carpeta de prueba nueva y vacía para probarlo sin riesgos. Para un proyecto real, entra con `cd` en la carpeta de ese proyecto (por ejemplo `cd ~/code/my-app`).
+
 ```sh
-cd ~/my-project
+mkdir -p ~/agentiloop-test
+cd ~/agentiloop-test
 agentiloop --tui
 ```
 
@@ -189,7 +192,7 @@ Antes de que el agente cambie un archivo o ejecute un comando, te pregunta. Puls
 ¿Solo quieres una respuesta sin chat? Pasa la pregunta como argumento:
 
 ```sh
-agentiloop "what does src/main.rs do?"
+agentiloop "explain what this project does"
 ```
 
 ### ¿Qué puede hacer? (herramientas)

@@ -166,8 +166,11 @@ If it prints nothing, go back to step 3. The key isn't loaded yet.
 
 Go to a project folder and start the full-screen interface:
 
+Start with a new, empty test folder so you can try it safely. For a real project, `cd` into that project's folder instead (for example `cd ~/code/my-app`).
+
 ```sh
-cd ~/my-project
+mkdir -p ~/agentiloop-test
+cd ~/agentiloop-test
 agentiloop --tui
 ```
 
@@ -189,7 +192,7 @@ Before the agent changes a file or runs a command, it asks you. Press **y** for 
 Just want one answer without the chat? Pass the question as an argument:
 
 ```sh
-agentiloop "what does src/main.rs do?"
+agentiloop "explain what this project does"
 ```
 
 ### What can it do? (tools)

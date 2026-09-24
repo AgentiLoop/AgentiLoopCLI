@@ -166,8 +166,11 @@ Si rien ne s'affiche, revenez à l'étape 3. La clé n'est pas encore chargée.
 
 Allez dans un dossier de projet et lancez l'interface plein écran :
 
+Commencez par un nouveau dossier de test vide pour essayer sans risque. Pour un vrai projet, allez plutôt dans son dossier avec `cd` (par exemple `cd ~/code/my-app`).
+
 ```sh
-cd ~/my-project
+mkdir -p ~/agentiloop-test
+cd ~/agentiloop-test
 agentiloop --tui
 ```
 
@@ -189,7 +192,7 @@ Avant de modifier un fichier ou de lancer une commande, l'agent vous demande. Ap
 Vous voulez juste une réponse, sans le chat ? Passez la question en argument :
 
 ```sh
-agentiloop "what does src/main.rs do?"
+agentiloop "explain what this project does"
 ```
 
 ### Que sait-il faire ? (outils)
