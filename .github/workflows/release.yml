@@ -131,3 +131,5 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+          # 0.x versions and tags like v1.0.0-beta.1 are published as pre-releases.
+          prerelease: ${{ startsWith(github.ref_name, 'v0.') || contains(github.ref_name, '-') }}
