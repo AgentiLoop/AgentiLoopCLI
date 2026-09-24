@@ -12,6 +12,14 @@ Try both and tell us which one does it better: **Rust or Go?** 🦀 vs 🐹
 
 ---
 
+### 💖 Sponsor AgentiLoop
+
+Like what you see? Help keep AgentiLoop fast and cross-platform. Sponsor us on **[GitHub Sponsors → AgentiLoop](https://github.com/sponsors/AgentiLoop)**. Tiers and perks are in the [Sponsorship guide](https://github.com/AgentiLoop/Agent/blob/main/docs/SPONSORSHIP.md).
+
+[![Sponsor AgentiLoop](https://img.shields.io/badge/Sponsor-AgentiLoop-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/AgentiLoop)
+
+---
+
 AgentiLoop is an AI coding agent that runs in your terminal, in the spirit of Claude Code. You describe what you want in plain language. The agent reads your files, edits code and runs commands to get it done, and it asks your permission before it changes anything.
 
 It's written in Rust and runs on macOS, Linux and Windows. It works with Claude (Anthropic), OpenAI, local models through Ollama or LM Studio, and oMLX on Apple Silicon.
