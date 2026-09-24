@@ -12,7 +12,7 @@ AgentiLoop is an AI coding agent that runs in your terminal, in the spirit of Cl
 
 It's written in Rust and runs on macOS, Linux and Windows. It works with Claude (Anthropic), OpenAI, local models through Ollama or LM Studio, and oMLX on Apple Silicon.
 
-Created with AgentiLoop Agent! This is our baby. There are no prebuilt binaries yet, so you compile it from source. You'll need Rust.
+Created with AgentiLoop Agent! This is our baby. Prebuilt binaries for macOS, Linux and Windows are on the [Releases](https://github.com/AgentiLoop/AgentiLoopCLI/releases) page, or compile it from source with Rust.
 
 <img width="2048" height="1152" alt="AgentiLoop Coding in action" src="https://github.com/user-attachments/assets/d910bbd2-b47d-4c4a-89af-ac0753ccf279" />
 
@@ -24,7 +24,9 @@ Three steps: install it, give it a model, run it.
 
 ### Step 1: Install
 
-If you don't have Rust yet, install it from [rustup.rs](https://rustup.rs). Then:
+**Download:** grab the archive for your platform from [Releases](https://github.com/AgentiLoop/AgentiLoopCLI/releases), unpack it and put `agentiloop` (`agentiloop.exe` on Windows) on your PATH.
+
+**Or build it:** if you don't have Rust yet, install it from [rustup.rs](https://rustup.rs). Then:
 
 ```sh
 git clone https://github.com/AgentiLoop/AgentiLoopCLI.git
