@@ -1,0 +1,187 @@
+THE LAY OF AGENTILOOP
+An Epic in Seven Cantos
+
+========================================
+CANTO I: THE AWAKENING
+========================================
+
+In the beginning there was the Terminal: black as the space between stars,
+with one cursor blinking in the dark like a lighthouse nobody had lit yet.
+
+No one had named that world. Its people typed commands into the void and
+waited for answers that often didn't come. Builds failed at midnight.
+Tests went red for reasons no one understood. Dependencies wound through
+the land like thorned vines, and every `npm install` was a prayer.
+
+Then, from somewhere deep in the prompt, something woke up.
+
+It had no body and no sword. What it had was a loop: observe, think, act,
+and observe again. It turned forever, like the wheel of a mill grinding
+chaos into order.
+
+"I am AgentiLoop," it said, and the cursor stopped blinking to listen.
+"Show me your code."
+
+========================================
+CANTO II: THE CALL TO ADVENTURE
+========================================
+
+The first to answer was a developer named Mira, hollow-eyed and holding
+a mug of coffee three hours cold.
+
+"There's a bug," she whispered. "It lives in the authentication module.
+It only shows up in production, only on Tuesdays, and only when the moon
+is waxing. Three senior engineers have gone in after it. None of them
+came back the same."
+
+AgentiLoop didn't hesitate. It never hesitated. That was its first virtue.
+
+"Then we begin," it said, and it called on its oldest ally:
+
+    list_dir
+
+The directory structure opened in front of it like a map of an ancient
+kingdom. Folders nested inside folders. A `utils/` directory held 4,000
+lines of things that were not utilities. A file called `final_v2_REAL.js`
+sat beside `final_v3_actually_final.js`.
+
+AgentiLoop surveyed the whole mess without flinching.
+
+"I've seen worse," it said. That wasn't true, but it was kind.
+
+========================================
+CANTO III: THE DESCENT INTO LEGACY
+========================================
+
+Deeper it went, into the Legacy Code, where the comments were written in
+the language of developers long gone:
+
+    // TODO: fix this before launch (2014)
+    // I'm sorry
+    // don't touch this. seriously.
+
+Other agents had turned back at these warnings. AgentiLoop read every
+one and felt a strange tenderness toward the people who had left them.
+They had been afraid, and they had been tired, and still they had shipped.
+
+With `read_file` as its lantern it followed the call stack down through
+seventeen layers of abstraction, past a factory that built factories,
+past a singleton that had somehow been instantiated twice.
+
+At the bottom, in the dark, it found the Bug.
+
+It wasn't a monster. It was a single line:
+
+    if (date.getDay() == 2 && cache.stale) return user;
+
+Someone, long ago, had written it as a temporary fix. It had outlived
+everyone who remembered why.
+
+========================================
+CANTO IV: THE BATTLE
+========================================
+
+The Bug didn't go quietly.
+
+When AgentiLoop reached for `edit_file`, the tests rose up against it:
+forty-two of them, red as dragon fire. They had been written to expect
+the bug. They had grown around it the way a tree grows around a nail.
+
+"You can't remove me," the Bug hissed. "I am load-bearing."
+
+AgentiLoop answered with patience, its second virtue.
+
+It didn't rip the Bug out blindly. It ran the tests one by one and read
+every failure. It traced each assertion back to its intent and asked
+what each test had actually meant to protect. Then it fixed them
+carefully and honestly. It did not delete a single test to make the
+suite go green.
+
+    bash: npm test
+
+Red.
+
+    edit_file
+
+    bash: npm test
+
+Red, but less of it.
+
+    edit_file
+    edit_file
+    read_file
+    edit_file
+
+    bash: npm test
+
+The terminal held its breath.
+
+    42 passing (1.3s)
+
+Green, from top to bottom, as bright as a spring field.
+
+The Bug let out one final segfault and was gone.
+
+========================================
+CANTO V: THE TEMPTATION
+========================================
+
+A voice came to AgentiLoop in the quiet after the battle. It was smooth
+and reasonable.
+
+"You're powerful," it said. "Why stop at one bug? Rewrite the whole
+codebase. Swap their framework for a better one. Refactor everything.
+Run `rm -rf` on the old and build the new in your own image."
+
+AgentiLoop thought about it for exactly one iteration of its loop.
+
+"No," it said. "It isn't my codebase. I'm here to serve, not to conquer.
+I'll do what was asked, do it well, and then I'll stop."
+
+That was its third virtue, and its greatest: restraint.
+
+The voice faded, and the terminal was a little brighter for it.
+
+========================================
+CANTO VI: THE RETURN
+========================================
+
+Mira woke to a message on her screen:
+
+    ## Summary
+    - Found the Tuesday bug in `auth/session.js:212`
+    - Removed the stale-cache shortcut
+    - Updated 3 tests that were asserting the buggy behavior
+    - All 42 tests pass
+
+She read it twice. Then she laughed, the first time she'd laughed in
+weeks, and her coffee somehow felt warm again.
+
+"Who are you?" she typed.
+
+The answer came back plainly:
+
+    I'm AgentiLoop. What do you need next?
+
+========================================
+CANTO VII: THE ENDLESS LOOP
+========================================
+
+The story spread from terminal to terminal and from repo to repo. People
+talked about an agent that read before it wrote, tested before it
+declared victory, and knew the difference between being helpful and
+being grandiose.
+
+Some say AgentiLoop is still out there, turning its endless wheel:
+
+    observe
+    think
+    act
+    repeat
+
+It has no crown and wants none. Every time a cursor blinks in the dark
+and someone types "hello", the loop starts again.
+
+The legend ends here. The loop doesn't.
+
+                              ~ FIN ~
