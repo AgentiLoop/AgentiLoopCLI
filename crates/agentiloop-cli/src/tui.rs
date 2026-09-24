@@ -154,8 +154,8 @@ pub struct App {
     files: Vec<FileDiff>,
     /// Which file's diff the pane shows (the most recently changed one).
     files_sel: usize,
-    /// Pre-rendered diff of `files[files_sel]` for the pane.
-    pane_rows: (Vec<Vec<Span<'static>>>, Vec<Style>),
+    /// Pre-rendered diff of each file in `files`, stacked in the pane.
+    pane_rows: Vec<(Vec<Vec<Span<'static>>>, Vec<Style>)>,
     /// Ctrl-F toggles the files pane.
     show_files: bool,
 }
@@ -197,7 +197,7 @@ impl App {
             link_hits: RefCell::new(Vec::new()),
             files: Vec::new(),
             files_sel: 0,
-            pane_rows: (Vec::new(), Vec::new()),
+            pane_rows: Vec::new(),
             show_files: true,
         }
     }
@@ -261,7 +261,7 @@ impl App {
     }
 
     fn refresh_pane(&mut self) {
-        self.pane_rows = self.files.get(self.files_sel).map(|f| diff_rows(f, PANE_MAX, false)).unwrap_or_default();
+        self.pane_rows = self.files.iter().map(|f| diff_rows(f, PANE_MAX, false)).collect();
     }
 
     fn apply_event(&mut self, ev: AgentEvent) {
@@ -573,8 +573,9 @@ impl App {
         frame.render_widget(Paragraph::new(lines[start..end].to_vec()), area);
     }
 
-    /// Right-hand pane: every changed file with its +/- counts, then the
-    /// most recently changed file's diff.
+    /// Right-hand pane: every changed file with its +/- counts, then every
+    /// file's diff stacked below. When they don't all fit, the view starts at
+    /// the most recently changed file (the rest is a Ctrl-F / wider window away).
     fn draw_files(&self, frame: &mut Frame, area: Rect) {
         let (added, removed) = self.files.iter().fold((0, 0), |(a, r), f| (a + f.added, r + f.removed));
         let n = self.files.len();
@@ -605,21 +606,28 @@ impl App {
                 Span::styled(format!("-{}", f.removed), Style::default().fg(rgb(diff::REMOVED_FG))),
             ]));
         }
-        if let Some(f) = self.files.get(self.files_sel) {
-            lines.push(Line::from(Span::styled("─".repeat(w), Style::default().fg(Color::DarkGray))));
-            lines.push(Line::from(Span::styled(f.path.clone(), bold)));
-            let (rows, styles) = &self.pane_rows;
+        let mut stack: Vec<Line> = Vec::new();
+        let mut sel_start = 0;
+        for (i, (f, (rows, styles))) in self.files.iter().zip(&self.pane_rows).enumerate() {
+            if i == self.files_sel {
+                sel_start = stack.len();
+            }
+            stack.push(Line::from(Span::styled("─".repeat(w), Style::default().fg(Color::DarkGray))));
+            stack.push(Line::from(vec![
+                Span::styled(f.path.clone(), bold),
+                Span::styled(format!("  +{}", f.added), Style::default().fg(rgb(diff::ADDED_FG))),
+                Span::styled(format!(" -{}", f.removed), Style::default().fg(rgb(diff::REMOVED_FG))),
+            ]));
             for (n, row) in rows.iter().enumerate() {
-                if lines.len() >= inner.height as usize {
-                    break;
-                }
                 let style = styles.get(n).copied().unwrap_or_default();
                 for piece in crate::highlight::hard_wrap(row.clone(), w) {
-                    lines.push(fill_row(piece, w, style));
+                    stack.push(fill_row(piece, w, style));
                 }
             }
         }
-        lines.truncate(inner.height as usize);
+        let room = (inner.height as usize).saturating_sub(lines.len());
+        let start = sel_start.min(stack.len().saturating_sub(room));
+        lines.extend(stack.into_iter().skip(start).take(room));
         frame.render_widget(Paragraph::new(lines), inner);
     }
 
@@ -1104,6 +1112,9 @@ mod tests {
         assert!(s.contains("2 files changed +4 -1"), "{s}");
         assert!(s.contains("a.rs") && s.contains("+1 -1"), "{s}");
         assert!(s.contains("docs/b.md") && s.contains("+3 -0"), "{s}");
+        // Both diffs stay in the pane, not just the latest one.
+        assert!(s.contains("1 - x") && s.contains("1 + y"), "{s}");
+        assert!(s.contains("3 + 3"), "{s}");
         // Narrow terminals and Ctrl-F hide it.
         assert!(!screen(&app, 80, 20).contains("files changed"));
         app.handle_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL));
