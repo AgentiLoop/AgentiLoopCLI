@@ -2,7 +2,7 @@
 
 🌐 [English](README.md) · [Español](README_es.md) · [Français](README_fr.md) · [Deutsch](README_de.md) · [中文 (简体)](README_zh.md) · [Русский](README_ru.md) · [한국어](README_ko.md) · [日本語](README_ja.md)
 
-### ¡Hemos publicado una versión preliminar v0.0.1 para Mac, Windows y Linux!
+### 🎉 ¡Hemos publicado la versión v0.0.2 para Mac, Windows y Linux!
 
 ---
 
@@ -53,7 +53,7 @@ Primero averigua qué archivo necesitas:
 **macOS y Linux.** Abre Terminal y pega estas líneas. Este ejemplo usa el archivo de Apple Silicon, así que cambia `macos-arm64` en las tres primeras líneas si el tuyo es distinto:
 
 ```sh
-curl -LO https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.1/agentiloop-macos-arm64.tar.gz
+curl -LO https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.2/agentiloop-macos-arm64.tar.gz
 tar xzf agentiloop-macos-arm64.tar.gz
 mkdir -p ~/.local/bin && mv agentiloop-macos-arm64/agentiloop ~/.local/bin/
 ```
@@ -63,7 +63,7 @@ Eso coloca el programa en `~/.local/bin`, una carpeta dentro de tu directorio pe
 **Windows.** Abre **PowerShell** (menú Inicio → escribe "PowerShell") y pega:
 
 ```powershell
-Invoke-WebRequest https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.1/agentiloop-windows-x86_64.zip -OutFile agentiloop.zip
+Invoke-WebRequest https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.2/agentiloop-windows-x86_64.zip -OutFile agentiloop.zip
 Expand-Archive agentiloop.zip -DestinationPath $HOME\agentiloop -Force
 $p = [Environment]::GetEnvironmentVariable("Path", "User")
 [Environment]::SetEnvironmentVariable("Path", "$p;$HOME\agentiloop\agentiloop-windows-x86_64", "User")
@@ -151,7 +151,7 @@ Después **cierra PowerShell y abre una ventana nueva**. `setx` no afecta a la v
 agentiloop --version
 ```
 
-Deberías ver `agentiloop 0.0.1`. Ahora comprueba que la clave está cargada:
+Deberías ver `agentiloop 0.0.2`. Ahora comprueba que la clave está cargada:
 
 ```sh
 echo $ANTHROPIC_API_KEY | cut -c1-10    # macOS / Linux: debería mostrar sk-ant-...

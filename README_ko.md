@@ -2,7 +2,7 @@
 
 🌐 [English](README.md) · [Español](README_es.md) · [Français](README_fr.md) · [Deutsch](README_de.md) · [中文 (简体)](README_zh.md) · [Русский](README_ru.md) · [한국어](README_ko.md) · [日本語](README_ja.md)
 
-### Mac, Windows, Linux용 사전 출시 버전 v0.0.1을 공개했어요!
+### 🎉 Mac, Windows, Linux용 릴리스 v0.0.2를 공개했어요!
 
 ---
 
@@ -53,7 +53,7 @@ Rust도, Go도, 컴파일도 필요 없어요. 파일 하나를 다운로드하�
 **macOS와 Linux.** 터미널을 열고 아래 줄을 붙여 넣으세요. 이 예시는 Apple Silicon용 파일을 사용하므로, 여러분의 환경이 다르다면 처음 세 줄의 `macos-arm64`를 바꿔 주세요:
 
 ```sh
-curl -LO https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.1/agentiloop-macos-arm64.tar.gz
+curl -LO https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.2/agentiloop-macos-arm64.tar.gz
 tar xzf agentiloop-macos-arm64.tar.gz
 mkdir -p ~/.local/bin && mv agentiloop-macos-arm64/agentiloop ~/.local/bin/
 ```
@@ -63,7 +63,7 @@ mkdir -p ~/.local/bin && mv agentiloop-macos-arm64/agentiloop ~/.local/bin/
 **Windows.** **PowerShell**을 열고 (시작 메뉴 → "PowerShell" 입력) 다음을 붙여 넣으세요:
 
 ```powershell
-Invoke-WebRequest https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.1/agentiloop-windows-x86_64.zip -OutFile agentiloop.zip
+Invoke-WebRequest https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.2/agentiloop-windows-x86_64.zip -OutFile agentiloop.zip
 Expand-Archive agentiloop.zip -DestinationPath $HOME\agentiloop -Force
 $p = [Environment]::GetEnvironmentVariable("Path", "User")
 [Environment]::SetEnvironmentVariable("Path", "$p;$HOME\agentiloop\agentiloop-windows-x86_64", "User")
@@ -151,7 +151,7 @@ setx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
 agentiloop --version
 ```
 
-`agentiloop 0.0.1`이 보여야 해요. 이제 키가 불러와졌는지 확인하세요:
+`agentiloop 0.0.2`이 보여야 해요. 이제 키가 불러와졌는지 확인하세요:
 
 ```sh
 echo $ANTHROPIC_API_KEY | cut -c1-10    # macOS / Linux: sk-ant-...가 출력되어야 해요

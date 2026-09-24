@@ -2,7 +2,7 @@
 
 🌐 [English](README.md) · [Español](README_es.md) · [Français](README_fr.md) · [Deutsch](README_de.md) · [中文 (简体)](README_zh.md) · [Русский](README_ru.md) · [한국어](README_ko.md) · [日本語](README_ja.md)
 
-### Nous avons publié une préversion v0.0.1 pour Mac, Windows et Linux !
+### 🎉 Nous avons publié la version v0.0.2 pour Mac, Windows et Linux !
 
 ---
 
@@ -53,7 +53,7 @@ Vous hésitez ? Sur Mac ou Linux, lancez `uname -m`. `arm64` ou `aarch64` veut d
 **macOS et Linux.** Ouvrez le Terminal et collez ces lignes. Cet exemple utilise le fichier Apple Silicon ; modifiez donc `macos-arm64` dans les trois premières lignes si le vôtre est différent :
 
 ```sh
-curl -LO https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.1/agentiloop-macos-arm64.tar.gz
+curl -LO https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.2/agentiloop-macos-arm64.tar.gz
 tar xzf agentiloop-macos-arm64.tar.gz
 mkdir -p ~/.local/bin && mv agentiloop-macos-arm64/agentiloop ~/.local/bin/
 ```
@@ -63,7 +63,7 @@ Cela place le programme dans `~/.local/bin`, un dossier de votre répertoire per
 **Windows.** Ouvrez **PowerShell** (menu Démarrer → tapez "PowerShell") et collez :
 
 ```powershell
-Invoke-WebRequest https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.1/agentiloop-windows-x86_64.zip -OutFile agentiloop.zip
+Invoke-WebRequest https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.2/agentiloop-windows-x86_64.zip -OutFile agentiloop.zip
 Expand-Archive agentiloop.zip -DestinationPath $HOME\agentiloop -Force
 $p = [Environment]::GetEnvironmentVariable("Path", "User")
 [Environment]::SetEnvironmentVariable("Path", "$p;$HOME\agentiloop\agentiloop-windows-x86_64", "User")
@@ -151,7 +151,7 @@ Ensuite, **fermez PowerShell et ouvrez une nouvelle fenêtre**. `setx` n'a pas d
 agentiloop --version
 ```
 
-Vous devriez voir `agentiloop 0.0.1`. Vérifiez maintenant que la clé est chargée :
+Vous devriez voir `agentiloop 0.0.2`. Vérifiez maintenant que la clé est chargée :
 
 ```sh
 echo $ANTHROPIC_API_KEY | cut -c1-10    # macOS / Linux : devrait afficher sk-ant-...

@@ -2,7 +2,7 @@
 
 🌐 [English](README.md) · [Español](README_es.md) · [Français](README_fr.md) · [Deutsch](README_de.md) · [中文 (简体)](README_zh.md) · [Русский](README_ru.md) · [한국어](README_ko.md) · [日本語](README_ja.md)
 
-### Мы выпустили предварительную сборку v0.0.1 для Mac, Windows и Linux!
+### 🎉 Мы выпустили релиз v0.0.2 для Mac, Windows и Linux!
 
 ---
 
@@ -53,7 +53,7 @@ AgentiLoop — это ИИ-агент для программирования, �
 **macOS и Linux.** Откройте Терминал и вставьте эти строки. В примере используется файл для Apple Silicon, поэтому, если у вас другой, замените `macos-arm64` в первых трёх строках:
 
 ```sh
-curl -LO https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.1/agentiloop-macos-arm64.tar.gz
+curl -LO https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.2/agentiloop-macos-arm64.tar.gz
 tar xzf agentiloop-macos-arm64.tar.gz
 mkdir -p ~/.local/bin && mv agentiloop-macos-arm64/agentiloop ~/.local/bin/
 ```
@@ -63,7 +63,7 @@ mkdir -p ~/.local/bin && mv agentiloop-macos-arm64/agentiloop ~/.local/bin/
 **Windows.** Откройте **PowerShell** (меню «Пуск» → введите "PowerShell") и вставьте:
 
 ```powershell
-Invoke-WebRequest https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.1/agentiloop-windows-x86_64.zip -OutFile agentiloop.zip
+Invoke-WebRequest https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.2/agentiloop-windows-x86_64.zip -OutFile agentiloop.zip
 Expand-Archive agentiloop.zip -DestinationPath $HOME\agentiloop -Force
 $p = [Environment]::GetEnvironmentVariable("Path", "User")
 [Environment]::SetEnvironmentVariable("Path", "$p;$HOME\agentiloop\agentiloop-windows-x86_64", "User")
@@ -151,7 +151,7 @@ setx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
 agentiloop --version
 ```
 
-Вы должны увидеть `agentiloop 0.0.1`. Теперь проверьте, что ключ загружен:
+Вы должны увидеть `agentiloop 0.0.2`. Теперь проверьте, что ключ загружен:
 
 ```sh
 echo $ANTHROPIC_API_KEY | cut -c1-10    # macOS / Linux: должно вывести sk-ant-...
