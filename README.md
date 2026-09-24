@@ -4,7 +4,7 @@
 
 ---
 
-Take it for a spin, read the README and see how long it takes you to get AgentiLoop up and running. If you have any issues, please let us know.
+Take it for a spin, read the README and see how long it takes you to get AgentiLoop up and running. If you have any issues, please let us know. Bonus: A Go port is in the words. We want to see which does this best Rust or Go! That repo is called AgentiLoopGo.
 
 ---
 
