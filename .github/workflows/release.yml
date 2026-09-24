@@ -96,7 +96,6 @@ jobs:
           mkdir -p dist/$NAME
           cp target/${{ matrix.target }}/release/agentiloop README.md LICENSE dist/$NAME/
           tar -C dist -czf dist/$NAME.tar.gz $NAME
-          cd dist && shasum -a 256 $NAME.tar.gz > $NAME.tar.gz.sha256
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
@@ -106,8 +105,6 @@ jobs:
           New-Item -ItemType Directory -Force dist/$name | Out-Null
           Copy-Item target/${{ matrix.target }}/release/agentiloop.exe, README.md, LICENSE dist/$name/
           Compress-Archive -Path dist/$name -DestinationPath dist/$name.zip
-          $hash = (Get-FileHash dist/$name.zip -Algorithm SHA256).Hash.ToLower()
-          "$hash  $name.zip" | Out-File -Encoding ascii dist/$name.zip.sha256
 
       - uses: actions/upload-artifact@v4
         with:
@@ -115,7 +112,6 @@ jobs:
           path: |
             dist/*.tar.gz
             dist/*.zip
-            dist/*.sha256
 
   release:
     name: Publish release
