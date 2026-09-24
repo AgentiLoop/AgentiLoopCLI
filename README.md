@@ -6,6 +6,10 @@
 
 ---
 
+<img width="1550" height="970" alt="image" src="https://github.com/user-attachments/assets/f66375f7-f547-4699-8ff1-624676b84411" />
+
+---
+
 **Take it for a spin!** Read the README and see how long it takes you to get AgentiLoop up and running. If you hit any issues, let us know. We'd love your feedback.
 
 **Bonus:** A Go version is available too: **AgentiLoopGo** → https://github.com/AgentiLoop/AgentiLoopGo
