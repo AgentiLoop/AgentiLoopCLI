@@ -1,6 +1,6 @@
 # AgentiLoopCLI
 
-## Attn: Early Daring Adopters! We put out a pre-release v0.0.1 build for Mac, Windows and Linux! 
+### Attn: Early Daring Adopters! We put out a pre-release v0.0.1 build for Mac, Windows and Linux! 
 Take it for a spin, read the README and see how long it takes you to get AgentiLoop up and running. If you have any issues, please let us know.
 
 AgentiLoop is an AI coding agent that runs in your terminal, in the spirit of Claude Code. You describe what you want in plain language. The agent reads your files, edits code and runs commands to get it done, and it asks your permission before it changes anything.
