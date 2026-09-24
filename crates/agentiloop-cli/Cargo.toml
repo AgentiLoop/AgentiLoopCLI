@@ -29,3 +29,4 @@ pulldown-cmark = { version = "0.13", default-features = false }
 unicode-width = "0.2"
 # Pure-Rust regex backend (no oniguruma C build); bundled syntaxes + themes.
 syntect = { version = "5", default-features = false, features = ["default-fancy", "yaml-load"] }
+similar = "2"

@@ -23,6 +23,8 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::diff::{self, FileDiff, Tag};
+
 /// Messages from the agent task to the UI.
 pub enum UiMsg {
     Event(AgentEvent),
@@ -38,6 +40,8 @@ pub enum UiMsg {
     User(String),
     /// Wipe the transcript (a different session was loaded, or /clear).
     Clear,
+    /// A file was written or edited: show its diff and update the files pane.
+    Diff(diff::Change),
 }
 
 /// What the UI sends to the agent task.
@@ -114,6 +118,8 @@ struct Entry {
     text: String,
     /// Pre-styled lines (syntax-highlighted code); when set, `text` is ignored.
     code: Option<Vec<Vec<Span<'static>>>>,
+    /// Whole-row style per `code` line (diff tints); empty = none.
+    styles: Vec<Style>,
 }
 
 /// UI state; backend-agnostic so it can be driven by tests.
@@ -144,6 +150,14 @@ pub struct App {
     pending_paths: HashMap<String, String>,
     /// Screen cells occupied by links in the last frame, for click handling.
     link_hits: RefCell<Vec<LinkHit>>,
+    /// Files changed this session (total diff each), in first-touched order.
+    files: Vec<FileDiff>,
+    /// Which file's diff the pane shows (the most recently changed one).
+    files_sel: usize,
+    /// Pre-rendered diff of `files[files_sel]` for the pane.
+    pane_rows: (Vec<Vec<Span<'static>>>, Vec<Style>),
+    /// Ctrl-F toggles the files pane.
+    show_files: bool,
 }
 
 struct LinkHit {
@@ -181,6 +195,10 @@ impl App {
             streaming: false,
             pending_paths: HashMap::new(),
             link_hits: RefCell::new(Vec::new()),
+            files: Vec::new(),
+            files_sel: 0,
+            pane_rows: (Vec::new(), Vec::new()),
+            show_files: true,
         }
     }
 
@@ -200,7 +218,7 @@ impl App {
 
     fn push(&mut self, kind: Kind, text: impl Into<String>) {
         self.streaming = false;
-        self.entries.push(Entry { kind, text: text.into(), code: None });
+        self.entries.push(Entry { kind, text: text.into(), code: None, styles: Vec::new() });
     }
 
     pub fn apply(&mut self, msg: UiMsg) {
@@ -220,8 +238,30 @@ impl App {
                 self.streaming = false;
                 self.pending_paths.clear();
                 self.scroll = 0;
+                self.files.clear();
+                self.refresh_pane();
+            }
+            UiMsg::Diff(c) => {
+                let (code, styles) = diff_rows(&c.edit, diff::INLINE_MAX, true);
+                self.streaming = false;
+                self.entries.push(Entry { kind: Kind::Tool, text: String::new(), code: Some(code), styles });
+                let total = c.total;
+                match self.files.iter().position(|f| f.path == total.path) {
+                    // Edited back to the original: no longer a change.
+                    Some(i) if total.is_empty() => drop(self.files.remove(i)),
+                    Some(i) => self.files[i] = total.clone(),
+                    None if !total.is_empty() => self.files.push(total.clone()),
+                    None => {}
+                }
+                self.files_sel =
+                    self.files.iter().position(|f| f.path == total.path).unwrap_or(self.files.len().saturating_sub(1));
+                self.refresh_pane();
             }
         }
+    }
+
+    fn refresh_pane(&mut self) {
+        self.pane_rows = self.files.get(self.files_sel).map(|f| diff_rows(f, PANE_MAX, false)).unwrap_or_default();
     }
 
     fn apply_event(&mut self, ev: AgentEvent) {
@@ -266,7 +306,7 @@ impl App {
                             line.insert(0, Span::styled(if i == 0 { format!("{mark} ") } else { "  ".into() }, mark_style));
                         }
                         self.streaming = false;
-                        self.entries.push(Entry { kind, text: String::new(), code: Some(code) });
+                        self.entries.push(Entry { kind, text: String::new(), code: Some(code), styles: Vec::new() });
                         return;
                     }
                 }
@@ -310,6 +350,7 @@ impl App {
                 self.quit = true;
                 return Some(Action::Quit);
             }
+            KeyCode::Char('f') if ctrl => self.show_files = !self.show_files,
             KeyCode::Char('u') if ctrl => {
                 self.input.clear();
                 self.cursor = 0;
@@ -416,6 +457,15 @@ impl App {
         let [transcript, input, status] =
             Layout::vertical([Constraint::Min(1), Constraint::Length(3), Constraint::Length(1)]).areas(frame.area());
 
+        // Claude Code-style "files changed" pane on the right, when there's room.
+        let transcript = if self.show_files && !self.files.is_empty() && transcript.width >= 100 {
+            let pane_w = (transcript.width * 2 / 5).clamp(36, 90);
+            let [left, right] = Layout::horizontal([Constraint::Min(40), Constraint::Length(pane_w)]).areas(transcript);
+            self.draw_files(frame, right);
+            left
+        } else {
+            transcript
+        };
         self.draw_transcript(frame, transcript);
 
         let title = if self.busy { self.busy_title() } else { Line::from(" prompt ") };
@@ -427,7 +477,7 @@ impl App {
             frame.set_cursor_position((inner.x + col.min(inner.width.saturating_sub(1)), inner.y));
         }
 
-        let help = "  Enter send · ↑↓ history · PgUp/PgDn scroll · click links · Ctrl-C quit";
+        let help = "  Enter send · ↑↓ history · PgUp/PgDn scroll · click links · Ctrl-F files · Ctrl-C quit";
         let mut bar = vec![Span::raw(self.status.clone())];
         if let Some(s) = &self.speed {
             bar.push(Span::styled(format!("⏱ {s} "), Style::default().fg(Color::Green)));
@@ -466,11 +516,12 @@ impl App {
         let mut links: Vec<(usize, usize, usize, String)> = Vec::new();
         for e in &self.entries {
             if let Some(code) = &e.code {
-                for line in code {
+                for (n, line) in code.iter().enumerate() {
+                    let style = e.styles.get(n).copied().unwrap_or_default();
                     for (i, piece) in crate::highlight::hard_wrap(line.clone(), width).into_iter().enumerate() {
                         let mut spans = if i == 0 { Vec::new() } else { vec![Span::raw("  ")] };
                         spans.extend(piece);
-                        lines.push(Line::from(spans));
+                        lines.push(fill_row(spans, width, style));
                     }
                 }
                 lines.push(Line::default());
@@ -522,6 +573,56 @@ impl App {
         frame.render_widget(Paragraph::new(lines[start..end].to_vec()), area);
     }
 
+    /// Right-hand pane: every changed file with its +/- counts, then the
+    /// most recently changed file's diff.
+    fn draw_files(&self, frame: &mut Frame, area: Rect) {
+        let (added, removed) = self.files.iter().fold((0, 0), |(a, r), f| (a + f.added, r + f.removed));
+        let n = self.files.len();
+        let bold = Style::default().add_modifier(Modifier::BOLD);
+        let title = Line::from(vec![
+            Span::styled(format!(" {n} file{} changed ", if n == 1 { "" } else { "s" }), bold),
+            Span::styled(format!("+{added} "), Style::default().fg(rgb(diff::ADDED_FG))),
+            Span::styled(format!("-{removed} "), Style::default().fg(rgb(diff::REMOVED_FG))),
+        ]);
+        let block = Block::default().borders(Borders::LEFT).border_style(Style::default().fg(Color::DarkGray)).title(title);
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+        let w = inner.width.max(1) as usize;
+        let mut lines: Vec<Line> = Vec::new();
+        for (i, f) in self.files.iter().enumerate() {
+            let counts = format!("+{} -{}", f.added, f.removed);
+            let room = w.saturating_sub(counts.len() + 1);
+            // Keep the end of long paths: the file name matters most.
+            let len = f.path.chars().count();
+            let path = if len > room { format!("…{}", f.path.chars().skip(len + 1 - room.max(1)).collect::<String>()) } else { f.path.clone() };
+            let pad = w.saturating_sub(path.chars().count() + counts.len());
+            let style = if i == self.files_sel { bold } else { Style::default() };
+            lines.push(Line::from(vec![
+                Span::styled(path, style),
+                Span::raw(" ".repeat(pad)),
+                Span::styled(format!("+{}", f.added), Style::default().fg(rgb(diff::ADDED_FG))),
+                Span::raw(" "),
+                Span::styled(format!("-{}", f.removed), Style::default().fg(rgb(diff::REMOVED_FG))),
+            ]));
+        }
+        if let Some(f) = self.files.get(self.files_sel) {
+            lines.push(Line::from(Span::styled("─".repeat(w), Style::default().fg(Color::DarkGray))));
+            lines.push(Line::from(Span::styled(f.path.clone(), bold)));
+            let (rows, styles) = &self.pane_rows;
+            for (n, row) in rows.iter().enumerate() {
+                if lines.len() >= inner.height as usize {
+                    break;
+                }
+                let style = styles.get(n).copied().unwrap_or_default();
+                for piece in crate::highlight::hard_wrap(row.clone(), w) {
+                    lines.push(fill_row(piece, w, style));
+                }
+            }
+        }
+        lines.truncate(inner.height as usize);
+        frame.render_widget(Paragraph::new(lines), inner);
+    }
+
     fn draw_modal(&self, frame: &mut Frame, req: &PermissionRequest) {
         let area = frame.area();
         let w = area.width.saturating_sub(4).min(80).max(20);
@@ -541,6 +642,74 @@ impl App {
         frame.render_widget(Clear, rect);
         frame.render_widget(Paragraph::new(lines).block(block), rect);
     }
+}
+
+/// Diff lines kept for the files pane (it only shows what fits anyway).
+const PANE_MAX: usize = 400;
+
+/// A row with `style`; tinted rows are padded to `width` so the background
+/// spans the whole row (Paragraph only paints under the text).
+fn fill_row(mut spans: Vec<Span<'static>>, width: usize, style: Style) -> Line<'static> {
+    if style.bg.is_some() {
+        let used: usize = spans.iter().map(Span::width).sum();
+        spans.push(Span::raw(" ".repeat(width.saturating_sub(used))));
+    }
+    Line::from(spans).style(style)
+}
+
+fn rgb((r, g, b): (u8, u8, u8)) -> Color {
+    Color::Rgb(r, g, b)
+}
+
+/// Styled rows for a diff, Claude Code style: an optional summary header, then
+/// numbered `-`/`+` lines with syntax colors on red/green tinted rows (the
+/// tint is the returned per-row style, so it fills the whole width).
+fn diff_rows(d: &FileDiff, max: usize, header: bool) -> (Vec<Vec<Span<'static>>>, Vec<Style>) {
+    let dim = Style::default().fg(Color::DarkGray);
+    let mut rows: Vec<Vec<Span<'static>>> = Vec::new();
+    let mut styles = Vec::new();
+    if header {
+        rows.push(vec![
+            Span::styled("⎿ ", dim),
+            Span::styled(d.path.clone(), Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(format!(": {}", d.summary())),
+        ]);
+        styles.push(Style::default());
+    }
+    let total: usize = d.hunks.iter().map(Vec::len).sum();
+    let mut shown = 0;
+    'hunks: for (h, hunk) in d.hunks.iter().enumerate() {
+        if h > 0 {
+            rows.push(vec![Span::styled(format!("{:>7}", "⋮"), dim)]);
+            styles.push(Style::default());
+        }
+        for l in hunk {
+            if shown == max {
+                break 'hunks;
+            }
+            shown += 1;
+            let (sign, fg, bg) = match l.tag {
+                Tag::Context => (' ', None, None),
+                Tag::Removed => ('-', Some(rgb(diff::REMOVED_FG)), Some(rgb(diff::REMOVED_BG))),
+                Tag::Added => ('+', Some(rgb(diff::ADDED_FG)), Some(rgb(diff::ADDED_BG))),
+            };
+            let mut spans = vec![
+                Span::styled(format!("{:>5} ", l.no), dim),
+                Span::styled(format!("{sign} "), fg.map_or(dim, |c| Style::default().fg(c).add_modifier(Modifier::BOLD))),
+            ];
+            match crate::highlight::highlight(&l.text, d.ext()).and_then(|mut v| v.pop()) {
+                Some(code) => spans.extend(code),
+                None => spans.push(Span::styled(l.text.clone(), fg.map_or(Style::default(), |c| Style::default().fg(c)))),
+            }
+            rows.push(spans);
+            styles.push(bg.map_or(Style::default(), |c| Style::default().bg(c)));
+        }
+    }
+    if total > shown {
+        rows.push(vec![Span::styled(format!("      … {} more lines", total - shown), dim)]);
+        styles.push(Style::default());
+    }
+    (rows, styles)
 }
 
 /// Blocking UI loop: drains agent messages, redraws, and forwards key presses.
@@ -902,6 +1071,49 @@ mod tests {
         app.apply(UiMsg::Event(AgentEvent::TurnComplete { input_tokens: 10, output_tokens: 100, elapsed_ms: 2500, first_token_ms: Some(500) }));
         let s = screen(&app, 120, 8);
         assert!(s.contains("50.0 tok/s · ttft 0.50s · 100 tok in 2.5s"), "{s}");
+    }
+
+    fn change(path: &str, before: &str, after: &str) -> UiMsg {
+        let d = diff::diff(path, Some(before), after);
+        UiMsg::Diff(diff::Change { edit: d.clone(), total: d })
+    }
+
+    #[test]
+    fn edit_diff_shows_numbered_tinted_lines() {
+        let mut app = App::new("s");
+        app.apply(change("src/a.txt", "one\ntwo\nthree\n", "one\nTWO\nthree\n"));
+        let mut t = Terminal::new(TestBackend::new(60, 10)).unwrap();
+        t.draw(|f| app.draw(f)).unwrap();
+        let buf = t.backend().buffer();
+        let row = |y: u16| (0..60).map(|x| buf.cell((x, y)).unwrap().symbol()).collect::<String>();
+        assert!(row(0).starts_with("⎿ src/a.txt: Added 1 line, removed 1 line"), "{}", row(0));
+        assert!(row(2).starts_with("    2 - two"), "{}", row(2));
+        assert!(row(3).starts_with("    2 + TWO"), "{}", row(3));
+        // The tint runs to the right edge, not just under the text.
+        assert_eq!(buf.cell((59, 2)).unwrap().bg, rgb(diff::REMOVED_BG));
+        assert_eq!(buf.cell((59, 3)).unwrap().bg, rgb(diff::ADDED_BG));
+        assert_eq!(buf.cell((59, 1)).unwrap().bg, Color::Reset);
+    }
+
+    #[test]
+    fn files_pane_lists_changes_and_toggles() {
+        let mut app = App::new("s");
+        app.apply(change("a.rs", "x\n", "y\n"));
+        app.apply(change("docs/b.md", "", "1\n2\n3\n"));
+        let s = screen(&app, 120, 20);
+        assert!(s.contains("2 files changed +4 -1"), "{s}");
+        assert!(s.contains("a.rs") && s.contains("+1 -1"), "{s}");
+        assert!(s.contains("docs/b.md") && s.contains("+3 -0"), "{s}");
+        // Narrow terminals and Ctrl-F hide it.
+        assert!(!screen(&app, 80, 20).contains("files changed"));
+        app.handle_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL));
+        assert!(!screen(&app, 120, 20).contains("files changed"));
+        // Editing a file back to its original drops it from the list.
+        app.handle_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL));
+        app.apply(change("a.rs", "x\n", "x\n"));
+        assert!(screen(&app, 120, 20).contains("1 file changed +3 -0"));
+        app.apply(UiMsg::Clear);
+        assert!(!screen(&app, 120, 20).contains("changed"));
     }
 
     #[test]

@@ -1,3 +1,4 @@
+mod diff;
 mod highlight;
 mod markdown;
 mod permission;
@@ -178,7 +179,8 @@ async fn main() -> Result<()> {
     };
 
     if !cli.prompt.is_empty() {
-        let res = agent.run(&cli.prompt.join(" "), render).await;
+        let mut tracker = diff::Tracker::new(cwd.clone());
+        let res = agent.run(&cli.prompt.join(" "), |ev| render_tracked(&mut tracker, ev)).await;
         persist(&mut session, &agent, sessions_dir.as_deref());
         mcp.shutdown().await;
         return res;
@@ -193,6 +195,7 @@ async fn main() -> Result<()> {
         // A continued session shows its earlier conversation, not an empty screen.
         replay_tui(&ui_tx, &agent.history);
         let ui = tokio::task::spawn_blocking(move || tui::run(app, ui_rx, in_tx));
+        let mut tracker = diff::Tracker::new(cwd.clone());
         // Agent side: one prompt or slash command at a time, until the UI hangs up.
         while let Some(tui::Input::Submit(line)) = in_rx.recv().await {
             if line.starts_with('/') {
@@ -206,6 +209,7 @@ async fn main() -> Result<()> {
                 .await;
                 // /resume and /clear switch sessions: show the new one's conversation.
                 if session.id != before {
+                    tracker = diff::Tracker::new(cwd.clone());
                     let _ = ui_tx.send(tui::UiMsg::Clear);
                     replay_tui(&ui_tx, &agent.history);
                 }
@@ -219,9 +223,16 @@ async fn main() -> Result<()> {
                 let _ = ui_tx.send(tui::UiMsg::Status(status(&agent, &session)));
             } else {
                 let tx = ui_tx.clone();
+                let tracker = &mut tracker;
                 if let Err(e) = agent
                     .run(&line, move |ev| {
+                        // Snapshot/diff before the event crosses to the UI thread:
+                        // the tool runs right after ToolCall returns.
+                        let change = tracker.observe(&ev);
                         let _ = tx.send(tui::UiMsg::Event(ev));
+                        if let Some(c) = change {
+                            let _ = tx.send(tui::UiMsg::Diff(c));
+                        }
                     })
                     .await
                 {
@@ -245,6 +256,7 @@ async fn main() -> Result<()> {
         session.id
     );
     replay_repl(&agent.history);
+    let mut tracker = diff::Tracker::new(cwd.clone());
     // rustyline gives us line editing plus up/down arrow recall of earlier prompts.
     let mut rl = rustyline::DefaultEditor::new()?;
     let history = settings::history_path();
@@ -276,7 +288,7 @@ async fn main() -> Result<()> {
             }
             continue;
         }
-        if let Err(e) = agent.run(line, render).await {
+        if let Err(e) = agent.run(line, |ev| render_tracked(&mut tracker, ev)).await {
             eprintln!("error: {e:#}");
         }
         persist(&mut session, &agent, sessions_dir.as_deref());
@@ -529,6 +541,15 @@ const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
 
 pub(crate) fn compacted_line(before_tokens: u64, messages_dropped: usize) -> String {
     format!("\u{1f4e6} context compacted ({before_tokens} tokens, {messages_dropped} messages → summary)")
+}
+
+/// `render`, plus a -/+ diff after each successful write_file / edit_file.
+fn render_tracked(tracker: &mut diff::Tracker, ev: AgentEvent) {
+    let change = tracker.observe(&ev);
+    render(ev);
+    if let Some(c) = change {
+        eprint!("{}", diff::ansi(&c.edit, diff::INLINE_MAX, diff::color_stderr()));
+    }
 }
 
 fn render(ev: AgentEvent) {
