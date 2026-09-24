@@ -1,6 +1,9 @@
 # AgentiLoopCLI
 
 ### Attn: Early Daring Adopters! We put out a pre-release v0.0.1 build for Mac, Windows and Linux! 
+
+---
+
 Take it for a spin, read the README and see how long it takes you to get AgentiLoop up and running. If you have any issues, please let us know.
 
 ---
