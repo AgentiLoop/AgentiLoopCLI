@@ -30,6 +30,228 @@ Created with AgentiLoop Agent! This is our baby. Prebuilt binaries for macOS, Li
 
 ---
 
+## 🚀 New here? Up and running in 5 minutes
+
+No Rust, no Go, no compiling. You download one file, give it an API key and start chatting. Follow the steps in order.
+
+### 1. Download AgentiLoop
+
+First find out which file you need:
+
+| Your computer | File to download |
+|---|---|
+| Mac with Apple Silicon (M1, M2, M3, M4…) | `agentiloop-macos-arm64.tar.gz` |
+| Mac with an Intel chip | `agentiloop-macos-x86_64.tar.gz` |
+| Linux, 64-bit PC | `agentiloop-linux-x86_64.tar.gz` |
+| Linux on ARM (Raspberry Pi 4/5, ARM servers) | `agentiloop-linux-arm64.tar.gz` |
+| Windows 10/11 | `agentiloop-windows-x86_64.zip` |
+
+Not sure? On Mac or Linux, run `uname -m`. `arm64` or `aarch64` means **arm64**, and `x86_64` means **x86_64**.
+
+**macOS and Linux.** Open Terminal and paste these lines. This example uses the Apple Silicon file, so change `macos-arm64` in the first three lines if yours is different:
+
+```sh
+curl -LO https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.1/agentiloop-macos-arm64.tar.gz
+tar xzf agentiloop-macos-arm64.tar.gz
+mkdir -p ~/.local/bin && mv agentiloop-macos-arm64/agentiloop ~/.local/bin/
+```
+
+That puts the program in `~/.local/bin`, a folder in your home directory. Step 3 tells your terminal to look there.
+
+**Windows.** Open **PowerShell** (Start menu → type "PowerShell") and paste:
+
+```powershell
+Invoke-WebRequest https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.1/agentiloop-windows-x86_64.zip -OutFile agentiloop.zip
+Expand-Archive agentiloop.zip -DestinationPath $HOME\agentiloop -Force
+$p = [Environment]::GetEnvironmentVariable("Path", "User")
+[Environment]::SetEnvironmentVariable("Path", "$p;$HOME\agentiloop\agentiloop-windows-x86_64", "User")
+```
+
+The last two lines add AgentiLoop to your PATH. **Close PowerShell and open a new window** so it picks up the change.
+
+### 2. Get an API key
+
+AgentiLoop is the agent. The "brain" is an AI model that you connect it to. Pick **one**:
+
+| Option | Where to get it | Cost |
+|---|---|---|
+| **Claude** (recommended) | [console.anthropic.com](https://console.anthropic.com/settings/keys) → *Create Key*. It starts with `sk-ant-` | Pay per use |
+| **OpenAI** | [platform.openai.com/api-keys](https://platform.openai.com/api-keys). It starts with `sk-` | Pay per use |
+| **Ollama** (runs on your own computer) | Install from [ollama.com](https://ollama.com), then run `ollama pull qwen2.5-coder` | Free, no key |
+
+Copy the key somewhere safe. You'll paste it in the next step.
+
+### 3. Save your settings in your shell profile
+
+Your **shell profile** is a small text file that your terminal reads every time it opens a new window. Put your settings there and you only have to do this once. If you skip it, you'd have to type your key again in every new terminal. That's the #1 reason people get stuck.
+
+**Which file is it?**
+
+| System | Shell (default) | Profile file |
+|---|---|---|
+| macOS (Catalina 10.15 and newer) | zsh | `~/.zshrc` |
+| Most Linux distros | bash | `~/.bashrc` |
+| Linux or Mac with zsh | zsh | `~/.zshrc` |
+| fish shell | fish | `~/.config/fish/config.fish` |
+| Windows | PowerShell | none needed, see below |
+
+Not sure which shell you use? Run `echo $SHELL`. `~` means your home folder, so `~/.zshrc` is e.g. `/Users/you/.zshrc`. Files that start with a dot are hidden in Finder and file browsers, which is normal.
+
+**Open the file.** Use one of these (they create the file if it doesn't exist yet):
+
+```sh
+nano ~/.zshrc                        # works everywhere, right in the terminal
+touch ~/.zshrc && open -e ~/.zshrc   # macOS: opens it in TextEdit
+```
+
+(Linux with bash: use `~/.bashrc` instead of `~/.zshrc`.)
+
+**Add these lines at the bottom.** Keep only the key line you need, and paste your real key between the quotes:
+
+```sh
+# AgentiLoop
+export PATH="$HOME/.local/bin:$PATH"
+
+export ANTHROPIC_API_KEY="sk-ant-paste-your-key-here"          # Claude
+# export OPENAI_API_KEY="sk-paste-your-key-here"               # OpenAI
+# export OPENAI_BASE_URL="http://localhost:11434/v1"           # Ollama (no key needed)
+```
+
+**Save and close.** In nano: **Ctrl-O**, **Enter**, then **Ctrl-X**. In TextEdit: **⌘S**, then close the window.
+
+**Load it.** Either open a new terminal window, or run:
+
+```sh
+source ~/.zshrc
+```
+
+**fish** uses a different syntax. Put this in `~/.config/fish/config.fish`:
+
+```fish
+fish_add_path $HOME/.local/bin
+set -gx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
+```
+
+**Windows (PowerShell).** Windows has no profile file to edit for this. Save the key as a user environment variable instead:
+
+```powershell
+setx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
+# or: setx OPENAI_API_KEY "sk-..."   /   setx OPENAI_BASE_URL "http://localhost:11434/v1"
+```
+
+Then **close PowerShell and open a new window**. `setx` doesn't affect the window it runs in. You can also do this with the mouse: Start → *Edit environment variables for your account* → *New…*.
+
+> 🔒 **Keep your key private.** Don't commit your profile file to git or paste the key into chats. On a Mac you can keep it in the Keychain instead; see [Step 2 of the Quick start](#step-2-connect-a-model).
+
+### 4. Check that it works
+
+```sh
+agentiloop --version
+```
+
+You should see `agentiloop 0.0.1`. Now check that the key is loaded:
+
+```sh
+echo $ANTHROPIC_API_KEY | cut -c1-10    # macOS / Linux: should print sk-ant-...
+```
+```powershell
+$env:ANTHROPIC_API_KEY.Substring(0,10)  # Windows PowerShell
+```
+
+If it prints nothing, go back to step 3. The key isn't loaded yet.
+
+### 5. Your first session
+
+Go to a project folder and start the full-screen interface:
+
+```sh
+cd ~/my-project
+agentiloop --tui
+```
+
+Using **Ollama**? Tell it the provider and a model you've pulled: `agentiloop -p openai -m qwen2.5-coder --tui`.
+
+Now just type what you want in plain English and press **Enter**. Some good first prompts:
+
+```text
+explain what this project does
+list the files in src and tell me which one is the entry point
+find the TODO comments and summarize them
+add a --verbose flag to the command-line parser
+run the tests and fix anything that fails
+create a README.md for this project
+```
+
+Before the agent changes a file or runs a command, it asks you. Press **y** for yes, **n** for no, **a** to always allow that tool for the session, or **Esc** to skip the step. Press **Ctrl-C** to quit. Next time, a plain `agentiloop` starts the same way and picks up your last conversation.
+
+Just want one answer without the chat? Pass the question as an argument:
+
+```sh
+agentiloop "what does src/main.rs do?"
+```
+
+### What can it do? (tools)
+
+The agent works with five built-in tools. You don't call them yourself. You describe the goal, and the agent picks the tool:
+
+| Tool | What it does | Asks first? |
+|---|---|---|
+| `read_file` | Reads a file (with line numbers) | No |
+| `list_dir` | Lists the files in a folder | No |
+| `write_file` | Creates a new file or overwrites one | **Yes** |
+| `edit_file` | Changes an exact piece of text in a file | **Yes** |
+| `bash` | Runs a shell command, like tests, builds or `git` (`sh -c` on Mac/Linux, `cmd /C` on Windows) | **Yes** |
+
+Want more tools, like web search, databases or GitHub? Add MCP servers; see [Adding tools with MCP](#adding-tools-with-mcp-optional).
+
+### The help command
+
+`agentiloop --help` lists every option:
+
+```text
+$ agentiloop --help
+AgentiLoop — a cross-platform agentic coding loop for your terminal
+
+Usage: agentiloop [OPTIONS] [PROMPT]...
+
+Arguments:
+  [PROMPT]...  One-shot prompt. If omitted, starts an interactive REPL
+
+Options:
+  -p, --provider <PROVIDER>      Model backend: `anthropic`, `openai` (OpenAI-compatible: OpenAI, Ollama, LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL), or `omlx` (local oMLX server, http://localhost:8000/v1). Defaults to the last one used, then auto-detected from which credentials are set [env: AGENTILOOP_PROVIDER=]
+  -m, --model <MODEL>            Model id to use. Defaults to the last model used with this provider (~/.agentiloop/settings.json), then the provider's default [env: AGENTILOOP_MODEL=]
+      --yes                      Skip all permission prompts (dangerous; intended for CI). Never remembered [env: AGENTILOOP_YES=]
+      --max-turns <MAX_TURNS>    Max provider round-trips per prompt [default: last used, then 50]
+      --compact-at <COMPACT_AT>  Summarize the conversation once a request reaches this many input tokens (0 = never) [default: last used, then 150000] [env: AGENTILOOP_COMPACT_AT=]
+  -C, --cwd <CWD>                Working directory the agent operates in (defaults to cwd)
+  -r, --resume <RESUME>          Resume a saved session by id (see /sessions)
+  -c, --continue                 Resume the most recent session for this working directory (the default for interactive launches; kept for scripts)
+      --new                      Start a new session instead of continuing the last one in this directory
+      --tui                      Full-screen terminal UI (ratatui) instead of the line REPL. Remembered [env: AGENTILOOP_TUI=]
+      --no-tui                   Use the line REPL even if the TUI was used last time
+      --no-mcp                   Don't start MCP servers from ~/.agentiloop/mcp.json / ./.mcp.json [env: AGENTILOOP_NO_MCP=]
+  -h, --help                     Print help
+  -V, --version                  Print version
+```
+
+Inside a session, type `/help` to see the chat commands (`/model`, `/sessions`, `/resume`, `/clear`, `/compact`, `/mcp`, `/exit`). The full reference is in [All options](#all-options) and [Commands inside the chat](#commands-inside-the-chat).
+
+### Stuck? Quick fixes
+
+| You see | Fix |
+|---|---|
+| `command not found: agentiloop` | `~/.local/bin` isn't on your PATH. Add the `export PATH=...` line from step 3, then open a new terminal. On Windows, open a new PowerShell window |
+| `Error: no provider credentials found` | No key is loaded. Redo step 3, then check it with step 4 |
+| macOS: *"agentiloop" cannot be opened* / *unidentified developer* | This happens if you downloaded with a browser instead of `curl`. Run `xattr -d com.apple.quarantine ~/.local/bin/agentiloop` |
+| Windows: *Windows protected your PC* | Click **More info** → **Run anyway** |
+| `401` / `invalid x-api-key` / authentication error | The key is wrong or has spaces or quotes in it. Copy it again and check the line in your profile |
+| Ollama: model not found | Run `ollama list` and pass the exact name with `-m` |
+| It keeps using an old model or provider | It remembers your last choices. Pass `-p` / `-m` to change them, or delete `~/.agentiloop/settings.json` to reset |
+
+Still stuck? [Open an issue](https://github.com/AgentiLoop/AgentiLoopCLI/issues) and paste the command and the error. We'll help.
+
+---
+
 ## Quick start
 
 Three steps: install it, give it a model, run it.
