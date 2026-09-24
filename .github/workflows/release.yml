@@ -80,9 +80,14 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k ci "$KC"
           security list-keychains -d user -s "$KC"
           codesign --force --timestamp --options runtime --sign "$MACOS_SIGN_IDENTITY" "$BIN"
-          ditto -c -k "$BIN" $RUNNER_TEMP/notarize.zip
-          xcrun notarytool submit $RUNNER_TEMP/notarize.zip --wait \
-            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+          # Notarize only when the Apple ID credentials are set; signing alone still works.
+          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_PASSWORD" ]; then
+            ditto -c -k "$BIN" "$RUNNER_TEMP/notarize.zip"
+            xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --wait \
+              --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+          else
+            echo "APPLE_ID / APPLE_APP_PASSWORD not set; skipping notarization"
+          fi
 
       - name: Package (macOS / Linux)
         if: runner.os != 'Windows'
