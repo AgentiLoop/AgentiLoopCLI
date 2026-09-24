@@ -6,7 +6,7 @@
 
 **Take it for a spin!** Read the README and see how long it takes you to get AgentiLoop up and running. If you hit any issues, let us know. We'd love your feedback.
 
-**Bonus:** A Go port is in the works: **AgentiLoopGo** → https://github.com/AgentiLoop/AgentiLoopGo
+**Bonus:** A Go port is here: **AgentiLoopGo** → https://github.com/AgentiLoop/AgentiLoopGo
 
 Try both and tell us which one does it better: **Rust or Go?** 🦀 vs 🐹
 
