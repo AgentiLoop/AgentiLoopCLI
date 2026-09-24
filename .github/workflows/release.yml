@@ -1,6 +1,6 @@
 # Builds `agentiloop` for macOS, Linux and Windows.
 #
-# - Push a tag like `v0.1.0` → builds everything and publishes a GitHub Release.
+# - Push a tag like `v0.0.1` → builds everything and publishes a GitHub Release.
 # - "Run workflow" on the Actions tab → builds everything; download from the run's Artifacts.
 #
 # macOS signing is optional: add these repo secrets and the mac binaries get
