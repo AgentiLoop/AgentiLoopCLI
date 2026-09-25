@@ -1,5 +1,3 @@
-<a href="https://fluxionai.world/register?source=github&campaign=aiagent&promo=AIAGENT"><img src="docs/sponsors/fluxion-ai-silver-ad.svg" width="900" alt="Fluxion AI, Silver Sponsor: one unified API for GPT, Claude and other leading AI models. Save up to 70% compared with official API pricing and get $3 in API credits." /></a>
-
 # AgentiLoopCLI
 
 🌐 [English](README.md) · [Español](README_es.md) · [Français](README_fr.md) · [Deutsch](README_de.md) · [中文 (简体)](README_zh.md) · [Русский](README_ru.md) · [한국어](README_ko.md) · [日本語](README_ja.md)
@@ -555,7 +553,3 @@ We keep dependencies small: 18 external crates, and each crate lists only the on
 ## License
 
 [PolyForm Noncommercial 1.0.0](LICENSE). You may use, change and share this software for personal and noncommercial purposes. Commercial use, including building or selling commercial versions, is reserved to AgentiLoop. Contact AgentiLoop for a commercial license.
-
----
-
-<a href="https://fluxionai.world/register?source=github&campaign=aiagent&promo=AIAGENT"><img src="docs/sponsors/fluxion-ai-silver-ad.svg" width="900" alt="Fluxion AI, Silver Sponsor: one unified API for GPT, Claude and other leading AI models. Save up to 70% compared with official API pricing and get $3 in API credits." /></a>
