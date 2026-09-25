@@ -1,3 +1,5 @@
+<a href="https://fluxionai.world/register?source=github&campaign=aiagent&promo=AIAGENT"><img src="docs/sponsors/fluxion-ai-silver-ad_zh.svg" width="900" alt="Fluxion AI，银牌赞助商：一个统一的 API 访问 GPT、Claude 及其他领先的 AI 模型。相比官方 API 价格最高节省 70%，并获得 $3 API 额度。" /></a>
+
 # AgentiLoopCLI
 
 🌐 [English](README.md) · [Español](README_es.md) · [Français](README_fr.md) · [Deutsch](README_de.md) · [中文 (简体)](README_zh.md) · [Русский](README_ru.md) · [한국어](README_ko.md) · [日本語](README_ja.md)
@@ -549,3 +551,7 @@ cargo run -p agentiloop-mcp --example mcp-example-server -- --http 8791   # 或 
 ## 许可证
 
 [PolyForm Noncommercial 1.0.0](LICENSE)。你可以出于个人和非商业目的使用、修改和分享本软件。商业用途（包括构建或销售商业版本）仅限 AgentiLoop 保留。如需商业许可，请联系 AgentiLoop。
+
+---
+
+<a href="https://fluxionai.world/register?source=github&campaign=aiagent&promo=AIAGENT"><img src="docs/sponsors/fluxion-ai-silver-ad_zh.svg" width="900" alt="Fluxion AI，银牌赞助商：一个统一的 API 访问 GPT、Claude 及其他领先的 AI 模型。相比官方 API 价格最高节省 70%，并获得 $3 API 额度。" /></a>

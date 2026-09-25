@@ -1,3 +1,5 @@
+<a href="https://fluxionai.world/register?source=github&campaign=aiagent&promo=AIAGENT"><img src="docs/sponsors/fluxion-ai-silver-ad_ja.svg" width="900" alt="Fluxion AI（シルバースポンサー）：GPT、Claude などの主要 AI モデルをひとつの統合 API で。公式 API 価格と比べて最大 70% お得、さらに $3 分の API クレジット。" /></a>
+
 # AgentiLoopCLI
 
 🌐 [English](README.md) · [Español](README_es.md) · [Français](README_fr.md) · [Deutsch](README_de.md) · [中文 (简体)](README_zh.md) · [Русский](README_ru.md) · [한국어](README_ko.md) · [日本語](README_ja.md)
@@ -549,3 +551,7 @@ cargo run -p agentiloop-mcp --example mcp-example-server -- --http 8791   # ま�
 ## ライセンス
 
 [PolyForm Noncommercial 1.0.0](LICENSE)。このソフトウェアは、個人的かつ非商用の目的であれば、使用、変更、共有することができます。商用バージョンの構築や販売を含む商用利用の権利は AgentiLoop に留保されています。商用ライセンスについては AgentiLoop にお問い合わせください。
+
+---
+
+<a href="https://fluxionai.world/register?source=github&campaign=aiagent&promo=AIAGENT"><img src="docs/sponsors/fluxion-ai-silver-ad_ja.svg" width="900" alt="Fluxion AI（シルバースポンサー）：GPT、Claude などの主要 AI モデルをひとつの統合 API で。公式 API 価格と比べて最大 70% お得、さらに $3 分の API クレジット。" /></a>
