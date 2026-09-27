@@ -112,7 +112,7 @@ async fn main() -> Result<()> {
     let mut saved = settings::load();
     let interactive = cli.prompt.is_empty();
     if cli.setup || wizard::should_run(interactive, cli.provider.is_some()) {
-        wizard::run(&mut saved).await?;
+        wizard::run(&mut wizard::Terminal, &mut saved).await?;
     }
     let last = saved.last.clone();
     let use_tui = interactive && !cli.no_tui && (cli.tui || last.tui);
@@ -224,7 +224,8 @@ async fn main() -> Result<()> {
                 // multi-line output (the /model list) isn't double-spaced.
                 let mut out: Vec<String> = Vec::new();
                 let before = session.id.clone();
-                let res = slash_command(&line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), &mcp, false, &mut |s| {
+                let mut setup = tui::SetupPrompter { tx: ui_tx.clone(), rx: &mut in_rx };
+                let res = slash_command(&line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), &mcp, false, &mut setup, &mut |s| {
                     out.push(s)
                 })
                 .await;
@@ -300,7 +301,7 @@ async fn main() -> Result<()> {
         }
         if line.starts_with('/') {
             let before = session.id.clone();
-            slash_command(line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), &mcp, true, &mut |s| {
+            slash_command(line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), &mcp, true, &mut wizard::Terminal, &mut |s| {
                 eprintln!("{s}")
             })
             .await?;
@@ -428,7 +429,8 @@ fn fallback_models() -> Vec<ModelInfo> {
 
 /// Runs a `/command`. Output lines go through `say` so the REPL (stderr) and
 /// the TUI (transcript) share one implementation; `interactive` allows the
-/// `/model` picker to read a choice from stdin.
+/// `/model` picker to read a choice from stdin. `/setup` talks through `setup`
+/// (the terminal, or the TUI's transcript and input line).
 async fn slash_command(
     line: &str,
     agent: &mut Agent,
@@ -438,6 +440,7 @@ async fn slash_command(
     sessions_dir: Option<&Path>,
     mcp: &agentiloop_mcp::McpManager,
     interactive: bool,
+    setup: &mut dyn wizard::Prompter,
     say: &mut dyn FnMut(String),
 ) -> Result<()> {
     let (cmd, arg) = line.split_once(' ').map_or((line, ""), |(c, a)| (c, a.trim()));
@@ -547,6 +550,13 @@ async fn slash_command(
             }
         }
         "/help" => say(HELP.into()),
+        "/setup" => {
+            // The running agent keeps its provider; a new key or provider needs a relaunch.
+            match wizard::run(setup, saved).await {
+                Ok(()) => say("setup saved; restart agentiloop to use the new provider and credentials".into()),
+                Err(e) => say(format!("{e:#}")),
+            }
+        }
         _ => say(format!("unknown command {cmd} (try /help)")),
     }
     Ok(())
@@ -558,6 +568,7 @@ const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
 /sessions       list saved sessions (newest first)\n\
 /resume <id|n>  load a saved session into this REPL\n\
 /clear          clear context and start a new session\n\
+/setup          run the setup wizard again (provider, key, model)\n\
 /exit           quit";
 
 pub(crate) fn compacted_line(before_tokens: u64, messages_dropped: usize) -> String {

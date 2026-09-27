@@ -42,6 +42,8 @@ pub enum UiMsg {
     Clear,
     /// A file was written or edited: show its diff and update the files pane.
     Diff(diff::Change),
+    /// The setup wizard wants a line of input; `secret` masks it (API keys).
+    Ask { secret: bool },
 }
 
 /// What the UI sends to the agent task.
@@ -103,6 +105,42 @@ impl PermissionPolicy for ChannelPolicy {
     }
 }
 
+/// Runs the setup wizard inside the TUI: questions go to the transcript and
+/// answers come from the input line (masked for keys).
+pub struct SetupPrompter<'a> {
+    pub tx: mpsc::UnboundedSender<UiMsg>,
+    pub rx: &'a mut mpsc::UnboundedReceiver<Input>,
+}
+
+impl SetupPrompter<'_> {
+    async fn read(&mut self, prompt: &str, secret: bool) -> anyhow::Result<String> {
+        let _ = self.tx.send(UiMsg::Line(prompt.trim_end().to_string()));
+        let _ = self.tx.send(UiMsg::Ask { secret });
+        match self.rx.recv().await {
+            Some(Input::Submit(line)) => Ok(line),
+            None => anyhow::bail!("setup cancelled; nothing was saved"),
+        }
+    }
+}
+
+#[async_trait]
+impl crate::wizard::Prompter for SetupPrompter<'_> {
+    /// Blank lines are dropped: the transcript already spaces entries.
+    fn say(&mut self, line: &str) {
+        if !line.is_empty() {
+            let _ = self.tx.send(UiMsg::Line(line.to_string()));
+        }
+    }
+
+    async fn ask(&mut self, prompt: &str) -> anyhow::Result<String> {
+        self.read(prompt, false).await
+    }
+
+    async fn ask_secret(&mut self, prompt: &str) -> anyhow::Result<String> {
+        self.read(prompt, true).await
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind {
     User,
@@ -158,6 +196,8 @@ pub struct App {
     pane_rows: Vec<(Vec<Vec<Span<'static>>>, Vec<Style>)>,
     /// Ctrl-F toggles the files pane.
     show_files: bool,
+    /// `Some(secret)` while the setup wizard waits for an answer on the input line.
+    asking: Option<bool>,
 }
 
 struct LinkHit {
@@ -199,6 +239,7 @@ impl App {
             files_sel: 0,
             pane_rows: Vec::new(),
             show_files: true,
+            asking: None,
         }
     }
 
@@ -256,6 +297,10 @@ impl App {
                 self.files_sel =
                     self.files.iter().position(|f| f.path == total.path).unwrap_or(self.files.len().saturating_sub(1));
                 self.refresh_pane();
+            }
+            UiMsg::Ask { secret } => {
+                self.busy = false;
+                self.asking = Some(secret);
             }
         }
     }
@@ -357,13 +402,25 @@ impl App {
             }
             KeyCode::Enter => {
                 let line = self.input.trim().to_string();
-                if line.is_empty() || self.busy {
+                if self.busy || (line.is_empty() && self.asking.is_none()) {
                     return None;
                 }
                 self.input.clear();
                 self.cursor = 0;
                 self.hist_idx = None;
                 self.scroll = 0;
+                if line == "/exit" || line == "/quit" {
+                    self.quit = true;
+                    return Some(Action::Quit);
+                }
+                // A wizard answer: echoed (masked for keys), never kept in history.
+                if let Some(secret) = self.asking.take() {
+                    self.push(Kind::User, if secret { "•".repeat(line.chars().count()) } else { line.clone() });
+                    self.busy = true;
+                    self.busy_since = Instant::now();
+                    self.activity = "Setting up".into();
+                    return Some(Action::Submit(line));
+                }
                 if self.history.last() != Some(&line) {
                     self.history.push(line.clone());
                     if let Some(p) = &self.history_file {
@@ -371,10 +428,6 @@ impl App {
                             tracing::warn!("could not save history: {e}");
                         }
                     }
-                }
-                if line == "/exit" || line == "/quit" {
-                    self.quit = true;
-                    return Some(Action::Quit);
                 }
                 if !line.starts_with('/') {
                     self.push(Kind::User, line.clone());
@@ -468,10 +521,15 @@ impl App {
         };
         self.draw_transcript(frame, transcript);
 
-        let title = if self.busy { self.busy_title() } else { Line::from(" prompt ") };
+        let title = if self.busy {
+            self.busy_title()
+        } else {
+            Line::from(if self.asking.is_some() { " setup " } else { " prompt " })
+        };
         let block = Block::default().borders(Borders::ALL).title(title);
         let inner = block.inner(input);
-        frame.render_widget(Paragraph::new(self.input.as_str()).block(block), input);
+        let shown = if self.asking == Some(true) { "•".repeat(self.input.chars().count()) } else { self.input.clone() };
+        frame.render_widget(Paragraph::new(shown).block(block), input);
         if self.modal.is_none() {
             let col = self.input[..self.cursor].chars().count() as u16;
             frame.set_cursor_position((inner.x + col.min(inner.width.saturating_sub(1)), inner.y));
@@ -1125,6 +1183,29 @@ mod tests {
         assert!(screen(&app, 120, 20).contains("1 file changed +3 -0"));
         app.apply(UiMsg::Clear);
         assert!(!screen(&app, 120, 20).contains("changed"));
+    }
+
+    #[test]
+    fn setup_answers_are_masked_and_kept_out_of_history() {
+        let mut app = App::new("s");
+        type_str(&mut app, "/setup");
+        app.handle_key(key(KeyCode::Enter));
+        assert!(app.busy);
+        app.apply(UiMsg::Line("Provider [1-4, default 1]:".into()));
+        app.apply(UiMsg::Ask { secret: false });
+        assert!(!app.busy);
+        // Enter on an empty line is an answer ("use the default") while asking.
+        assert!(matches!(app.handle_key(key(KeyCode::Enter)), Some(Action::Submit(l)) if l.is_empty()));
+        assert!(app.busy && app.asking.is_none());
+        app.apply(UiMsg::Ask { secret: true });
+        type_str(&mut app, "sk-secret");
+        let s = screen(&app, 40, 8);
+        assert!(s.contains("•••••••••") && !s.contains("sk-secret"), "{s}");
+        assert!(s.contains(" setup "), "{s}");
+        assert!(matches!(app.handle_key(key(KeyCode::Enter)), Some(Action::Submit(l)) if l == "sk-secret"));
+        let s = screen(&app, 40, 8);
+        assert!(s.contains("> •••••••••") && !s.contains("sk-secret"), "{s}");
+        assert_eq!(app.history, vec!["/setup".to_string()]);
     }
 
     #[test]

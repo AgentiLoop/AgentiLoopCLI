@@ -1,13 +1,16 @@
-//! First-run wizard (`agentiloop --setup`): pick a provider, enter a key, check
-//! the connection, choose a model, and save the credential to
+//! First-run wizard (`agentiloop --setup`, `/setup`): pick a provider, enter a
+//! key, check the connection, choose a model, and save the credential to
 //! `~/.agentiloop/env` (optionally also the shell profile or the macOS Keychain).
 //! Runs by itself when there are no credentials and nothing in `~/.agentiloop`.
+//! Talks to the user through a [`Prompter`], so it works on the plain terminal
+//! and inside the TUI alike.
 
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
 use agentiloop_core::{ModelInfo, Provider};
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 
 use crate::reset::{BLOCK_END, BLOCK_START, CREDENTIAL_VARS};
 use crate::settings;
@@ -22,32 +25,54 @@ pub fn should_run(interactive: bool, provider_flag: bool) -> bool {
     interactive && !provider_flag && no_credentials() && io::stdin().is_terminal() && io::stdout().is_terminal()
 }
 
-fn ask(prompt: &str) -> Result<String> {
-    print!("{prompt}");
-    io::stdout().flush()?;
-    let mut line = String::new();
-    if io::stdin().lock().read_line(&mut line)? == 0 {
-        println!();
-        anyhow::bail!("setup cancelled; nothing was saved");
-    }
-    Ok(line.trim().to_string())
+/// How the wizard talks to the user: the plain terminal ([`Terminal`]) or the
+/// TUI's transcript and input line (`tui::SetupPrompter`).
+#[async_trait]
+pub trait Prompter: Send {
+    /// Show a line (may contain newlines; empty = blank line where that makes sense).
+    fn say(&mut self, line: &str);
+    /// Show `prompt` and wait for a line of input (trimmed).
+    async fn ask(&mut self, prompt: &str) -> Result<String>;
+    /// Like `ask`, but the answer is hidden as it is typed and not kept in history.
+    async fn ask_secret(&mut self, prompt: &str) -> Result<String>;
 }
 
-fn ask_default(prompt: &str, default: &str) -> Result<String> {
-    let a = ask(&format!("{prompt} [{default}]: "))?;
+/// Plain stdin/stdout, for the first run and the line REPL.
+pub struct Terminal;
+
+#[async_trait]
+impl Prompter for Terminal {
+    fn say(&mut self, line: &str) {
+        println!("{line}");
+    }
+
+    async fn ask(&mut self, prompt: &str) -> Result<String> {
+        print!("{prompt}");
+        io::stdout().flush()?;
+        let mut line = String::new();
+        if io::stdin().lock().read_line(&mut line)? == 0 {
+            println!();
+            anyhow::bail!("setup cancelled; nothing was saved");
+        }
+        Ok(line.trim().to_string())
+    }
+
+    async fn ask_secret(&mut self, prompt: &str) -> Result<String> {
+        // Hidden input needs a terminal; scripted stdin (tests, pipes) falls back to a plain read.
+        if !io::stdin().is_terminal() {
+            return self.ask(prompt).await;
+        }
+        Ok(rpassword::prompt_password(prompt).context("reading input")?.trim().to_string())
+    }
+}
+
+async fn ask_default(p: &mut dyn Prompter, prompt: &str, default: &str) -> Result<String> {
+    let a = p.ask(&format!("{prompt} [{default}]: ")).await?;
     Ok(if a.is_empty() { default.to_string() } else { a })
 }
 
-fn ask_secret(prompt: &str) -> Result<String> {
-    // Hidden input needs a terminal; scripted stdin (tests, pipes) falls back to a plain read.
-    if !io::stdin().is_terminal() {
-        return ask(prompt);
-    }
-    Ok(rpassword::prompt_password(prompt).context("reading input")?.trim().to_string())
-}
-
-fn ask_yes(prompt: &str, default_yes: bool) -> Result<bool> {
-    let a = ask(&format!("{prompt} {} ", if default_yes { "[Y/n]" } else { "[y/N]" }))?;
+async fn ask_yes(p: &mut dyn Prompter, prompt: &str, default_yes: bool) -> Result<bool> {
+    let a = p.ask(&format!("{prompt} {} ", if default_yes { "[Y/n]" } else { "[y/N]" })).await?;
     Ok(match a.to_ascii_lowercase().as_str() {
         "" => default_yes,
         "y" | "yes" => true,
@@ -55,15 +80,15 @@ fn ask_yes(prompt: &str, default_yes: bool) -> Result<bool> {
     })
 }
 
-fn choose(prompt: &str, n: usize, default: usize) -> Result<usize> {
+async fn choose(p: &mut dyn Prompter, prompt: &str, n: usize, default: usize) -> Result<usize> {
     loop {
-        let a = ask(&format!("{prompt} [1-{n}, default {default}]: "))?;
+        let a = p.ask(&format!("{prompt} [1-{n}, default {default}]: ")).await?;
         if a.is_empty() {
             return Ok(default);
         }
         match a.parse::<usize>() {
             Ok(i) if (1..=n).contains(&i) => return Ok(i),
-            _ => println!("Please enter a number from 1 to {n}."),
+            _ => p.say(&format!("Please enter a number from 1 to {n}.")),
         }
     }
 }
@@ -214,20 +239,22 @@ struct Connected {
     models: Vec<ModelInfo>,
 }
 
-async fn connect() -> Result<Connected> {
+async fn connect(p: &mut dyn Prompter) -> Result<Connected> {
     loop {
-        println!();
-        println!("Which model provider do you want to use?");
-        println!("  1  Claude (Anthropic) — API key from console.anthropic.com");
-        println!("  2  OpenAI — API key from platform.openai.com");
-        println!("  3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)");
-        println!("  4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)");
-        let (name, vars): (&'static str, Vec<(String, String)>) = match choose("Provider", 4, 1)? {
-            1 => ("anthropic", vec![("ANTHROPIC_API_KEY".into(), ask_secret("Anthropic API key (starts with sk-ant-, input hidden): ")?)]),
-            2 => ("openai", vec![("OPENAI_API_KEY".into(), ask_secret("OpenAI API key (starts with sk-, input hidden): ")?)]),
+        p.say("");
+        p.say(
+            "Which model provider do you want to use?\n  \
+             1  Claude (Anthropic) — API key from console.anthropic.com\n  \
+             2  OpenAI — API key from platform.openai.com\n  \
+             3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)\n  \
+             4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)",
+        );
+        let (name, vars): (&'static str, Vec<(String, String)>) = match choose(p, "Provider", 4, 1).await? {
+            1 => ("anthropic", vec![("ANTHROPIC_API_KEY".into(), p.ask_secret("Anthropic API key (starts with sk-ant-, input hidden): ").await?)]),
+            2 => ("openai", vec![("OPENAI_API_KEY".into(), p.ask_secret("OpenAI API key (starts with sk-, input hidden): ").await?)]),
             3 => {
-                let mut v = vec![("OPENAI_BASE_URL".into(), ask_default("Server URL", "http://localhost:11434/v1")?)];
-                let key = ask_secret("API key (press Enter if the server needs none, input hidden): ")?;
+                let mut v = vec![("OPENAI_BASE_URL".into(), ask_default(p, "Server URL", "http://localhost:11434/v1").await?)];
+                let key = p.ask_secret("API key (press Enter if the server needs none, input hidden): ").await?;
                 if !key.is_empty() {
                     v.push(("OPENAI_API_KEY".into(), key));
                 }
@@ -237,35 +264,34 @@ async fn connect() -> Result<Connected> {
                 let omlx_settings = dirs::home_dir().map(|h| h.join(".omlx/settings.json")).filter(|p| p.is_file());
                 let v = match omlx_settings {
                     Some(_) => Vec::new(),
-                    None => vec![("OMLX_BASE_URL".into(), ask_default("oMLX server URL", "http://localhost:8000/v1")?)],
+                    None => vec![("OMLX_BASE_URL".into(), ask_default(p, "oMLX server URL", "http://localhost:8000/v1").await?)],
                 };
                 ("omlx", v)
             }
         };
         if vars.iter().any(|(k, v)| k.ends_with("_KEY") && v.is_empty()) {
-            println!("The key is empty.");
+            p.say("The key is empty.");
             continue;
         }
         for (k, v) in &vars {
             std::env::set_var(k, v);
         }
-        print!("Checking the connection… ");
-        io::stdout().flush()?;
+        p.say("Checking the connection…");
         let result = match agentiloop_provider::from_env(Some(name)) {
             Ok(p) => p.list_models().await.map(|m| (p, m)),
             Err(e) => Err(e),
         };
         match result {
             Ok((provider, models)) => {
-                println!("ok ({} model(s) available).", models.len());
+                p.say(&format!("Connected ({} model(s) available).", models.len()));
                 return Ok(Connected { name, vars, provider, models });
             }
             Err(e) => {
-                println!("failed.\n  {e:#}");
+                p.say(&format!("Connection failed.\n  {e:#}"));
                 for (k, _) in &vars {
                     std::env::remove_var(k);
                 }
-                if !ask_yes("Try again?", true)? {
+                if !ask_yes(p, "Try again?", true).await? {
                     anyhow::bail!("setup cancelled; nothing was saved");
                 }
             }
@@ -273,25 +299,26 @@ async fn connect() -> Result<Connected> {
     }
 }
 
-fn pick_model(c: &Connected) -> Result<String> {
+async fn pick_model(p: &mut dyn Prompter, c: &Connected) -> Result<String> {
     let default = c.provider.default_model();
     let default = if !default.is_empty() { default.to_string() } else { c.models.first().map(|m| m.id.clone()).unwrap_or_default() };
     if c.models.is_empty() {
-        println!("The server lists no models; using `{default}`. Change it later with /model.");
+        p.say(&format!("The server lists no models; using `{default}`. Change it later with /model."));
         return Ok(default);
     }
-    println!();
-    println!("Pick a model (change it any time with /model):");
+    p.say("");
     let shown = c.models.iter().take(15).collect::<Vec<_>>();
+    let mut list = String::from("Pick a model (change it any time with /model):");
     for (i, m) in shown.iter().enumerate() {
         let mark = if m.id == default { "  (default)" } else { "" };
-        println!("  {:>2}  {}{mark}", i + 1, m.id);
+        list.push_str(&format!("\n  {:>2}  {}{mark}", i + 1, m.id));
     }
     if c.models.len() > shown.len() {
-        println!("      … and {} more (type the id)", c.models.len() - shown.len());
+        list.push_str(&format!("\n      … and {} more (type the id)", c.models.len() - shown.len()));
     }
+    p.say(&list);
     loop {
-        let a = ask(&format!("Model [1-{}, an id, or Enter for {default}]: ", shown.len()))?;
+        let a = p.ask(&format!("Model [1-{}, an id, or Enter for {default}]: ", shown.len())).await?;
         if a.is_empty() {
             return Ok(default);
         }
@@ -303,38 +330,41 @@ fn pick_model(c: &Connected) -> Result<String> {
         if c.models.iter().any(|m| m.id == a) {
             return Ok(a);
         }
-        if ask_yes(&format!("`{a}` is not in the list; use it anyway?"), false)? {
+        if ask_yes(p, &format!("`{a}` is not in the list; use it anyway?"), false).await? {
             return Ok(a);
         }
     }
 }
 
-pub async fn run(saved: &mut settings::Settings) -> Result<()> {
+pub async fn run(p: &mut dyn Prompter, saved: &mut settings::Settings) -> Result<()> {
     let home = settings::home().context("no home directory")?;
-    println!("Welcome to AgentiLoop! Let's set things up (about a minute).");
-    println!("Settings are kept in {}. Run `agentiloop --setup` to redo this, `agentiloop --reset` to start over.", home.display());
+    p.say("Welcome to AgentiLoop! Let's set things up (about a minute).");
+    p.say(&format!("Settings are kept in {}. Run `agentiloop --setup` or `/setup` to redo this, `agentiloop --reset` to start over.", home.display()));
 
-    let c = connect().await?;
-    let model = pick_model(&c)?;
+    let c = connect(p).await?;
+    let model = pick_model(p, &c).await?;
 
     // Where the credential lives. ~/.agentiloop/env is always the baseline unless the Keychain holds it.
     let profile = shell_profile();
     let mut setup = settings::Setup { completed_at: Some(rfc3339_now()), profile: None, keychain: Vec::new() };
     let mut block: Vec<String> = Vec::new();
     if !c.vars.is_empty() {
-        println!();
-        println!("Where should the credential be saved?");
-        println!("  1  {} (recommended; only agentiloop reads it, file mode 600)", home.join("env").display());
+        p.say("");
+        let mut menu = format!(
+            "Where should the credential be saved?\n  1  {} (recommended; only agentiloop reads it, file mode 600)",
+            home.join("env").display()
+        );
         let mut n = 1;
-        if let Some((p, _)) = &profile {
+        if let Some((path, _)) = &profile {
             n = 2;
-            println!("  2  Also add it to {} so other tools in your terminal see it", p.display());
+            menu.push_str(&format!("\n  2  Also add it to {} so other tools in your terminal see it", path.display()));
             if cfg!(target_os = "macos") {
                 n = 3;
-                println!("  3  macOS Keychain, with a line in {} that reads it (nothing stored in plain text)", p.display());
+                menu.push_str(&format!("\n  3  macOS Keychain, with a line in {} that reads it (nothing stored in plain text)", path.display()));
             }
         }
-        let choice = choose("Save to", n, 1)?;
+        p.say(&menu);
+        let choice = choose(p, "Save to", n, 1).await?;
         let (path, kind) = profile.clone().unzip();
         match choice {
             3 => {
@@ -344,7 +374,7 @@ pub async fn run(saved: &mut settings::Settings) -> Result<()> {
                         keychain_store(k, v)?;
                         setup.keychain.push(k.clone());
                         block.push(keychain_line(kind.unwrap(), k));
-                        println!("stored {k} in the Keychain");
+                        p.say(&format!("stored {k} in the Keychain"));
                     } else {
                         block.push(export_line(kind.unwrap(), k, v));
                     }
@@ -356,25 +386,25 @@ pub async fn run(saved: &mut settings::Settings) -> Result<()> {
                 block.extend(c.vars.iter().map(|(k, v)| export_line(kind.unwrap(), k, v)));
             }
             _ => {
-                let p = settings::save_env_file(&c.vars)?;
-                println!("saved to {}", p.display());
+                let path = settings::save_env_file(&c.vars)?;
+                p.say(&format!("saved to {}", path.display()));
             }
         }
     }
 
     // PATH: offer once, only when a profile is being written or would be.
-    if let (Some(dir), Some((p, kind))) = (exe_dir_missing_from_path(), &profile) {
-        println!();
-        println!("`{}` is not on your PATH, so `agentiloop` only works with its full path.", dir.display());
-        if ask_yes(&format!("Add it to PATH in {}?", p.display()), true)? {
+    if let (Some(dir), Some((path, kind))) = (exe_dir_missing_from_path(), &profile) {
+        p.say("");
+        p.say(&format!("`{}` is not on your PATH, so `agentiloop` only works with its full path.", dir.display()));
+        if ask_yes(p, &format!("Add it to PATH in {}?", path.display()), true).await? {
             block.push(path_line(*kind, &dir));
         }
     }
     if !block.is_empty() {
-        let (p, _) = profile.as_ref().expect("block implies profile");
-        write_block(p, &block)?;
-        setup.profile = Some(p.clone());
-        println!("updated {} (between `{BLOCK_START}` and `{BLOCK_END}`); it applies to new terminals", p.display());
+        let (path, _) = profile.as_ref().expect("block implies profile");
+        write_block(path, &block)?;
+        setup.profile = Some(path.clone());
+        p.say(&format!("updated {} (between `{BLOCK_START}` and `{BLOCK_END}`); it applies to new terminals", path.display()));
     }
 
     saved.set_model(c.name, &model);
@@ -382,9 +412,9 @@ pub async fn run(saved: &mut settings::Settings) -> Result<()> {
     saved.setup = setup;
     settings::save(saved)?;
 
-    println!();
-    println!("All set: {} / {}. Type a request at the prompt, /help for commands, /exit to leave.", c.name, model);
-    println!();
+    p.say("");
+    p.say(&format!("All set: {} / {}. Type a request at the prompt, /help for commands, /exit to leave.", c.name, model));
+    p.say("");
     Ok(())
 }
 
