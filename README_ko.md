@@ -34,6 +34,16 @@ AgentiLoop Agent!로 만들었어요. 저희가 정성껏 키운 아이예요. m
 
 ---
 
+## ⚡ 첫 실행: 설정 마법사가 모두 해 줘요
+
+직접 설정할 것은 아무것도 없어요. `agentiloop`를 처음 실행하면 내장 설정 마법사가 알아서 시작돼요. 어떤 프로바이더를 쓸지 (Claude, OpenAI, Ollama / LM Studio 또는 oMLX) 묻고, API 키를 받고 (입력은 숨겨져요), 키가 동작하는지 확인하고, 모델을 고르게 한 뒤 모든 것을 `~/.agentiloop`에 저장해요. 1분 정도 걸리고, 설정 파일도 `export` 줄도 필요 없어요.
+
+<img src="docs/setup-wizard-tui.png" width="900" alt="전체 화면 TUI 안에서 실행되는 설정 마법사: 프로바이더, 숨겨진 API 키, 연결 확인, 모델 목록, 키 저장 위치, 그리고 첫 프롬프트" />
+
+`agentiloop --setup`으로 언제든 다시 실행할 수 있어요 (전체 화면 버전은 `--tui`를 붙이거나, 세션 안에서 `/setup`을 입력하세요). `agentiloop --reset`은 모든 것을 잊고 처음 상태에서 시작해요. 명령줄 프로그램을 설치해 본 적이 없으신가요? 아래 [처음이신가요?](#-처음이신가요-5분-만에-시작하기)를 순서대로 따라 해 보세요.
+
+---
+
 ## 🚀 처음이신가요? 5분 만에 시작하기
 
 Rust도, Go도, 컴파일도 필요 없어요. 파일 하나를 다운로드하고 API 키를 설정하면 바로 대화를 시작할 수 있어요. 순서대로 따라 해 주세요.
@@ -60,7 +70,7 @@ tar xzf agentiloop-macos-arm64.tar.gz
 mkdir -p ~/.local/bin && mv agentiloop-macos-arm64/agentiloop ~/.local/bin/
 ```
 
-이렇게 하면 프로그램이 홈 디렉터리 안의 폴더인 `~/.local/bin`에 들어가요. 3단계에서 터미널이 그곳을 찾도록 설정해요.
+이렇게 하면 프로그램이 홈 디렉터리 안의 폴더인 `~/.local/bin`에 들어가요. 3단계의 설정 마법사가 터미널이 그곳을 찾도록 설정해 주겠다고 제안해요.
 
 **Windows.** **PowerShell**을 열고 (시작 메뉴 → "PowerShell" 입력) 다음을 붙여 넣으세요:
 
@@ -85,67 +95,69 @@ AgentiLoop는 에이전트예요. "두뇌" 역할은 여기에 연결하는 AI �
 
 키를 안전한 곳에 복사해 두세요. 다음 단계에서 붙여 넣을 거예요.
 
-### 3. 셸 프로필에 설정 저장하기
+### 3. 설정 마법사 실행하기
 
-**셸 프로필**은 터미널이 새 창을 열 때마다 읽는 작은 텍스트 파일이에요. 여기에 설정을 넣어 두면 이 작업은 한 번만 하면 돼요. 이 단계를 건너뛰면 새 터미널을 열 때마다 키를 다시 입력해야 해요. 사람들이 막히는 가장 흔한 이유예요.
+파일을 편집하거나 `export` 명령어를 입력할 필요가 없어요. AgentiLoop에는 몇 가지 질문을 하고 키를 대신 저장해 주는 내장 설정 마법사가 있어요.
 
-**어떤 파일인가요?**
-
-| 시스템 | 셸 (기본값) | 프로필 파일 |
-|---|---|---|
-| macOS (Catalina 10.15 이상) | zsh | `~/.zshrc` |
-| 대부분의 Linux 배포판 | bash | `~/.bashrc` |
-| zsh를 쓰는 Linux 또는 Mac | zsh | `~/.zshrc` |
-| fish 셸 | fish | `~/.config/fish/config.fish` |
-| Windows | PowerShell | 필요 없음, 아래 참고 |
-
-어떤 셸을 쓰는지 모르겠다면 `echo $SHELL`을 실행해 보세요. `~`는 홈 폴더를 뜻하므로 `~/.zshrc`는 예를 들어 `/Users/you/.zshrc`예요. 점으로 시작하는 파일은 Finder나 파일 탐색기에서 숨겨져 있는데, 이건 정상이에요.
-
-**파일을 여세요.** 다음 중 하나를 사용하세요 (파일이 아직 없으면 새로 만들어져요):
+`~/.local/bin`이 아직 PATH에 없으므로, 이번 한 번만 전체 경로로 시작하세요 (Windows에서는 1단계에서 이미 PATH를 설정했으니 그냥 `agentiloop`를 입력하세요):
 
 ```sh
-nano ~/.zshrc                        # 어디서나 동작해요, 터미널 안에서 바로 편집
-touch ~/.zshrc && open -e ~/.zshrc   # macOS: 텍스트 편집기로 열어요
+~/.local/bin/agentiloop
 ```
 
-(bash를 쓰는 Linux: `~/.zshrc` 대신 `~/.bashrc`를 사용하세요.)
+마법사가 다섯 개의 짧은 단계를 안내해요. **Enter**를 누르면 기본값을 받아들이고, 번호를 입력하면 선택할 수 있어요:
 
-**맨 아래에 다음 줄을 추가하세요.** 필요한 키 줄만 남기고, 따옴표 사이에 실제 키를 붙여 넣으세요:
+1. **프로바이더**: Claude는 `1`, OpenAI는 `2`, Ollama는 `3`을 입력하세요.
+2. **API 키**: 2단계의 키를 붙여 넣고 Enter를 누르세요. 붙여 넣는 동안 화면에 아무것도 표시되지 않는데, 이건 의도된 거예요. 키가 숨겨져 있어요. Ollama에는 키가 필요 없어요: 서버 주소에서 Enter, 키에서 다시 Enter를 누르세요.
+3. **연결 확인**: 마법사가 바로 키를 시험해요. 실패하면 이유를 알려 주고 다시 시도할 수 있게 해 줘요. 성공하기 전까지는 아무것도 저장되지 않아요.
+4. **모델**: Enter를 눌러 기본값을 쓰거나, 목록에서 번호를 입력하세요.
+5. **키를 저장할 위치**: Enter를 누르세요. 그러면 키가 AgentiLoop만 읽는 비공개 파일인 `~/.agentiloop/env`에 저장돼요.
 
-```sh
-# AgentiLoop
-export PATH="$HOME/.local/bin:$PATH"
+마지막으로 마법사는 `~/.local/bin`이 PATH에 없다는 것을 알아채고 `Add it to PATH in /Users/you/.zshrc?`라고 물어봐요. **Enter** (예)를 누르세요. 그러면 `All set`이 출력되고 프롬프트에 도착해요.
 
-export ANTHROPIC_API_KEY="sk-ant-paste-your-key-here"          # Claude
-# export OPENAI_API_KEY="sk-paste-your-key-here"               # OpenAI
-# export OPENAI_BASE_URL="http://localhost:11434/v1"           # Ollama (키 불필요)
+Claude를 선택하고 기본값을 받아들였을 때 전체 과정은 이렇게 보여요:
+
+```text
+$ ~/.local/bin/agentiloop
+Welcome to AgentiLoop! Let's set things up (about a minute).
+Settings are kept in /Users/you/.agentiloop. Run `agentiloop --setup` or `/setup` to redo this, `agentiloop --reset` to start over.
+
+Which model provider do you want to use?
+  1  Claude (Anthropic) — API key from console.anthropic.com
+  2  OpenAI — API key from platform.openai.com
+  3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)
+  4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)
+Provider [1-4, default 1]: 1
+Anthropic API key (starts with sk-ant-, input hidden):
+Checking the connection…
+Connected (8 model(s) available).
+
+Pick a model (change it any time with /model):
+   1  claude-sonnet-5  (default)
+   2  claude-…
+   3  claude-…
+   …
+Model [1-8, an id, or Enter for claude-sonnet-5]:
+
+Where should the credential be saved?
+  1  /Users/you/.agentiloop/env (recommended; only agentiloop reads it, file mode 600)
+  2  Also add it to /Users/you/.zshrc so other tools in your terminal see it
+  3  macOS Keychain, with a line in /Users/you/.zshrc that reads it (nothing stored in plain text)
+Save to [1-3, default 1]:
+saved to /Users/you/.agentiloop/env
+
+`/Users/you/.local/bin` is not on your PATH, so `agentiloop` only works with its full path.
+Add it to PATH in /Users/you/.zshrc? [Y/n]
+updated /Users/you/.zshrc (between `# >>> agentiloop >>>` and `# <<< agentiloop <<<`); it applies to new terminals
+
+All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
 ```
 
-**저장하고 닫으세요.** nano에서는 **Ctrl-O**, **Enter**, 그다음 **Ctrl-X**. 텍스트 편집기에서는 **⌘S**를 누른 뒤 창을 닫으세요.
+여기서 바로 대화를 시작해도 되고, `/exit`를 입력하고 4단계로 넘어가도 돼요. 실수하셨나요? `agentiloop --setup`은 마법사를 다시 실행하고, `agentiloop --reset`은 저장된 모든 것을 지워요.
 
-**불러오세요.** 새 터미널 창을 열거나, 다음을 실행하세요:
+> 🔒 **키는 비밀로 지켜 주세요.** `~/.agentiloop/env`는 여러분만 읽을 수 있어요. 키를 채팅에 붙여 넣거나 git에 커밋하지 마세요. Mac에서는 마지막 질문에서 3번을 고르면 대신 키체인에 저장되므로, 평문으로 디스크에 남지 않아요.
 
-```sh
-source ~/.zshrc
-```
-
-**fish**는 문법이 달라요. 다음 내용을 `~/.config/fish/config.fish`에 넣으세요:
-
-```fish
-fish_add_path $HOME/.local/bin
-set -gx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
-```
-
-**Windows (PowerShell).** Windows에는 이 용도로 편집할 프로필 파일이 없어요. 대신 키를 사용자 환경 변수로 저장하세요 (설정 마법사에서 2번을 고르면 같은 일을 해요):
-
-```powershell
-setx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
-# 또는: setx OPENAI_API_KEY "sk-..."   /   setx OPENAI_BASE_URL "http://localhost:11434/v1"
-```
-
-그런 다음 **PowerShell을 닫고 새 창을 여세요**. `setx`는 실행한 창 자체에는 적용되지 않아요. 마우스로도 할 수 있어요: 시작 → *Edit environment variables for your account* → *New…*.
-
-> 🔒 **키는 비밀로 지켜 주세요.** 프로필 파일을 git에 커밋하거나 키를 채팅에 붙여 넣지 마세요. Mac에서는 대신 키체인에 보관할 수도 있어요. [빠른 시작의 2단계](#2단계-모델-연결하기)를 참고하세요.
+환경 변수로 키를 직접 관리하고 싶으신가요? 그것도 가능하지만 고급 방법이에요. 빠른 시작의 [고급: 키를 직접 설정하기](#2단계-모델-연결하기)를 참고하세요.
 
 ### 4. 잘 동작하는지 확인하기
 
