@@ -25,7 +25,7 @@ pub fn from_env(name: Option<&str>) -> anyhow::Result<Arc<dyn Provider>> {
         None if has("OPENAI_API_KEY") || has("OPENAI_BASE_URL") => "openai".into(),
         None if has("OMLX_BASE_URL") || has("OMLX_PORT") || has("OMLX_API_KEY") => "omlx".into(),
         None => anyhow::bail!(
-            "no provider credentials found: set ANTHROPIC_API_KEY, OPENAI_API_KEY / OPENAI_BASE_URL (e.g. http://localhost:11434/v1 for Ollama), or use `-p omlx` for a local oMLX server"
+            "no provider credentials found: set ANTHROPIC_API_KEY, OPENAI_API_KEY / OPENAI_BASE_URL (e.g. http://localhost:11434/v1 for Ollama), or use `-p omlx` for a local oMLX server; run `agentiloop --setup` for a guided setup"
         ),
     };
     Ok(match name.as_str() {

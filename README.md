@@ -257,7 +257,7 @@ Inside a session, type `/help` to see the chat commands (`/model`, `/sessions`, 
 | Windows: *Windows protected your PC* | Click **More info** → **Run anyway** |
 | `401` / `invalid x-api-key` / authentication error | The key is wrong or has spaces or quotes in it. Copy it again and check the line in your profile |
 | Ollama: model not found | Run `ollama list` and pass the exact name with `-m` |
-| It keeps using an old model or provider | It remembers your last choices. Pass `-p` / `-m` to change them, or delete `~/.agentiloop/settings.json` to reset |
+| It keeps using an old model or provider | It remembers your last choices. Pass `-p` / `-m` to change them, or run `agentiloop --reset` to start over |
 
 Still stuck? [Open an issue](https://github.com/AgentiLoop/AgentiLoopCLI/issues) and paste the command and the error. We'll help.
 
@@ -285,7 +285,11 @@ This builds the program and puts an `agentiloop` command on your PATH, in `~/.ca
 
 ### Step 2: Connect a model
 
-AgentiLoop needs a model to talk to. Pick one of these:
+AgentiLoop needs a model to talk to.
+
+**Easiest:** just run `agentiloop`. On a machine with no key set up it starts a short wizard that asks which provider you want, takes your key (typed hidden), checks the connection, lets you pick a model and saves the key to `~/.agentiloop/env` (only AgentiLoop reads it). You can rerun it any time with `agentiloop --setup`, and `agentiloop --reset` puts everything back to brand new.
+
+**By hand:** set one of these in your terminal instead:
 
 | I want to use… | Do this |
 |---|---|
@@ -397,6 +401,8 @@ Every option can also be set with an environment variable, shown in the second c
 | `-C, --cwd <folder>` | | Work in a different folder than the one you're in |
 | `--yes` | `AGENTILOOP_YES` | Don't ask before running tools. ⚠️ Only for trusted, automated use |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | Don't start MCP servers (see below) |
+| `--setup` | | Run the first-time wizard again (provider, key, model) |
+| `--reset` | | Back to brand new: deletes `~/.agentiloop`, the agentiloop block in your shell profile and Keychain items the wizard created. Hand-written `export` lines are only commented out, and only if you say yes. Add `--yes` to skip the questions |
 | `--max-turns <n>` | | Max steps the agent may take per request (default 50) |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | When to summarize a long conversation (default 150000, `0` = never) |
 | `-h` / `-V` | | Help / version |
@@ -476,7 +482,8 @@ Everything lives in `~/.agentiloop/`. Set `AGENTILOOP_HOME` to use a different f
 
 | File | What's in it |
 |---|---|
-| `settings.json` | Remembered provider, models and options. Delete it to reset |
+| `settings.json` | Remembered provider, models and options, plus what the wizard wrote elsewhere |
+| `env` | Your key, written by the wizard (`KEY=value`, file mode 600). Loaded at startup; an `export` in your shell wins over it |
 | `sessions/` | Your conversations, one file each |
 | `mcp.json` | Your MCP servers |
 | `history.txt` | Prompts you've typed (for ↑ / ↓) |
