@@ -37,6 +37,12 @@ impl Provider for ScriptedProvider {
             created_at: String::new(),
             max_input_tokens: Some(1_000_000),
             max_tokens: Some(128_000),
+        }, ModelInfo {
+            id: "small".into(),
+            display_name: "8K model".into(),
+            created_at: String::new(),
+            max_input_tokens: Some(8192),
+            max_tokens: Some(8192),
         }])
     }
     async fn complete(&self, req: ProviderRequest) -> anyhow::Result<ProviderResponse> {
@@ -412,4 +418,44 @@ fn config_overrides_beat_the_catalog() {
     assert_eq!(l.compact_at_tokens, 0);
     assert_eq!(l.context_window, Some(1_000_000));
     assert_eq!(p.requests.lock().unwrap()[0].max_tokens, 1_000);
+}
+
+#[test]
+fn small_context_reserves_input_and_tools_on_every_turn() {
+    let p = ScriptedProvider::new(vec![tool_call("t1", "echo", json!({"msg": "ping"})), text("hello")]);
+    let mut a = agent_with(p.clone(), AgentConfig { model: "small".into(), ..Default::default() });
+    collect(&mut a, "hello").0.unwrap();
+    let reqs = p.requests.lock().unwrap();
+    assert_eq!(reqs.len(), 2);
+    for req in reqs.iter() {
+        let input = serde_json::to_vec(&(&req.system, &req.messages, &req.tools)).unwrap().len() as u64
+            + 256 + 16 * (req.messages.len() + req.tools.len()) as u64;
+        assert!(req.max_tokens > 0);
+        assert!(u64::from(req.max_tokens) + input <= 8192);
+        assert!(req.max_tokens < 7800, "must reserve at least the reported 392 input tokens");
+    }
+    assert!(reqs[1].max_tokens < reqs[0].max_tokens, "tool history consumes context");
+}
+
+#[test]
+fn small_context_clamps_explicit_output_and_compaction() {
+    let p = ScriptedProvider::new(vec![text("hello"), text("SUMMARY")]);
+    let mut a = agent_with(p.clone(), AgentConfig {
+        model: "small".into(), max_tokens: Some(32_768), ..Default::default()
+    });
+    collect(&mut a, "hello").0.unwrap();
+    a.history.push(Message::user_text("x".repeat(4500)));
+    tokio::runtime::Runtime::new().unwrap().block_on(a.compact()).unwrap();
+    let reqs = p.requests.lock().unwrap();
+    assert!(reqs[0].max_tokens < 8192);
+    assert!(reqs[1].max_tokens > 0 && reqs[1].max_tokens < 4096);
+}
+
+#[test]
+fn oversized_input_fails_locally_without_sending_request() {
+    let p = ScriptedProvider::new(vec![]);
+    let mut a = agent_with(p.clone(), AgentConfig { model: "small".into(), ..Default::default() });
+    let err = collect(&mut a, &"界".repeat(8192)).0.unwrap_err();
+    assert!(err.to_string().contains("context budget"), "{err}");
+    assert!(p.requests.lock().unwrap().is_empty());
 }
