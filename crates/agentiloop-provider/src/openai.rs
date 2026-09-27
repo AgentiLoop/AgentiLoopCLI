@@ -80,10 +80,14 @@ impl OpenAIProvider {
         anyhow::anyhow!(msg)
     }
 
-    async fn send_chat(&self, req: &ProviderRequest, stream: bool) -> anyhow::Result<reqwest::Response> {
-        let body = WireRequest {
+    /// api.openai.com wants `max_completion_tokens` (its newer models reject
+    /// `max_tokens`); every other compatible server gets `max_tokens`.
+    fn wire_request<'a>(&self, req: &'a ProviderRequest, stream: bool) -> WireRequest<'a> {
+        let official = self.base_url.starts_with("https://api.openai.com");
+        WireRequest {
             model: &req.model,
-            max_tokens: req.max_tokens,
+            max_tokens: (!official).then_some(req.max_tokens),
+            max_completion_tokens: official.then_some(req.max_tokens),
             messages: to_wire_messages(&req.system, &req.messages),
             tools: req
                 .tools
@@ -95,8 +99,11 @@ impl OpenAIProvider {
                 .collect(),
             stream,
             stream_options: stream.then_some(WireStreamOptions { include_usage: true }),
-        };
+        }
+    }
 
+    async fn send_chat(&self, req: &ProviderRequest, stream: bool) -> anyhow::Result<reqwest::Response> {
+        let body = self.wire_request(req, stream);
         let resp = self
             .auth(self.client.post(format!("{}/chat/completions", self.base_url)))
             .json(&body)
@@ -178,7 +185,12 @@ fn is_snapshot_date(s: &str) -> bool {
 #[derive(Serialize)]
 struct WireRequest<'a> {
     model: &'a str,
-    max_tokens: u32,
+    /// Legacy output cap; still what Ollama, LM Studio and most compatible servers read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_tokens: Option<u32>,
+    /// OpenAI's replacement — its gpt-5 / o-series models 400 on `max_tokens`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_completion_tokens: Option<u32>,
     messages: Vec<WireMessage<'a>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     tools: Vec<WireTool<'a>>,
@@ -1031,6 +1043,22 @@ data: [DONE]
         let p = p.with_identity("omlx", "");
         assert_eq!(p.name(), "omlx");
         assert_eq!(p.default_model(), "");
+    }
+
+    // api.openai.com 400s on `max_tokens` for gpt-5 / o-series ("Use
+    // 'max_completion_tokens' instead"); other servers keep `max_tokens`.
+    #[test]
+    fn output_cap_field_depends_on_host() {
+        let body = |base: &str| {
+            let r = req();
+            serde_json::to_value(OpenAIProvider::new("k", base).wire_request(&r, false)).unwrap()
+        };
+        let official = body(DEFAULT_BASE_URL);
+        assert_eq!(official["max_completion_tokens"], 16);
+        assert!(official.get("max_tokens").is_none());
+        let local = body("http://localhost:11434/v1");
+        assert_eq!(local["max_tokens"], 16);
+        assert!(local.get("max_completion_tokens").is_none());
     }
 }
 
