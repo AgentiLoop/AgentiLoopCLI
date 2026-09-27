@@ -285,6 +285,10 @@ AgentiLoop a besoin d'un modèle avec qui parler.
 
 **Le plus simple :** lancez simplement `agentiloop`. Sur une machine sans clé configurée, un court assistant démarre : il demande quel fournisseur vous voulez, prend votre clé (saisie masquée), vérifie la connexion, vous laisse choisir un modèle et enregistre la clé dans `~/.agentiloop/env` (seul AgentiLoop le lit). Vous pouvez le relancer à tout moment avec `agentiloop --setup`, et `agentiloop --reset` remet tout à neuf.
 
+<img src="docs/setup-wizard-tui.png" width="900" alt="L'assistant de configuration dans l'interface plein écran (TUI) : fournisseur, clé API masquée, test de connexion, liste des modèles, emplacement de la clé, puis la première demande" />
+
+L'assistant s'exécute dans l'interface que vous utilisez. `agentiloop --setup` pose ses questions dans le terminal classique ; `agentiloop --setup --tui` (ou une TUI mémorisée) les pose dans l'interface plein écran, comme sur la capture, et vous amène directement à l'invite une fois terminé. Dans une session en cours, `/setup` fait la même chose dans les deux.
+
 **À la main :** définissez plutôt l'une de ces variables dans votre terminal :
 
 | Je veux utiliser… | Faites ceci |
@@ -397,7 +401,7 @@ Chaque option peut aussi être définie par une variable d'environnement, indiqu
 | `-C, --cwd <folder>` | | Travaille dans un autre dossier que celui où vous êtes |
 | `--yes` | `AGENTILOOP_YES` | Ne demande rien avant de lancer les outils. ⚠️ Uniquement pour un usage automatisé et de confiance |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | Ne démarre pas les serveurs MCP (voir ci-dessous) |
-| `--setup` | | Relance l'assistant de première configuration (fournisseur, clé, modèle) |
+| `--setup` | | Relance l'assistant de première configuration (fournisseur, clé, modèle). Avec `--tui`, il s'exécute dans l'interface plein écran |
 | `--reset` | | Retour à neuf : supprime `~/.agentiloop`, le bloc agentiloop de votre profil shell et les éléments du Trousseau créés par l'assistant (sous Windows : les variables d'environnement utilisateur qu'il a définies). Les lignes `export` écrites à la main sont seulement mises en commentaire, et seulement si vous acceptez. Ajoutez `--yes` pour sauter les questions |
 | `--max-turns <n>` | | Nombre maximal d'étapes que l'agent peut faire par demande (50 par défaut) |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | Quand résumer une longue conversation (150000 par défaut, `0` = jamais) |

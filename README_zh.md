@@ -285,6 +285,10 @@ AgentiLoop 需要一个可以对话的模型。
 
 **最简单的方式：** 直接运行 `agentiloop`。在没有配置密钥的机器上，它会启动一个简短的向导：询问你想用哪个提供方，接收你的密钥（隐藏输入），检查连接，让你选择模型，然后把密钥保存到 `~/.agentiloop/env`（只有 AgentiLoop 会读取它）。你可以随时用 `agentiloop --setup` 重新运行向导，`agentiloop --reset` 则把一切恢复到初始状态。
 
+<img src="docs/setup-wizard-tui.png" width="900" alt="在全屏 TUI 中运行的设置向导：提供方、隐藏的 API 密钥、连接检查、模型列表、密钥保存位置，然后是第一条提示" />
+
+向导会在你使用的界面中运行。`agentiloop --setup` 在普通终端里提问；`agentiloop --setup --tui`（或记住的 TUI）像截图那样在全屏界面里提问，完成后直接进入提示符。在会话中，`/setup` 在两种界面里都能做同样的事。
+
 **手动方式：** 改为在终端中设置以下其中一项：
 
 | 我想使用… | 这样做 |
@@ -397,7 +401,7 @@ agentiloop --new          # 开始一段新对话（旧对话仍会保存）
 | `-C, --cwd <folder>` | | 在与当前所在位置不同的文件夹中工作 |
 | `--yes` | `AGENTILOOP_YES` | 运行工具前不询问。⚠️ 仅用于可信的自动化场景 |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | 不启动 MCP 服务器（见下文） |
-| `--setup` | | 重新运行首次设置向导（提供方、密钥、模型） |
+| `--setup` | | 重新运行首次设置向导（提供方、密钥、模型）。加上 `--tui` 可在全屏界面中运行 |
 | `--reset` | | 恢复初始状态：删除 `~/.agentiloop`、shell 配置文件中的 agentiloop 块，以及向导创建的钥匙串项（Windows 上：向导设置的用户环境变量）。手写的 `export` 行只会被注释掉，而且仅在你同意时。加上 `--yes` 可跳过询问 |
 | `--max-turns <n>` | | 智能体每个请求最多可执行的步数（默认 50） |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | 何时对长对话进行总结（默认 150000，`0` = 从不） |

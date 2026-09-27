@@ -289,6 +289,10 @@ AgentiLoop needs a model to talk to.
 
 **Easiest:** just run `agentiloop`. On a machine with no key set up it starts a short wizard that asks which provider you want, takes your key (typed hidden), checks the connection, lets you pick a model and saves the key to `~/.agentiloop/env` (only AgentiLoop reads it). You can rerun it any time with `agentiloop --setup`, and `agentiloop --reset` puts everything back to brand new.
 
+<img src="docs/setup-wizard-tui.png" width="900" alt="The setup wizard running inside the full-screen TUI: provider, hidden API key, connection check, model list, where to save the key, then the first prompt" />
+
+The wizard runs in whichever interface you use. `agentiloop --setup` asks its questions on the plain terminal; `agentiloop --setup --tui` (or a remembered TUI) asks them inside the full-screen interface, as in the screenshot, and drops you straight into the prompt when it is done. Inside a running session, `/setup` does the same in both.
+
 **By hand:** set one of these in your terminal instead:
 
 | I want to use… | Do this |
@@ -401,7 +405,7 @@ Every option can also be set with an environment variable, shown in the second c
 | `-C, --cwd <folder>` | | Work in a different folder than the one you're in |
 | `--yes` | `AGENTILOOP_YES` | Don't ask before running tools. ⚠️ Only for trusted, automated use |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | Don't start MCP servers (see below) |
-| `--setup` | | Run the first-time wizard again (provider, key, model) |
+| `--setup` | | Run the first-time wizard again (provider, key, model). Combine with `--tui` to run it inside the full-screen interface |
 | `--reset` | | Back to brand new: deletes `~/.agentiloop`, the agentiloop block in your shell profile and Keychain items the wizard created (on Windows: the user environment variables it set). Hand-written `export` lines are only commented out, and only if you say yes. Add `--yes` to skip the questions |
 | `--max-turns <n>` | | Max steps the agent may take per request (default 50) |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | When to summarize a long conversation (default 150000, `0` = never) |

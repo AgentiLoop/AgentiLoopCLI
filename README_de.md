@@ -285,6 +285,10 @@ AgentiLoop braucht ein Modell, mit dem es sprechen kann.
 
 **Am einfachsten:** Führe einfach `agentiloop` aus. Auf einem Rechner ohne eingerichteten Schlüssel startet ein kurzer Assistent: Er fragt, welchen Anbieter du möchtest, nimmt deinen Schlüssel entgegen (versteckt eingegeben), prüft die Verbindung, lässt dich ein Modell wählen und speichert den Schlüssel in `~/.agentiloop/env` (nur AgentiLoop liest sie). Du kannst ihn jederzeit mit `agentiloop --setup` erneut starten, und `agentiloop --reset` setzt alles auf den Anfangszustand zurück.
 
+<img src="docs/setup-wizard-tui.png" width="900" alt="Der Einrichtungsassistent in der Vollbild-Oberfläche (TUI): Anbieter, verdeckter API-Schlüssel, Verbindungstest, Modellliste, Speicherort des Schlüssels, dann die erste Eingabe" />
+
+Der Assistent läuft in der Oberfläche, die du benutzt. `agentiloop --setup` stellt seine Fragen im normalen Terminal; `agentiloop --setup --tui` (oder eine gemerkte TUI) stellt sie in der Vollbild-Oberfläche wie im Screenshot und bringt dich danach direkt zur Eingabezeile. In einer laufenden Sitzung macht `/setup` in beiden dasselbe.
+
 **Von Hand:** Setze stattdessen eine dieser Variablen in deinem Terminal:
 
 | Ich möchte nutzen… | So geht's |
@@ -397,7 +401,7 @@ Jede Option lässt sich auch über eine Umgebungsvariable setzen, die in der zwe
 | `-C, --cwd <folder>` | | Arbeitet in einem anderen Ordner als dem, in dem du gerade bist |
 | `--yes` | `AGENTILOOP_YES` | Fragt nicht, bevor Tools ausgeführt werden. ⚠️ Nur für vertrauenswürdige, automatisierte Nutzung |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | Startet keine MCP-Server (siehe unten) |
-| `--setup` | | Startet den Einrichtungsassistenten erneut (Anbieter, Schlüssel, Modell) |
+| `--setup` | | Startet den Einrichtungsassistenten erneut (Anbieter, Schlüssel, Modell). Zusammen mit `--tui` läuft er in der Vollbild-Oberfläche |
 | `--reset` | | Zurück auf Anfang: löscht `~/.agentiloop`, den agentiloop-Block in deinem Shell-Profil und die vom Assistenten angelegten Schlüsselbund-Einträge (unter Windows: die von ihm gesetzten Benutzer-Umgebungsvariablen). Von Hand geschriebene `export`-Zeilen werden nur auskommentiert, und nur wenn du zustimmst. Mit `--yes` entfallen die Rückfragen |
 | `--max-turns <n>` | | Maximale Anzahl Schritte, die der Agent pro Anfrage machen darf (Standard 50) |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | Wann eine lange Unterhaltung zusammengefasst wird (Standard 150000, `0` = nie) |
