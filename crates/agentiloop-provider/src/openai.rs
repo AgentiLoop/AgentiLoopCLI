@@ -10,11 +10,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
+/// OpenAI's per-model doc pages (`<id>.md`), the only place OpenAI publishes
+/// context windows and output caps — `/models` doesn't carry them.
+const MODEL_DOCS_URL: &str = "https://developers.openai.com/api/docs/models";
 
 pub struct OpenAIProvider {
     client: reqwest::Client,
     api_key: String,
     base_url: String,
+    model_docs_url: String,
     name: &'static str,
     default_model: String,
 }
@@ -26,6 +30,7 @@ impl OpenAIProvider {
             client: reqwest::Client::new(),
             api_key: api_key.into().trim().to_string(),
             base_url: base_url.trim_end_matches('/').to_string(),
+            model_docs_url: MODEL_DOCS_URL.into(),
             name: "openai",
             default_model: "gpt-4o-mini".into(),
         }
@@ -137,6 +142,35 @@ impl OpenAIProvider {
             (m, n) => m.or(n),
         }
     }
+
+    /// OpenAI's published `(context window, max output)` for one of its own
+    /// models, fetched from the model's doc page. Dated snapshots
+    /// (`o1-mini-2024-09-12`) have no page of their own, so the date suffix
+    /// is dropped and the family page is used instead.
+    async fn openai_published_limits(&self, id: &str) -> Option<(u64, u32)> {
+        if !looks_like_openai_model(id) {
+            return None;
+        }
+        let family = id
+            .len()
+            .checked_sub(11)
+            .map(|at| id.split_at(at))
+            .filter(|(_, tail)| tail.starts_with('-') && is_snapshot_date(&tail[1..]))
+            .map(|(family, _)| family);
+        for page in std::iter::once(id).chain(family) {
+            let resp = self.client.get(format!("{}/{page}.md", self.model_docs_url)).send().await.ok()?;
+            if !resp.status().is_success() {
+                continue;
+            }
+            return parse_model_doc(&resp.text().await.ok()?);
+        }
+        None
+    }
+}
+
+/// `YYYY-MM-DD` as used in OpenAI snapshot ids.
+fn is_snapshot_date(s: &str) -> bool {
+    s.len() == 10 && s.chars().enumerate().all(|(i, c)| if i == 4 || i == 7 { c == '-' } else { c.is_ascii_digit() })
 }
 
 // ---- request wire types -----------------------------------------------------
@@ -320,25 +354,32 @@ struct WireOllamaShow {
     parameters: String,
 }
 
-/// Published limits (context window, max output) for OpenAI's own models,
-/// which `/models` doesn't report. Longest matching prefix wins.
-fn openai_limits(id: &str) -> Option<(u64, u32)> {
-    const TABLE: &[(&str, u64, u32)] = &[
-        ("gpt-5", 400_000, 128_000),
-        ("gpt-4.1", 1_047_576, 32_768),
-        ("gpt-4o", 128_000, 16_384),
-        ("gpt-4-turbo", 128_000, 4_096),
-        ("gpt-3.5-turbo", 16_385, 4_096),
-        ("o1-mini", 128_000, 65_536),
-        ("o1", 200_000, 100_000),
-        ("o3", 200_000, 100_000),
-        ("o4-mini", 200_000, 100_000),
-    ];
-    TABLE
-        .iter()
-        .filter(|(prefix, _, _)| id.starts_with(prefix))
-        .max_by_key(|(prefix, _, _)| prefix.len())
-        .map(|&(_, input, output)| (input, output))
+/// Pulls `(context window, max output)` out of an OpenAI model doc page
+/// (`developers.openai.com/api/docs/models/<id>.md`). The "Model details"
+/// list carries lines like `- 400,000 context window`,
+/// `- Maximum input tokens: 272,000` and `- 128,000 max output tokens`;
+/// the explicit input cap wins over the context window when both appear.
+fn parse_model_doc(md: &str) -> Option<(u64, u32)> {
+    fn number(md: &str, label: &str) -> Option<u64> {
+        md.lines()
+            .filter_map(|l| l.trim_start().strip_prefix("- "))
+            .find(|l| l.contains(label))?
+            .split(|c: char| !c.is_ascii_digit() && c != ',')
+            .find(|w| w.chars().any(|c| c.is_ascii_digit()))?
+            .replace(',', "")
+            .parse()
+            .ok()
+    }
+    let input = number(md, "Maximum input tokens").or_else(|| number(md, "context window"))?;
+    let output = number(md, "max output tokens")?;
+    Some((input, u32::try_from(output).ok()?))
+}
+
+/// Does this id look like one of OpenAI's own models (`gpt-*`, `chatgpt-*`, `o1`…`o4`)?
+fn looks_like_openai_model(id: &str) -> bool {
+    id.starts_with("gpt-")
+        || id.starts_with("chatgpt-")
+        || (id.starts_with('o') && id[1..].starts_with(|c: char| c.is_ascii_digit()))
 }
 
 // streaming
@@ -459,9 +500,11 @@ impl Provider for OpenAIProvider {
         if info.max_input_tokens.is_none() {
             info.max_input_tokens = self.ollama_context_length(id).await;
         }
-        if let Some((input, output)) = openai_limits(id) {
-            info.max_input_tokens.get_or_insert(input);
-            info.max_tokens.get_or_insert(output);
+        if info.max_input_tokens.is_none() || info.max_tokens.is_none() {
+            if let Some((input, output)) = self.openai_published_limits(id).await {
+                info.max_input_tokens.get_or_insert(input);
+                info.max_tokens.get_or_insert(output);
+            }
         }
         Ok(Some(info))
     }
@@ -772,22 +815,51 @@ data: [DONE]
         assert!(p.model_info("missing").await.unwrap().is_none());
     }
 
+    // Trimmed from developers.openai.com/api/docs/models/{gpt-4o-mini,gpt-5}.md.
+    const DOC_4O_MINI: &str = "# GPT-4o mini\n\n## Model details\n\n- Default snapshot: `gpt-4o-mini-2024-07-18`\n- 128,000 context window\n- 16,384 max output tokens\n- Oct 01, 2023 knowledge cutoff\n";
+    const DOC_GPT5: &str = "# GPT-5\n\n- 400,000 context window\n- Maximum input tokens: 272,000\n- 128,000 max output tokens\n";
+
     #[tokio::test]
-    async fn model_info_fills_in_openai_published_limits() {
+    async fn model_info_pulls_openai_published_limits_from_model_docs() {
         // No `/v1` suffix, so no Ollama probe; `/models` carries no limits.
-        let base = serve_routes(&[("/models", r#"{"data":[{"id":"gpt-4o-mini"},{"id":"llama3"}]}"#)]).await;
-        let p = OpenAIProvider::new("k", base);
+        let base = serve_routes(&[
+            ("/models", r#"{"data":[{"id":"gpt-4o-mini"},{"id":"gpt-4o-mini-2024-07-18"},{"id":"gpt-5"},{"id":"llama3"}]}"#),
+            ("/docs/gpt-4o-mini.md", DOC_4O_MINI),
+            ("/docs/gpt-5.md", DOC_GPT5),
+        ])
+        .await;
+        let mut p = OpenAIProvider::new("k", base.clone());
+        p.model_docs_url = format!("{base}/docs");
         let m = p.model_info("gpt-4o-mini").await.unwrap().unwrap();
         assert_eq!((m.max_input_tokens, m.max_tokens), (Some(128_000), Some(16_384)));
+        // Dated snapshot has no page of its own → family page.
+        let m = p.model_info("gpt-4o-mini-2024-07-18").await.unwrap().unwrap();
+        assert_eq!((m.max_input_tokens, m.max_tokens), (Some(128_000), Some(16_384)));
+        // Explicit input cap beats the context window.
+        let m = p.model_info("gpt-5").await.unwrap().unwrap();
+        assert_eq!((m.max_input_tokens, m.max_tokens), (Some(272_000), Some(128_000)));
         let m = p.model_info("llama3").await.unwrap().unwrap();
         assert_eq!((m.max_input_tokens, m.max_tokens), (None, None));
     }
 
     #[test]
-    fn openai_limits_prefer_longest_prefix() {
-        assert_eq!(openai_limits("o1-mini-2024-09-12"), Some((128_000, 65_536)));
-        assert_eq!(openai_limits("o1-preview"), Some((200_000, 100_000)));
-        assert_eq!(openai_limits("gpt-4.1-nano"), Some((1_047_576, 32_768)));
-        assert_eq!(openai_limits("gpt-oss:120b"), None);
+    fn model_doc_parsing_ignores_prose_and_needs_both_limits() {
+        // gpt-4.1-nano's blurb mentions "1M token context window" in prose; only the details list counts.
+        let md = "GPT-4.1 nano: 1M token context window, and low latency.\n\n- 1,047,576 context window\n- 32,768 max output tokens\n";
+        assert_eq!(parse_model_doc(md), Some((1_047_576, 32_768)));
+        assert_eq!(parse_model_doc("- 128,000 context window\n"), None);
+        assert_eq!(parse_model_doc("## Model details\n"), None);
+    }
+
+    #[test]
+    fn only_openai_looking_ids_are_looked_up() {
+        for id in ["gpt-4o", "gpt-5.2", "chatgpt-4o-latest", "o1-mini", "o3", "o4-mini-2025-04-16"] {
+            assert!(looks_like_openai_model(id), "{id}");
+        }
+        for id in ["llama3", "qwen3:4b", "olmo-2", "claude-3", "o"] {
+            assert!(!looks_like_openai_model(id), "{id}");
+        }
+        assert!(is_snapshot_date("2024-09-12"));
+        assert!(!is_snapshot_date("preview"));
     }
 }
