@@ -1,7 +1,9 @@
 //! Model backends: Anthropic Messages API, OpenAI-compatible Chat Completions
-//! (OpenAI, Ollama, LM Studio, Groq, OpenRouter, …), and oMLX (local MLX server).
+//! (OpenAI, Ollama, LM Studio, Groq, OpenRouter, …), oMLX (local MLX server),
+//! and Codex (ChatGPT subscription via `codex login`).
 
 pub mod anthropic;
+pub mod codex;
 pub mod omlx;
 pub mod openai;
 
@@ -10,13 +12,15 @@ use std::sync::Arc;
 use agentiloop_core::Provider;
 pub use agentiloop_core::ModelInfo;
 pub use anthropic::AnthropicProvider;
+pub use codex::CodexProvider;
 pub use openai::OpenAIProvider;
 
-/// Build a provider by name (`anthropic` | `openai` | `omlx`), or pick one from
-/// the environment when `name` is `None`: Anthropic if `ANTHROPIC_API_KEY` /
-/// `ANTHROPIC_OAUTH_TOKEN` is set, otherwise OpenAI if `OPENAI_API_KEY` or
-/// `OPENAI_BASE_URL` is set, otherwise oMLX if `OMLX_BASE_URL` / `OMLX_PORT` /
-/// `OMLX_API_KEY` is set.
+/// Build a provider by name (`anthropic` | `openai` | `omlx` | `codex`), or pick
+/// one from the environment when `name` is `None`: Anthropic if
+/// `ANTHROPIC_API_KEY` / `ANTHROPIC_OAUTH_TOKEN` is set, otherwise OpenAI if
+/// `OPENAI_API_KEY` or `OPENAI_BASE_URL` is set, otherwise oMLX if
+/// `OMLX_BASE_URL` / `OMLX_PORT` / `OMLX_API_KEY` is set, otherwise Codex if
+/// `codex login` has left an auth.json behind.
 pub fn from_env(name: Option<&str>) -> anyhow::Result<Arc<dyn Provider>> {
     let has = |k: &str| std::env::var_os(k).is_some_and(|v| !v.is_empty());
     let name = match name {
@@ -24,14 +28,16 @@ pub fn from_env(name: Option<&str>) -> anyhow::Result<Arc<dyn Provider>> {
         None if has("ANTHROPIC_API_KEY") || has("ANTHROPIC_OAUTH_TOKEN") => "anthropic".into(),
         None if has("OPENAI_API_KEY") || has("OPENAI_BASE_URL") => "openai".into(),
         None if has("OMLX_BASE_URL") || has("OMLX_PORT") || has("OMLX_API_KEY") => "omlx".into(),
+        None if CodexProvider::from_env().is_ok() => "codex".into(),
         None => anyhow::bail!(
-            "no provider credentials found: set ANTHROPIC_API_KEY, OPENAI_API_KEY / OPENAI_BASE_URL (e.g. http://localhost:11434/v1 for Ollama), or use `-p omlx` for a local oMLX server; run `agentiloop --setup` for a guided setup"
+            "no provider credentials found: set ANTHROPIC_API_KEY, OPENAI_API_KEY / OPENAI_BASE_URL (e.g. http://localhost:11434/v1 for Ollama), use `-p omlx` for a local oMLX server, or run `codex login` and use `-p codex` for your ChatGPT plan; run `agentiloop --setup` for a guided setup"
         ),
     };
     Ok(match name.as_str() {
         "anthropic" => Arc::new(AnthropicProvider::from_env()?),
         "openai" => Arc::new(OpenAIProvider::from_env()?),
         "omlx" => Arc::new(omlx::from_env()?),
-        other => anyhow::bail!("unknown provider `{other}` (expected anthropic, openai, or omlx)"),
+        "codex" => Arc::new(CodexProvider::from_env()?),
+        other => anyhow::bail!("unknown provider `{other}` (expected anthropic, openai, omlx, or codex)"),
     })
 }

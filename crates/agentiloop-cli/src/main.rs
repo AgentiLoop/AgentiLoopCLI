@@ -20,9 +20,10 @@ use rustyline::error::ReadlineError;
 #[command(name = "agentiloop", version, about)]
 struct Cli {
     /// Model backend: `anthropic`, `openai` (OpenAI-compatible: OpenAI, Ollama,
-    /// LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL), or `omlx` (local
-    /// oMLX server, http://localhost:8000/v1). Defaults to the last one used,
-    /// then auto-detected from which credentials are set.
+    /// LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL), `omlx` (local
+    /// oMLX server, http://localhost:8000/v1), or `codex` (ChatGPT plan via
+    /// `codex login`). Defaults to the last one used, then auto-detected from
+    /// which credentials are set.
     #[arg(short, long, env = "AGENTILOOP_PROVIDER")]
     provider: Option<String>,
 
@@ -148,6 +149,10 @@ async fn main() -> Result<()> {
 
         let provider = agentiloop_provider::from_env(cli.provider.as_deref().or(last.provider.as_deref()))?;
         let mut tools = agentiloop_tools::default_registry();
+        // Codex models are trained on apply_patch; other providers keep the plain edit tools.
+        if provider.name() == "codex" {
+            tools.register(agentiloop_tools::ApplyPatch);
+        }
         let mcp = if cli.no_mcp {
             agentiloop_mcp::McpManager::default()
         } else {

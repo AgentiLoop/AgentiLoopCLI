@@ -265,9 +265,10 @@ async fn connect(p: &mut dyn Prompter) -> Result<Connected> {
              1  Claude (Anthropic) — API key from console.anthropic.com\n  \
              2  OpenAI — API key from platform.openai.com\n  \
              3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)\n  \
-             4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)",
+             4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)\n  \
+             5  Codex — your ChatGPT Plus/Pro plan (sign in first with `codex login`)",
         );
-        let (name, vars): (&'static str, Vec<(String, String)>) = match choose(p, "Provider", 4, 1).await? {
+        let (name, vars): (&'static str, Vec<(String, String)>) = match choose(p, "Provider", 5, 1).await? {
             1 => ("anthropic", vec![("ANTHROPIC_API_KEY".into(), p.ask_secret("Anthropic API key (starts with sk-ant-, input hidden): ").await?)]),
             2 => ("openai", vec![("OPENAI_API_KEY".into(), p.ask_secret("OpenAI API key (starts with sk-, input hidden): ").await?)]),
             3 => {
@@ -278,7 +279,7 @@ async fn connect(p: &mut dyn Prompter) -> Result<Connected> {
                 }
                 ("openai", v)
             }
-            _ => {
+            4 => {
                 let omlx_settings = dirs::home_dir().map(|h| h.join(".omlx/settings.json")).filter(|p| p.is_file());
                 let v = match omlx_settings {
                     Some(_) => Vec::new(),
@@ -286,6 +287,8 @@ async fn connect(p: &mut dyn Prompter) -> Result<Connected> {
                 };
                 ("omlx", v)
             }
+            // Tokens come from ~/.codex/auth.json; nothing to store here.
+            _ => ("codex", Vec::new()),
         };
         if vars.iter().any(|(k, v)| k.ends_with("_KEY") && v.is_empty()) {
             p.say("The key is empty.");
