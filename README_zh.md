@@ -105,17 +105,15 @@ AgentiLoop 是智能体，而它的"大脑"是你为它连接的 AI 模型。请
 ~/.local/bin/agentiloop
 ```
 
-向导会带你完成五个简短的步骤。按 **Enter** 接受默认值，或者输入一个数字：
+第一次运行时，如果还没有配置密钥，向导会自动启动。它大约需要一分钟，会询问五件事：
 
-1. **提供方**：输入 `1` 选择 Claude，`2` 选择 OpenAI，`3` 选择 Ollama。
-2. **API 密钥**：粘贴第 2 步中的密钥，然后按 Enter。粘贴时屏幕上不会有任何显示；这是故意的，密钥是隐藏的。Ollama 不需要密钥：在服务器地址处按 Enter，在密钥处再按一次 Enter。
-3. **连接检查**：向导会立即试用这个密钥。如果失败，它会说明原因并让你重试。在成功之前不会保存任何内容。
-4. **模型**：按 Enter 使用默认模型，或从列表中输入一个数字。
-5. **密钥保存位置**：按 Enter。这样它会保存在 `~/.agentiloop/env` 中，这是一个只有 AgentiLoop 会读取的私有文件。
+1. **使用哪个提供方** — Claude、OpenAI、本地兼容 OpenAI 的服务器（Ollama、LM Studio……）或 oMLX。输入一个数字。
+2. **你的 API 密钥** — 隐藏输入，屏幕上不会显示任何内容。本地服务器通常不需要密钥；如果 oMLX 运行在同一台 Mac 上，向导会从 oMLX 自己的设置中读取密钥，所以根本不会问。
+3. **连接检查** — 向导会立即与提供方通信。如果密钥不正确，它会告诉你并让你重试；在成功之前不会保存任何内容。
+4. **使用哪个模型** — 从提供方返回的列表中选择一个，或按 Enter 使用默认模型。之后可以随时用 `/model` 更改。
+5. **把密钥保存在哪里** — 按 Enter 使用默认位置 `~/.agentiloop/env`，这是一个只有 AgentiLoop 会读取的私有文件。（其他选项适合那些还想把密钥放进 shell 或 macOS 钥匙串的人，见快速入门中的[高级：手动设置密钥](#第-2-步连接模型)。）
 
-最后，向导会注意到 `~/.local/bin` 不在你的 PATH 中，并询问 `Add it to PATH in /Users/you/.zshrc?`。按 **Enter**（表示是）。然后它会显示 `All set`，你就进入了提示符。
-
-下面是选择 Claude 并接受默认值时的完整过程：
+最后，向导会注意到 `~/.local/bin` 不在你的 PATH 中，并提议把它加进去。按 **Enter**（表示是）。然后它会显示 `All set`，并把你带到提示符。下面是在普通终端中选择 Claude 并接受默认值的完整过程（你的模型列表会有所不同）：
 
 ```text
 $ ~/.local/bin/agentiloop
@@ -153,11 +151,27 @@ updated /Users/you/.zshrc (between `# >>> agentiloop >>>` and `# <<< agentiloop 
 All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
 ```
 
-你可以直接在这里开始对话，也可以输入 `/exit` 然后继续第 4 步。弄错了？`agentiloop --setup` 会重新运行向导，`agentiloop --reset` 会清除它保存的所有内容。
+你可以直接在这里开始对话，也可以输入 `/exit` 然后继续第 4 步。从现在起，直接输入 `agentiloop` 就会直接进入提示符。
 
-> 🔒 **请保管好你的密钥。** `~/.agentiloop/env` 只有你自己能读取。不要把密钥粘贴到聊天中，也不要提交到 git。在 Mac 上，最后一个问题中的选项 3 会把它存放在钥匙串中，这样它永远不会以明文形式出现在磁盘上。
+对于 Claude，你可以粘贴普通的 API 密钥（`sk-ant-api…`），也可以粘贴 Claude Code 令牌（`sk-ant-oat01-…`，可通过 `claude setup-token` 获取）；AgentiLoop 会自动识别是哪一种。如果你选择了选项 3（Ollama、LM Studio……），向导还会询问服务器 URL，并提供 `http://localhost:11434/v1` 作为默认值，所以对于本地 Ollama 只需按 Enter。
+
+**同一个向导，全屏版本。** 向导会在你使用的界面中运行。加上 `--tui` 启动，同样的问题会出现在全屏界面里；完成后你已经处于提示符：
+
+<img src="docs/setup-wizard-tui.png" width="900" alt="在全屏 TUI 中运行的设置向导：提供方、隐藏的 API 密钥、连接检查、模型列表、密钥保存位置，然后是第一条提示" />
+
+**随时重新运行或重做：**
+
+```bash
+agentiloop --setup          # 在普通终端中运行向导
+agentiloop --setup --tui    # 在全屏 TUI 中运行向导（如截图所示）
+/setup                      # 在运行中的会话里（REPL 或 TUI 均可）
+agentiloop --reset          # 忘掉一切，从初始状态重新开始
+```
+
+> 🔒 **请保管好你的密钥。** `~/.agentiloop/env` 只有你自己能读取。不要把密钥粘贴到聊天中，也不要提交到 git。在 Mac 上，在“Where should the credential be saved?”问题中选择选项 3 会把它存放在钥匙串中，这样它永远不会以明文形式出现在磁盘上。
 
 更想自己用环境变量管理密钥？这也可以，但这是高级路线；请参阅快速入门中的[高级：手动设置密钥](#第-2-步连接模型)。
+
 
 ### 4. 检查是否正常工作
 
@@ -292,68 +306,7 @@ cargo install --path crates/agentiloop-cli
 
 ### 第 2 步：连接模型
 
-AgentiLoop 需要一个可以对话的模型。**你不需要为此设置任何环境变量**：内置的设置向导会问你几个问题，并为你保存所有内容。
-
-#### 设置向导（推荐）
-
-直接运行 `agentiloop`。第一次运行时，如果还没有配置密钥，向导会自动启动。它大约需要一分钟，会询问五件事：
-
-1. **使用哪个提供方** — Claude、OpenAI、本地兼容 OpenAI 的服务器（Ollama、LM Studio……）或 oMLX。输入一个数字。
-2. **你的 API 密钥** — 隐藏输入，屏幕上不会显示任何内容。本地服务器通常不需要密钥；如果 oMLX 运行在同一台 Mac 上，向导会从 oMLX 自己的设置中读取密钥，所以根本不会问。
-3. **连接检查** — 向导会立即与提供方通信。如果密钥不正确，它会告诉你并让你重试；在成功之前不会保存任何内容。
-4. **使用哪个模型** — 从提供方返回的列表中选择一个，或按 Enter 使用默认模型。之后可以随时用 `/model` 更改。
-5. **把密钥保存在哪里** — 按 Enter 使用默认位置 `~/.agentiloop/env`，这是一个只有 AgentiLoop 会读取的私有文件。（其他选项适合那些还想把密钥放进 shell 或 macOS 钥匙串的人，见下文的*高级*部分。）
-
-然后它会显示 `All set`，并把你带到提示符。下面是在普通终端中选择 Claude 并接受默认值的完整过程（你的模型列表会有所不同）：
-
-```text
-$ agentiloop
-Welcome to AgentiLoop! Let's set things up (about a minute).
-Settings are kept in /Users/you/.agentiloop. Run `agentiloop --setup` or `/setup` to redo this, `agentiloop --reset` to start over.
-
-Which model provider do you want to use?
-  1  Claude (Anthropic) — API key from console.anthropic.com
-  2  OpenAI — API key from platform.openai.com
-  3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)
-  4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)
-Provider [1-4, default 1]: 1
-Anthropic API key (starts with sk-ant-, input hidden):
-Checking the connection…
-Connected (8 model(s) available).
-
-Pick a model (change it any time with /model):
-   1  claude-sonnet-5  (default)
-   2  claude-…
-   3  claude-…
-   …
-Model [1-8, an id, or Enter for claude-sonnet-5]:
-
-Where should the credential be saved?
-  1  /Users/you/.agentiloop/env (recommended; only agentiloop reads it, file mode 600)
-  2  Also add it to /Users/you/.zshrc so other tools in your terminal see it
-  3  macOS Keychain, with a line in /Users/you/.zshrc that reads it (nothing stored in plain text)
-Save to [1-3, default 1]:
-saved to /Users/you/.agentiloop/env
-
-All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
-```
-
-就是这样。从现在起，`agentiloop` 会直接进入提示符。
-
-对于 Claude，你可以粘贴普通的 API 密钥（`sk-ant-api…`），也可以粘贴 Claude Code 令牌（`sk-ant-oat01-…`，可通过 `claude setup-token` 获取）；AgentiLoop 会自动识别是哪一种。如果你选择了选项 3（Ollama、LM Studio……），向导还会询问服务器 URL，并提供 `http://localhost:11434/v1` 作为默认值，所以对于本地 Ollama 只需按 Enter。
-
-**同一个向导，全屏版本。** 向导会在你使用的界面中运行。加上 `--tui` 启动，同样的问题会出现在全屏界面里；完成后你已经处于提示符：
-
-<img src="docs/setup-wizard-tui.png" width="900" alt="在全屏 TUI 中运行的设置向导：提供方、隐藏的 API 密钥、连接检查、模型列表、密钥保存位置，然后是第一条提示" />
-
-**随时重新运行或重做：**
-
-```bash
-agentiloop --setup          # 在普通终端中运行向导
-agentiloop --setup --tui    # 在全屏 TUI 中运行向导（如截图所示）
-/setup                      # 在运行中的会话里（REPL 或 TUI 均可）
-agentiloop --reset          # 忘掉一切，从初始状态重新开始
-```
+AgentiLoop 需要一个可以对话的模型。**你不需要为此设置任何环境变量**：直接运行 `agentiloop`，内置的设置向导会问你几个问题，并为你保存所有内容。带完整过程的逐步说明请见上文的[3. 运行设置向导](#3-运行设置向导)。
 
 <details>
 <summary><b>高级：手动设置密钥</b>（如果向导对你有效，可跳过这部分）</summary>

@@ -105,17 +105,15 @@ AgentiLoop는 에이전트예요. "두뇌" 역할은 여기에 연결하는 AI �
 ~/.local/bin/agentiloop
 ```
 
-마법사가 다섯 개의 짧은 단계를 안내해요. **Enter**를 누르면 기본값을 받아들이고, 번호를 입력하면 선택할 수 있어요:
+처음에 아직 키가 설정되어 있지 않으면 마법사가 알아서 시작돼요. 1분 정도 걸리고 다섯 가지를 물어봐요:
 
-1. **프로바이더**: Claude는 `1`, OpenAI는 `2`, Ollama는 `3`을 입력하세요.
-2. **API 키**: 2단계의 키를 붙여 넣고 Enter를 누르세요. 붙여 넣는 동안 화면에 아무것도 표시되지 않는데, 이건 의도된 거예요. 키가 숨겨져 있어요. Ollama에는 키가 필요 없어요: 서버 주소에서 Enter, 키에서 다시 Enter를 누르세요.
-3. **연결 확인**: 마법사가 바로 키를 시험해요. 실패하면 이유를 알려 주고 다시 시도할 수 있게 해 줘요. 성공하기 전까지는 아무것도 저장되지 않아요.
-4. **모델**: Enter를 눌러 기본값을 쓰거나, 목록에서 번호를 입력하세요.
-5. **키를 저장할 위치**: Enter를 누르세요. 그러면 키가 AgentiLoop만 읽는 비공개 파일인 `~/.agentiloop/env`에 저장돼요.
+1. **어떤 프로바이더** — Claude, OpenAI, 로컬 OpenAI 호환 서버 (Ollama, LM Studio, …) 또는 oMLX. 번호를 입력하세요.
+2. **API 키** — 입력은 숨겨져서 화면에 아무것도 표시되지 않아요. 로컬 서버에는 보통 필요 없고, 같은 Mac의 oMLX라면 마법사가 oMLX 자체 설정에서 키를 읽어 오므로 묻지도 않아요.
+3. **연결 확인** — 마법사가 바로 프로바이더와 통신해요. 키가 틀렸으면 알려 주고 다시 시도할 수 있게 해 줘요. 성공하기 전까지는 아무것도 저장되지 않아요.
+4. **어떤 모델** — 프로바이더가 돌려준 목록에서 하나를 고르거나, Enter를 눌러 기본값을 사용하세요. 나중에 `/model`로 언제든 바꿀 수 있어요.
+5. **키를 어디에 보관할지** — Enter를 눌러 기본값인 `~/.agentiloop/env`를 사용하세요. AgentiLoop만 읽는 비공개 파일이에요. (키를 셸이나 macOS 키체인에도 두고 싶은 분들을 위한 다른 선택지는 빠른 시작의 [고급: 키를 직접 설정하기](#2단계-모델-연결하기)에서 다뤄요.)
 
-마지막으로 마법사는 `~/.local/bin`이 PATH에 없다는 것을 알아채고 `Add it to PATH in /Users/you/.zshrc?`라고 물어봐요. **Enter** (예)를 누르세요. 그러면 `All set`이 출력되고 프롬프트에 도착해요.
-
-Claude를 선택하고 기본값을 받아들였을 때 전체 과정은 이렇게 보여요:
+마지막으로 마법사는 `~/.local/bin`이 PATH에 없다는 것을 알아채고 추가할지 물어봐요. **Enter** (예)를 누르세요. 그러면 `All set`이라고 표시되고 프롬프트로 이어져요. 일반 터미널에서 Claude를 선택하고 기본값을 그대로 받아들인 전체 실행 과정은 이렇게 보여요 (모델 목록은 다를 수 있어요):
 
 ```text
 $ ~/.local/bin/agentiloop
@@ -153,11 +151,27 @@ updated /Users/you/.zshrc (between `# >>> agentiloop >>>` and `# <<< agentiloop 
 All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
 ```
 
-여기서 바로 대화를 시작해도 되고, `/exit`를 입력하고 4단계로 넘어가도 돼요. 실수하셨나요? `agentiloop --setup`은 마법사를 다시 실행하고, `agentiloop --reset`은 저장된 모든 것을 지워요.
+여기서 바로 대화를 시작해도 되고, `/exit`를 입력하고 4단계로 넘어가도 돼요. 이제부터는 그냥 `agentiloop`만 입력하면 바로 프롬프트로 시작돼요.
 
-> 🔒 **키는 비밀로 지켜 주세요.** `~/.agentiloop/env`는 여러분만 읽을 수 있어요. 키를 채팅에 붙여 넣거나 git에 커밋하지 마세요. Mac에서는 마지막 질문에서 3번을 고르면 대신 키체인에 저장되므로, 평문으로 디스크에 남지 않아요.
+Claude에는 일반 API 키 (`sk-ant-api…`)나 Claude Code 토큰 (`sk-ant-oat01-…`, `claude setup-token`으로 받을 수 있어요) 중 어느 것이든 붙여 넣을 수 있어요. AgentiLoop가 어떤 종류인지 알아서 감지해요. 3번 (Ollama, LM Studio, …)을 선택했다면 마법사가 서버 URL도 묻고 기본값으로 `http://localhost:11434/v1`을 제시하므로, 로컬 Ollama라면 Enter만 누르면 돼요.
+
+**같은 마법사, 전체 화면으로.** 마법사는 사용 중인 인터페이스 안에서 실행돼요. `--tui`로 시작하면 같은 질문이 전체 화면 인터페이스 안에 나타나고, 끝나면 이미 프롬프트에 있어요:
+
+<img src="docs/setup-wizard-tui.png" width="900" alt="전체 화면 TUI 안에서 실행되는 설정 마법사: 프로바이더, 숨겨진 API 키, 연결 확인, 모델 목록, 키 저장 위치, 그리고 첫 프롬프트" />
+
+**언제든 다시 실행하거나 다시 하기:**
+
+```bash
+agentiloop --setup          # 일반 터미널에서 마법사
+agentiloop --setup --tui    # 전체 화면 TUI 안에서 마법사 (스크린샷처럼)
+/setup                      # 실행 중인 세션 안에서 (REPL 또는 TUI)
+agentiloop --reset          # 모든 것을 잊고 처음 상태에서 시작
+```
+
+> 🔒 **키는 비밀로 지켜 주세요.** `~/.agentiloop/env`는 여러분만 읽을 수 있어요. 키를 채팅에 붙여 넣거나 git에 커밋하지 마세요. Mac에서는 “Where should the credential be saved?” 질문에서 3번을 고르면 대신 키체인에 저장되므로, 평문으로 디스크에 남지 않아요.
 
 환경 변수로 키를 직접 관리하고 싶으신가요? 그것도 가능하지만 고급 방법이에요. 빠른 시작의 [고급: 키를 직접 설정하기](#2단계-모델-연결하기)를 참고하세요.
+
 
 ### 4. 잘 동작하는지 확인하기
 
@@ -292,68 +306,7 @@ cargo install --path crates/agentiloop-cli
 
 ### 2단계: 모델 연결하기
 
-AgentiLoop는 대화할 모델이 필요해요. **이를 위해 환경 변수를 설정할 필요는 없어요**: 내장 설정 마법사가 몇 가지 질문을 하고 모든 것을 대신 저장해 줘요.
-
-#### 설정 마법사 (추천)
-
-그냥 `agentiloop`를 실행하세요. 처음에 아직 키가 설정되어 있지 않으면 마법사가 알아서 시작돼요. 1분 정도 걸리고 다섯 가지를 물어봐요:
-
-1. **어떤 프로바이더** — Claude, OpenAI, 로컬 OpenAI 호환 서버 (Ollama, LM Studio, …) 또는 oMLX. 번호를 입력하세요.
-2. **API 키** — 입력은 숨겨져서 화면에 아무것도 표시되지 않아요. 로컬 서버에는 보통 필요 없고, 같은 Mac의 oMLX라면 마법사가 oMLX 자체 설정에서 키를 읽어 오므로 묻지도 않아요.
-3. **연결 확인** — 마법사가 바로 프로바이더와 통신해요. 키가 틀렸으면 알려 주고 다시 시도할 수 있게 해 줘요. 성공하기 전까지는 아무것도 저장되지 않아요.
-4. **어떤 모델** — 프로바이더가 돌려준 목록에서 하나를 고르거나, Enter를 눌러 기본값을 사용하세요. 나중에 `/model`로 언제든 바꿀 수 있어요.
-5. **키를 어디에 보관할지** — Enter를 눌러 기본값인 `~/.agentiloop/env`를 사용하세요. AgentiLoop만 읽는 비공개 파일이에요. (키를 셸이나 macOS 키체인에도 두고 싶은 분들을 위한 다른 선택지는 아래 *고급*에서 다뤄요.)
-
-그러면 `All set`이라고 표시되고 프롬프트로 이어져요. 일반 터미널에서 Claude를 선택하고 기본값을 그대로 받아들인 전체 실행 과정은 이렇게 보여요 (모델 목록은 다를 수 있어요):
-
-```text
-$ agentiloop
-Welcome to AgentiLoop! Let's set things up (about a minute).
-Settings are kept in /Users/you/.agentiloop. Run `agentiloop --setup` or `/setup` to redo this, `agentiloop --reset` to start over.
-
-Which model provider do you want to use?
-  1  Claude (Anthropic) — API key from console.anthropic.com
-  2  OpenAI — API key from platform.openai.com
-  3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)
-  4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)
-Provider [1-4, default 1]: 1
-Anthropic API key (starts with sk-ant-, input hidden):
-Checking the connection…
-Connected (8 model(s) available).
-
-Pick a model (change it any time with /model):
-   1  claude-sonnet-5  (default)
-   2  claude-…
-   3  claude-…
-   …
-Model [1-8, an id, or Enter for claude-sonnet-5]:
-
-Where should the credential be saved?
-  1  /Users/you/.agentiloop/env (recommended; only agentiloop reads it, file mode 600)
-  2  Also add it to /Users/you/.zshrc so other tools in your terminal see it
-  3  macOS Keychain, with a line in /Users/you/.zshrc that reads it (nothing stored in plain text)
-Save to [1-3, default 1]:
-saved to /Users/you/.agentiloop/env
-
-All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
-```
-
-이게 전부예요. 이제부터 `agentiloop`는 바로 프롬프트로 시작돼요.
-
-Claude에는 일반 API 키 (`sk-ant-api…`)나 Claude Code 토큰 (`sk-ant-oat01-…`, `claude setup-token`으로 받을 수 있어요) 중 어느 것이든 붙여 넣을 수 있어요. AgentiLoop가 어떤 종류인지 알아서 감지해요. 3번 (Ollama, LM Studio, …)을 선택했다면 마법사가 서버 URL도 묻고 기본값으로 `http://localhost:11434/v1`을 제시하므로, 로컬 Ollama라면 Enter만 누르면 돼요.
-
-**같은 마법사, 전체 화면으로.** 마법사는 사용 중인 인터페이스 안에서 실행돼요. `--tui`로 시작하면 같은 질문이 전체 화면 인터페이스 안에 나타나고, 끝나면 이미 프롬프트에 있어요:
-
-<img src="docs/setup-wizard-tui.png" width="900" alt="전체 화면 TUI 안에서 실행되는 설정 마법사: 프로바이더, 숨겨진 API 키, 연결 확인, 모델 목록, 키 저장 위치, 그리고 첫 프롬프트" />
-
-**언제든 다시 실행하거나 다시 하기:**
-
-```bash
-agentiloop --setup          # 일반 터미널에서 마법사
-agentiloop --setup --tui    # 전체 화면 TUI 안에서 마법사 (스크린샷처럼)
-/setup                      # 실행 중인 세션 안에서 (REPL 또는 TUI)
-agentiloop --reset          # 모든 것을 잊고 처음 상태에서 시작
-```
+AgentiLoop는 대화할 모델이 필요해요. **이를 위해 환경 변수를 설정할 필요는 없어요**: 그냥 `agentiloop`를 실행하면 내장 설정 마법사가 몇 가지 질문을 하고 모든 것을 대신 저장해 줘요. 전체 실행 과정이 담긴 단계별 안내는 위의 [3. 설정 마법사 실행하기](#3-설정-마법사-실행하기)를 참고하세요.
 
 <details>
 <summary><b>고급: 키를 직접 설정하기</b> (마법사가 잘 동작했다면 건너뛰세요)</summary>

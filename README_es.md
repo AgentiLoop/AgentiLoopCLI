@@ -105,17 +105,15 @@ Como `~/.local/bin` todavía no está en tu PATH, esta única vez arráncalo con
 ~/.local/bin/agentiloop
 ```
 
-El asistente te guía por cinco pasos cortos. Pulsa **Enter** para aceptar el valor predeterminado, o escribe un número:
+La primera vez, cuando todavía no hay ninguna clave configurada, el asistente arranca solo. Tarda alrededor de un minuto y pregunta cinco cosas:
 
-1. **Proveedor**: escribe `1` para Claude, `2` para OpenAI, `3` para Ollama.
-2. **Clave de API**: pega la clave del paso 2 y pulsa Enter. La pantalla se queda en blanco mientras pegas; es a propósito, la clave está oculta. Ollama no necesita clave: pulsa Enter para la dirección del servidor y otra vez para la clave.
-3. **Comprobación de conexión**: el asistente prueba la clave al momento. Si falla, te dice por qué y te deja intentarlo de nuevo. No se guarda nada hasta que funciona.
-4. **Modelo**: pulsa Enter para el predeterminado, o escribe un número de la lista.
-5. **Dónde guardar la clave**: pulsa Enter. Eso la deja en `~/.agentiloop/env`, un archivo privado que solo lee AgentiLoop.
+1. **Qué proveedor** — Claude, OpenAI, un servidor local compatible con OpenAI (Ollama, LM Studio, …) u oMLX. Escribe un número.
+2. **Tu clave de API** — se escribe de forma oculta, no se muestra nada en pantalla. Los servidores locales normalmente no necesitan ninguna; con oMLX en el mismo Mac, el asistente lee la clave de la propia configuración de oMLX, así que ni siquiera la pide.
+3. **Comprobación de conexión** — el asistente habla con el proveedor al momento. Si la clave es incorrecta te lo dice y te ofrece intentarlo de nuevo; no se guarda nada hasta que funciona.
+4. **Qué modelo** — elige uno de la lista que devuelve el proveedor, o pulsa Enter para el predeterminado. Puedes cambiarlo en cualquier momento más adelante con `/model`.
+5. **Dónde guardar la clave** — pulsa Enter para la opción predeterminada, `~/.agentiloop/env`, un archivo privado que solo lee AgentiLoop. (Las otras opciones, para quien también quiera la clave en su shell o en el Llavero de macOS, se explican en [Avanzado: definir la clave a mano](#paso-2-conecta-un-modelo) en el Inicio rápido.)
 
-Por último, el asistente se da cuenta de que `~/.local/bin` no está en tu PATH y pregunta `Add it to PATH in /Users/you/.zshrc?`. Pulsa **Enter** (sí). Después muestra `All set` y ya estás en el prompt.
-
-Así es como se ve todo el proceso cuando eliges Claude y aceptas los valores predeterminados:
+Por último, el asistente se da cuenta de que `~/.local/bin` no está en tu PATH y se ofrece a añadirlo. Pulsa **Enter** (sí). Después dice `All set` y te deja en el prompt. Aquí tienes una ejecución completa en el terminal normal, eligiendo Claude y aceptando los valores predeterminados (tu lista de modelos será distinta):
 
 ```text
 $ ~/.local/bin/agentiloop
@@ -153,11 +151,27 @@ updated /Users/you/.zshrc (between `# >>> agentiloop >>>` and `# <<< agentiloop 
 All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
 ```
 
-Puedes empezar a chatear aquí mismo, o escribir `/exit` y continuar con el paso 4. ¿Te has equivocado? `agentiloop --setup` vuelve a ejecutar el asistente, y `agentiloop --reset` borra todo lo que guardó.
+Puedes empezar a chatear aquí mismo, o escribir `/exit` y continuar con el paso 4. A partir de ahora, un simple `agentiloop` arranca directamente en el prompt.
 
-> 🔒 **Mantén tu clave en privado.** `~/.agentiloop/env` solo lo puedes leer tú. No pegues la clave en chats ni la subas a git. En un Mac, la opción 3 de la última pregunta la guarda en el Llavero, así que nunca está en el disco en texto plano.
+Para Claude puedes pegar una clave de API normal (`sk-ant-api…`) o un token de Claude Code (`sk-ant-oat01-…`, de `claude setup-token`); AgentiLoop detecta de qué tipo es. Si elegiste la opción 3 (Ollama, LM Studio, …), el asistente también te pide la URL del servidor y ofrece `http://localhost:11434/v1` como valor predeterminado, así que para un Ollama local basta con pulsar Enter.
+
+**El mismo asistente, a pantalla completa.** El asistente funciona en la interfaz que uses. Arráncalo con `--tui` y las mismas preguntas aparecen dentro de la interfaz a pantalla completa; cuando termina ya estás en el prompt:
+
+<img src="docs/setup-wizard-tui.png" width="900" alt="El asistente de configuración dentro de la interfaz a pantalla completa (TUI): proveedor, clave de API oculta, comprobación de conexión, lista de modelos, dónde guardar la clave y el primer mensaje" />
+
+**Vuelve a ejecutarlo o rehazlo cuando quieras:**
+
+```bash
+agentiloop --setup          # asistente en el terminal normal
+agentiloop --setup --tui    # asistente dentro de la TUI a pantalla completa (como en la captura)
+/setup                      # desde dentro de una sesión en marcha (REPL o TUI)
+agentiloop --reset          # olvidarlo todo y empezar de cero
+```
+
+> 🔒 **Mantén tu clave en privado.** `~/.agentiloop/env` solo lo puedes leer tú. No pegues la clave en chats ni la subas a git. En un Mac, la opción 3 de la pregunta «Where should the credential be saved?» la guarda en el Llavero, así que nunca está en el disco en texto plano.
 
 ¿Prefieres gestionar la clave tú mismo con variables de entorno? También funciona, pero es la vía avanzada; consulta [Avanzado: definir la clave a mano](#paso-2-conecta-un-modelo) en el Inicio rápido.
+
 
 ### 4. Comprueba que funciona
 
@@ -292,68 +306,7 @@ Esto compila el programa y deja un comando `agentiloop` en tu PATH, en `~/.cargo
 
 ### Paso 2: Conecta un modelo
 
-AgentiLoop necesita un modelo con el que hablar. **No tienes que definir ninguna variable de entorno para esto**: el asistente de configuración integrado te hace unas pocas preguntas y lo guarda todo por ti.
-
-#### El asistente de configuración (recomendado)
-
-Simplemente ejecuta `agentiloop`. La primera vez, cuando todavía no hay ninguna clave configurada, el asistente arranca solo. Tarda alrededor de un minuto y pregunta cinco cosas:
-
-1. **Qué proveedor** — Claude, OpenAI, un servidor local compatible con OpenAI (Ollama, LM Studio, …) u oMLX. Escribe un número.
-2. **Tu clave de API** — se escribe de forma oculta, no se muestra nada en pantalla. Los servidores locales normalmente no necesitan ninguna; con oMLX en el mismo Mac, el asistente lee la clave de la propia configuración de oMLX, así que ni siquiera la pide.
-3. **Comprobación de conexión** — el asistente habla con el proveedor al momento. Si la clave es incorrecta te lo dice y te ofrece intentarlo de nuevo; no se guarda nada hasta que funciona.
-4. **Qué modelo** — elige uno de la lista que devuelve el proveedor, o pulsa Enter para el predeterminado. Puedes cambiarlo en cualquier momento más adelante con `/model`.
-5. **Dónde guardar la clave** — pulsa Enter para la opción predeterminada, `~/.agentiloop/env`, un archivo privado que solo lee AgentiLoop. (Las otras opciones, para quien también quiera la clave en su shell o en el Llavero de macOS, se explican en *Avanzado* más abajo.)
-
-Después dice `All set` y te deja en el prompt. Aquí tienes una ejecución completa en el terminal normal, eligiendo Claude y aceptando los valores predeterminados (tu lista de modelos será distinta):
-
-```text
-$ agentiloop
-Welcome to AgentiLoop! Let's set things up (about a minute).
-Settings are kept in /Users/you/.agentiloop. Run `agentiloop --setup` or `/setup` to redo this, `agentiloop --reset` to start over.
-
-Which model provider do you want to use?
-  1  Claude (Anthropic) — API key from console.anthropic.com
-  2  OpenAI — API key from platform.openai.com
-  3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)
-  4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)
-Provider [1-4, default 1]: 1
-Anthropic API key (starts with sk-ant-, input hidden):
-Checking the connection…
-Connected (8 model(s) available).
-
-Pick a model (change it any time with /model):
-   1  claude-sonnet-5  (default)
-   2  claude-…
-   3  claude-…
-   …
-Model [1-8, an id, or Enter for claude-sonnet-5]:
-
-Where should the credential be saved?
-  1  /Users/you/.agentiloop/env (recommended; only agentiloop reads it, file mode 600)
-  2  Also add it to /Users/you/.zshrc so other tools in your terminal see it
-  3  macOS Keychain, with a line in /Users/you/.zshrc that reads it (nothing stored in plain text)
-Save to [1-3, default 1]:
-saved to /Users/you/.agentiloop/env
-
-All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
-```
-
-Eso es todo. A partir de ahora `agentiloop` arranca directamente en el prompt.
-
-Para Claude puedes pegar una clave de API normal (`sk-ant-api…`) o un token de Claude Code (`sk-ant-oat01-…`, de `claude setup-token`); AgentiLoop detecta de qué tipo es. Si elegiste la opción 3 (Ollama, LM Studio, …), el asistente también te pide la URL del servidor y ofrece `http://localhost:11434/v1` como valor predeterminado, así que para un Ollama local basta con pulsar Enter.
-
-**El mismo asistente, a pantalla completa.** El asistente funciona en la interfaz que uses. Arráncalo con `--tui` y las mismas preguntas aparecen dentro de la interfaz a pantalla completa; cuando termina ya estás en el prompt:
-
-<img src="docs/setup-wizard-tui.png" width="900" alt="El asistente de configuración dentro de la interfaz a pantalla completa (TUI): proveedor, clave de API oculta, comprobación de conexión, lista de modelos, dónde guardar la clave y el primer mensaje" />
-
-**Vuelve a ejecutarlo o rehazlo cuando quieras:**
-
-```bash
-agentiloop --setup          # asistente en el terminal normal
-agentiloop --setup --tui    # asistente dentro de la TUI a pantalla completa (como en la captura)
-/setup                      # desde dentro de una sesión en marcha (REPL o TUI)
-agentiloop --reset          # olvidarlo todo y empezar de cero
-```
+AgentiLoop necesita un modelo con el que hablar. **No tienes que definir ninguna variable de entorno para esto**: simplemente ejecuta `agentiloop` y el asistente de configuración integrado te hace unas pocas preguntas y lo guarda todo por ti. La guía paso a paso, con una ejecución completa, está más arriba en [3. Ejecuta el asistente de configuración](#3-ejecuta-el-asistente-de-configuración).
 
 <details>
 <summary><b>Avanzado: definir la clave a mano</b> (sáltate esto si el asistente te ha funcionado)</summary>
