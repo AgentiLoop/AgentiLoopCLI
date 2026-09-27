@@ -2,6 +2,7 @@ mod diff;
 mod highlight;
 mod markdown;
 mod permission;
+mod reset;
 mod settings;
 mod tui;
 
@@ -71,6 +72,17 @@ struct Cli {
     #[arg(long, env = "AGENTILOOP_NO_MCP")]
     no_mcp: bool,
 
+    /// Run the first-time setup wizard (provider, key, model). Runs by itself on a
+    /// machine with no credentials and no ~/.agentiloop.
+    #[arg(long, conflicts_with_all = ["prompt", "reset"])]
+    setup: bool,
+
+    /// Back to brand new: delete ~/.agentiloop (settings, env, history, sessions,
+    /// mcp.json), the agentiloop block in your shell profile and Keychain items the
+    /// wizard created. Asks first unless --yes.
+    #[arg(long, conflicts_with = "prompt")]
+    reset: bool,
+
     /// One-shot prompt. If omitted, starts an interactive REPL.
     prompt: Vec<String>,
 }
@@ -81,8 +93,13 @@ async fn main() -> Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .with_writer(io::stderr)
         .init();
-
     let cli = Cli::parse();
+
+    if cli.reset {
+        return reset::run(cli.yes);
+    }
+    settings::load_env_file();
+
 
     let cwd = match cli.cwd {
         Some(p) => p.canonicalize()?,
