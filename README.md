@@ -26,27 +26,17 @@ Like what you see? Help keep AgentiLoop fast and cross-platform. Sponsor us on *
 
 AgentiLoop is an AI coding agent that runs in your terminal, in the spirit of Claude Code. You describe what you want in plain language. The agent reads your files, edits code and runs commands to get it done, and it asks your permission before it changes anything.
 
-It's written in Rust and runs on macOS, Linux and Windows. It works with Claude (Anthropic), OpenAI, local models through Ollama or LM Studio, and oMLX on Apple Silicon.
+It's written in Rust and runs on macOS, Linux and Windows. It works with Claude (Anthropic), OpenAI, local models through Ollama or LM Studio, and oMLX on Apple Silicon. There is nothing to configure by hand: the first time you run it, a built-in setup wizard asks which provider you want, takes your key, checks that it works and saves it. About a minute, no config files, no `export` lines.
 
-Created with AgentiLoop Agent! This is our baby. Prebuilt binaries for macOS, Linux and Windows are on the [Releases](https://github.com/AgentiLoop/AgentiLoopCLI/releases) page, or compile it from source with Rust.
+Prebuilt binaries are on the [Releases](https://github.com/AgentiLoop/AgentiLoopCLI/releases) page; building from source is covered under [For developers](#for-developers). Created with AgentiLoop Agent! This is our baby.
 
 <img src="docs/pong.png" width="900" alt="AgentiLoop writing, building and launching an Atari-style Pong game in SwiftUI from a single prompt, with the live diff and the running game window" />
 
 ---
 
-## ⚡ First run: the setup wizard does it all
+## 🚀 Get started in 5 minutes
 
-There is nothing to configure by hand. The first time you run `agentiloop`, a built-in setup wizard starts on its own. It asks which provider you want (Claude, OpenAI, Ollama / LM Studio or oMLX), takes your API key (typed hidden), checks that the key works, lets you pick a model and saves everything in `~/.agentiloop`. About a minute, no config files, no `export` lines.
-
-<img src="docs/setup-wizard-tui.png" width="900" alt="The setup wizard running inside the full-screen TUI: provider, hidden API key, connection check, model list, where to save the key, then the first prompt" />
-
-Run it again any time with `agentiloop --setup` (add `--tui` for the full-screen version, or type `/setup` inside a session). `agentiloop --reset` forgets everything and starts from brand new. Never installed a command-line program before? Follow [New here?](#-new-here-up-and-running-in-5-minutes) below, step by step.
-
----
-
-## 🚀 New here? Up and running in 5 minutes
-
-No Rust, no Go, no compiling. You download one file, give it an API key and start chatting. Follow the steps in order.
+No Rust, no compiling. You download one file, give it an API key and start chatting. Follow the steps in order.
 
 ### 1. Download AgentiLoop
 
@@ -97,23 +87,21 @@ Copy the key somewhere safe. You'll paste it in the next step.
 
 ### 3. Run the setup wizard
 
-You don't edit any files or type any `export` commands. AgentiLoop has a built-in setup wizard that asks a few questions and saves your key for you.
-
 Because `~/.local/bin` isn't on your PATH yet, start it with its full path this one time (on Windows step 1 already fixed the PATH, so just type `agentiloop`):
 
 ```sh
 ~/.local/bin/agentiloop
 ```
 
-The first time, when no key is set up yet, the wizard starts on its own. It takes about a minute and asks five things:
+When no key is saved yet, the wizard starts on its own and asks five things:
 
 1. **Which provider** — Claude, OpenAI, a local OpenAI-compatible server (Ollama, LM Studio, …) or oMLX. Type a number.
 2. **Your API key** — typed hidden, nothing shows on screen. Local servers usually need none; for oMLX on the same Mac the wizard reads the key from oMLX's own settings, so it doesn't even ask.
 3. **Connection check** — the wizard talks to the provider right away. If the key is wrong it tells you and offers to try again; nothing is saved until it works.
 4. **Which model** — pick one from the list the provider returned, or press Enter for the default. You can change it any time later with `/model`.
-5. **Where to keep the key** — press Enter for the default, `~/.agentiloop/env`, a private file only AgentiLoop reads. (The other choices, for people who also want the key in their shell or in the macOS Keychain, are covered under [Advanced: setting the key by hand](#step-2-connect-a-model) in the Quick start.)
+5. **Where to keep the key** — press Enter for the default, `~/.agentiloop/env`, a private file only AgentiLoop reads. The other choices, for people who also want the key in their shell or in the macOS Keychain, are explained under *Advanced* below.
 
-Last, the wizard notices that `~/.local/bin` isn't on your PATH and offers to add it. Press **Enter** (yes). Then it says `All set` and drops you at the prompt. Here is a full run on the plain terminal, choosing Claude and accepting the defaults (your model list will differ):
+Last, the wizard notices that `~/.local/bin` isn't on your PATH and offers to add it. Press **Enter** (yes). Then it says `All set` and drops you at the prompt. Here is a full run choosing Claude and accepting the defaults (your model list will differ):
 
 ```text
 $ ~/.local/bin/agentiloop
@@ -153,13 +141,15 @@ All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for co
 
 You can start chatting right here, or type `/exit` and carry on with step 4. From now on a plain `agentiloop` starts straight into the prompt.
 
-For Claude you can paste either a normal API key (`sk-ant-api…`) or a Claude Code token (`sk-ant-oat01-…`, from `claude setup-token`); AgentiLoop detects which kind it is. If you picked option 3 (Ollama, LM Studio, …) the wizard also asks for the server URL and offers `http://localhost:11434/v1` as the default, so for a local Ollama you just press Enter.
+Good to know:
 
-**Same wizard, full-screen.** The wizard runs in whichever interface you use. Start it with `--tui` and the same questions appear inside the full-screen interface; when it finishes you are already at the prompt:
+- For Claude you can paste either a normal API key (`sk-ant-api…`) or a Claude Code token (`sk-ant-oat01-…`, from `claude setup-token`); AgentiLoop detects which kind it is.
+- Option 3 (Ollama, LM Studio, …) also asks for the server URL. The default, `http://localhost:11434/v1`, is right for a local Ollama, so just press Enter.
+- The wizard runs in whichever interface you use. Start with `--tui` and the same questions appear inside the full-screen interface; when it finishes you are already at the prompt:
 
 <img src="docs/setup-wizard-tui.png" width="900" alt="The setup wizard running inside the full-screen TUI: provider, hidden API key, connection check, model list, where to save the key, then the first prompt" />
 
-**Rerun or redo it any time:**
+Rerun or redo it any time:
 
 ```bash
 agentiloop --setup          # wizard on the plain terminal
@@ -169,144 +159,6 @@ agentiloop --reset          # forget everything and start from brand new
 ```
 
 > 🔒 **Keep your key private.** `~/.agentiloop/env` is readable only by you. Don't paste the key into chats or commit it to git. On a Mac, option 3 in the "Where should the credential be saved?" question stores it in the Keychain instead, so it's never on disk in plain text.
-
-Prefer to manage the key yourself with environment variables? That works too, but it's the advanced route; see [Advanced: setting the key by hand](#step-2-connect-a-model) in the Quick start.
-
-
-### 4. Check that it works
-
-**Open a new terminal window** so it picks up the PATH change from the wizard (Windows: a new PowerShell window). Then:
-
-```sh
-agentiloop --version
-```
-
-You should see `agentiloop 0.0.2`. Now run it with no options:
-
-```sh
-agentiloop
-```
-
-It should go straight to the prompt. If the wizard starts again instead, the key didn't get saved: go through step 3 once more.
-
-### 5. Your first session
-
-Go to a project folder and start the full-screen interface:
-
-Start with a new, empty test folder so you can try it safely. For a real project, `cd` into that project's folder instead (for example `cd ~/code/my-app`).
-
-```sh
-mkdir -p ~/agentiloop-test
-cd ~/agentiloop-test
-agentiloop --tui
-```
-
-Using **Ollama**? The wizard already remembered the server and the model you picked. To switch to another model you've pulled, type `/model` inside the session.
-
-Now just type what you want in plain English and press **Enter**. Some good first prompts:
-
-```text
-explain what this project does
-list the files in src and tell me which one is the entry point
-find the TODO comments and summarize them
-add a --verbose flag to the command-line parser
-run the tests and fix anything that fails
-create a README.md for this project
-```
-
-Before the agent changes a file or runs a command, it asks you. Press **y** for yes, **n** for no, **a** to always allow that tool for the session, or **Esc** to skip the step. Press **Ctrl-C** to quit. Next time, a plain `agentiloop` starts the same way and picks up your last conversation.
-
-Just want one answer without the chat? Pass the question as an argument:
-
-```sh
-agentiloop "explain what this project does"
-```
-
-### What can it do? (tools)
-
-The agent works with five built-in tools. You don't call them yourself. You describe the goal, and the agent picks the tool:
-
-| Tool | What it does | Asks first? |
-|---|---|---|
-| `read_file` | Reads a file (with line numbers) | No |
-| `list_dir` | Lists the files in a folder | No |
-| `write_file` | Creates a new file or overwrites one | **Yes** |
-| `edit_file` | Changes an exact piece of text in a file | **Yes** |
-| `bash` | Runs a shell command, like tests, builds or `git` (`sh -c` on Mac/Linux, `cmd /C` on Windows) | **Yes** |
-
-Want more tools, like web search, databases or GitHub? Add MCP servers; see [Adding tools with MCP](#adding-tools-with-mcp-optional).
-
-### The help command
-
-`agentiloop --help` lists every option:
-
-```text
-$ agentiloop --help
-AgentiLoop — a cross-platform agentic coding loop for your terminal
-
-Usage: agentiloop [OPTIONS] [PROMPT]...
-
-Arguments:
-  [PROMPT]...  One-shot prompt. If omitted, starts an interactive REPL
-
-Options:
-  -p, --provider <PROVIDER>      Model backend: `anthropic`, `openai` (OpenAI-compatible: OpenAI, Ollama, LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL), or `omlx` (local oMLX server, http://localhost:8000/v1). Defaults to the last one used, then auto-detected from which credentials are set [env: AGENTILOOP_PROVIDER=]
-  -m, --model <MODEL>            Model id to use. Defaults to the last model used with this provider (~/.agentiloop/settings.json), then the provider's default [env: AGENTILOOP_MODEL=]
-      --yes                      Skip all permission prompts (dangerous; intended for CI). Never remembered [env: AGENTILOOP_YES=]
-      --max-turns <MAX_TURNS>    Max provider round-trips per prompt [default: last used, then 50]
-      --compact-at <COMPACT_AT>  Summarize the conversation once a request reaches this many input tokens (0 = never) [default: last used, then 150000] [env: AGENTILOOP_COMPACT_AT=]
-  -C, --cwd <CWD>                Working directory the agent operates in (defaults to cwd)
-  -r, --resume <RESUME>          Resume a saved session by id (see /sessions)
-  -c, --continue                 Resume the most recent session for this working directory (the default for interactive launches; kept for scripts)
-      --new                      Start a new session instead of continuing the last one in this directory
-      --tui                      Full-screen terminal UI (ratatui) instead of the line REPL. Remembered [env: AGENTILOOP_TUI=]
-      --no-tui                   Use the line REPL even if the TUI was used last time
-      --no-mcp                   Don't start MCP servers from ~/.agentiloop/mcp.json / ./.mcp.json [env: AGENTILOOP_NO_MCP=]
-  -h, --help                     Print help
-  -V, --version                  Print version
-```
-
-Inside a session, type `/help` to see the chat commands (`/model`, `/sessions`, `/resume`, `/clear`, `/compact`, `/mcp`, `/exit`). The full reference is in [All options](#all-options) and [Commands inside the chat](#commands-inside-the-chat).
-
-### Stuck? Quick fixes
-
-| You see | Fix |
-|---|---|
-| `command not found: agentiloop` | `~/.local/bin` isn't on your PATH. Open a new terminal window first; if that doesn't help, run `~/.local/bin/agentiloop --setup` and say yes when it offers to add it to PATH. On Windows, open a new PowerShell window |
-| `Error: no provider credentials found` | No key is saved. Run `agentiloop --setup` (step 3), then check with step 4 |
-| macOS: *"agentiloop" cannot be opened* / *unidentified developer* | This happens if you downloaded with a browser instead of `curl`. Run `xattr -d com.apple.quarantine ~/.local/bin/agentiloop` |
-| Windows: *Windows protected your PC* | Click **More info** → **Run anyway** |
-| `401` / `invalid x-api-key` / authentication error | The key is wrong or was pasted with spaces or quotes. Copy it again and run `agentiloop --setup` to enter it afresh |
-| Ollama: model not found | Run `ollama list` and pass the exact name with `-m` |
-| It keeps using an old model or provider | It remembers your last choices. Pass `-p` / `-m` to change them, or run `agentiloop --reset` to start over |
-
-Still stuck? [Open an issue](https://github.com/AgentiLoop/AgentiLoopCLI/issues) and paste the command and the error. We'll help.
-
----
-
-## Quick start
-
-Three steps: install it, give it a model, run it.
-
-### Step 1: Install
-
-**Download:** grab the archive for your platform from [Releases](https://github.com/AgentiLoop/AgentiLoopCLI/releases), unpack it and put `agentiloop` (`agentiloop.exe` on Windows) on your PATH.
-
-**Or build it:** if you don't have Rust yet, install it from [rustup.rs](https://rustup.rs). Then:
-
-```sh
-git clone https://github.com/AgentiLoop/AgentiLoopCLI.git
-cd AgentiLoopCLI
-cargo install --path crates/agentiloop-cli
-```
-
-This builds the program and puts an `agentiloop` command on your PATH, in `~/.cargo/bin`.
-
-> **Not installing?** Everything in this README also works from inside the repo folder. Wherever you see `agentiloop <options>`, type `cargo run -- <options>` instead. Everything after the `--` goes to AgentiLoop.
-
-### Step 2: Connect a model
-
-AgentiLoop needs a model to talk to. **You don't have to set any environment variables for this**: just run `agentiloop` and the built-in setup wizard asks a few questions and saves everything for you. The step-by-step walkthrough, with a full transcript, is in [3. Run the setup wizard](#3-run-the-setup-wizard) above.
 
 <details>
 <summary><b>Advanced: setting the key by hand</b> (skip this if the wizard worked for you)</summary>
@@ -341,16 +193,42 @@ export ANTHROPIC_API_KEY="$(security find-generic-password -a "$USER" -s ANTHROP
 
 </details>
 
-### Step 3: Run it
+### 4. Check that it works
 
-Go to the project you want to work on and start AgentiLoop:
+**Open a new terminal window** so it picks up the PATH change from the wizard (Windows: a new PowerShell window). Then:
 
 ```sh
-cd ~/my-project
+agentiloop --version
+```
+
+You should see `agentiloop 0.0.2`. Now run it with no options:
+
+```sh
+agentiloop
+```
+
+It should go straight to the prompt. If the wizard starts again instead, the key didn't get saved: go through step 3 once more.
+
+### 5. Your first session
+
+Start with a new, empty test folder so you can try it safely. For a real project, `cd` into that project's folder instead (for example `cd ~/code/my-app`).
+
+```sh
+mkdir -p ~/agentiloop-test
+cd ~/agentiloop-test
 agentiloop --tui
 ```
 
-`--tui` opens the full-screen interface, which we recommend. Type what you want, e.g. *"find where the config file is loaded and add a --verbose flag"*, and press Enter.
+`--tui` opens the full-screen interface, which we recommend. Type what you want in plain English and press **Enter**. Some good first prompts:
+
+```text
+explain what this project does
+list the files in src and tell me which one is the entry point
+find the TODO comments and summarize them
+add a --verbose flag to the command-line parser
+run the tests and fix anything that fails
+create a README.md for this project
+```
 
 You'll see the agent's replies, each tool it uses (🔧) and each result (✓ or ✖). The box at the bottom shows what it's doing right now, for example ` ✻ Thinking...  12s `. Before it writes a file or runs a command, it asks you:
 
@@ -358,6 +236,22 @@ You'll see the agent's replies, each tool it uses (🔧) and each result (✓ or
 - **n**: no
 - **a**: always allow this tool for the rest of the session
 - **Esc**: skip this step, but keep going
+
+**Ctrl-C** quits. Next time, a plain `agentiloop` starts the same way and picks up your last conversation. Using **Ollama**? To switch to another model you've pulled, type `/model` inside the session.
+
+### Stuck? Quick fixes
+
+| You see | Fix |
+|---|---|
+| `command not found: agentiloop` | `~/.local/bin` isn't on your PATH. Open a new terminal window first; if that doesn't help, run `~/.local/bin/agentiloop --setup` and say yes when it offers to add it to PATH. On Windows, open a new PowerShell window |
+| `Error: no provider credentials found` | No key is saved. Run `agentiloop --setup` (step 3), then check with step 4 |
+| macOS: *"agentiloop" cannot be opened* / *unidentified developer* | This happens if you downloaded with a browser instead of `curl`. Run `xattr -d com.apple.quarantine ~/.local/bin/agentiloop` |
+| Windows: *Windows protected your PC* | Click **More info** → **Run anyway** |
+| `401` / `invalid x-api-key` / authentication error | The key is wrong or was pasted with spaces or quotes. Copy it again and run `agentiloop --setup` to enter it afresh |
+| Ollama: model not found | Run `ollama list` and pass the exact name with `-m` |
+| It keeps using an old model or provider | It remembers your last choices. Pass `-p` / `-m` to change them, or run `agentiloop --reset` to start over |
+
+Still stuck? [Open an issue](https://github.com/AgentiLoop/AgentiLoopCLI/issues) and paste the command and the error. We'll help.
 
 ---
 
@@ -370,6 +264,22 @@ You'll see the agent's replies, each tool it uses (🔧) and each result (✓ or
 | **One-shot** | `agentiloop "explain this project"` | One question: it answers, then exits. Handy in scripts |
 
 Keys in the TUI: **Enter** sends · **↑ / ↓** go through earlier prompts · **PgUp / PgDn** or the mouse wheel scrolls · **Ctrl-U** clears the line · **Ctrl-C** quits.
+
+---
+
+## What can it do? (tools)
+
+The agent works with five built-in tools. You don't call them yourself. You describe the goal, and the agent picks the tool:
+
+| Tool | What it does | Asks first? |
+|---|---|---|
+| `read_file` | Reads a file (with line numbers) | No |
+| `list_dir` | Lists the files in a folder | No |
+| `write_file` | Creates a new file or overwrites one | **Yes** |
+| `edit_file` | Changes an exact piece of text in a file | **Yes** |
+| `bash` | Runs a shell command, like tests, builds or `git` (`sh -c` on Mac/Linux, `cmd /C` on Windows) | **Yes** |
+
+Want more tools, like web search, databases or GitHub? Add MCP servers; see [Adding tools with MCP](#adding-tools-with-mcp-optional).
 
 ---
 
@@ -404,13 +314,13 @@ Some things are **never** remembered on purpose:
 - `--no-mcp`, `-C` and one-shot prompts
 - API keys: those live in `~/.agentiloop/env` (written by the wizard) or your shell environment, never in `settings.json`
 
-To forget everything, delete `~/.agentiloop/settings.json`.
+To forget everything, delete `~/.agentiloop/settings.json`, or run `agentiloop --reset` to go back to brand new.
 
 ---
 
 ## All options
 
-Every option can also be set with an environment variable, shown in the second column. An option you type always beats a remembered value.
+`agentiloop --help` prints this list in the terminal. Every option can also be set with an environment variable, shown in the second column. An option you type always beats a remembered value.
 
 | Option | Env variable | What it does |
 |---|---|---|
@@ -527,6 +437,20 @@ You'll rarely need these:
 ---
 
 ## For developers
+
+### Build from source
+
+If you don't have Rust yet, install it from [rustup.rs](https://rustup.rs). Then:
+
+```sh
+git clone https://github.com/AgentiLoop/AgentiLoopCLI.git
+cd AgentiLoopCLI
+cargo install --path crates/agentiloop-cli
+```
+
+This builds the program and puts an `agentiloop` command on your PATH, in `~/.cargo/bin`. The setup wizard runs on first launch exactly as described in [step 3](#3-run-the-setup-wizard).
+
+> **Not installing?** Everything in this README also works from inside the repo folder. Wherever you see `agentiloop <options>`, type `cargo run -- <options>` instead. Everything after the `--` goes to AgentiLoop.
 
 ### Build and test
 
