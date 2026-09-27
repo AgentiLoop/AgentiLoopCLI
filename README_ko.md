@@ -149,20 +149,19 @@ setx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
 
 ### 4. 잘 동작하는지 확인하기
 
+마법사가 바꾼 PATH가 적용되도록 **새 터미널 창을 여세요** (Windows: 새 PowerShell 창). 그런 다음:
+
 ```sh
 agentiloop --version
 ```
 
-`agentiloop 0.0.2`이 보여야 해요. 이제 키가 불러와졌는지 확인하세요:
+`agentiloop 0.0.2`이 보여야 해요. 이제 옵션 없이 실행하세요:
 
 ```sh
-echo $ANTHROPIC_API_KEY | cut -c1-10    # macOS / Linux: sk-ant-...가 출력되어야 해요
-```
-```powershell
-$env:ANTHROPIC_API_KEY.Substring(0,10)  # Windows PowerShell
+agentiloop
 ```
 
-아무것도 출력되지 않으면 3단계로 돌아가세요. 키가 아직 불러와지지 않은 거예요.
+바로 프롬프트로 이어져야 해요. 대신 마법사가 다시 시작되면 키가 저장되지 않은 거예요. 3단계를 한 번 더 진행하세요.
 
 ### 5. 첫 번째 세션
 
@@ -176,7 +175,7 @@ cd ~/agentiloop-test
 agentiloop --tui
 ```
 
-**Ollama**를 쓰시나요? 프로바이더와 pull 받은 모델을 지정하세요: `agentiloop -p openai -m qwen2.5-coder --tui`.
+**Ollama**를 쓰시나요? 마법사가 서버와 선택한 모델을 이미 기억하고 있어요. pull 받은 다른 모델로 바꾸려면 세션 안에서 `/model`을 입력하세요.
 
 이제 원하는 것을 평범한 말로 입력하고 **Enter**를 누르기만 하면 돼요. 처음 시도해 보기 좋은 프롬프트:
 
@@ -247,11 +246,11 @@ Options:
 
 | 보이는 내용 | 해결 방법 |
 |---|---|
-| `command not found: agentiloop` | `~/.local/bin`이 PATH에 없어요. 3단계의 `export PATH=...` 줄을 추가한 다음 새 터미널을 여세요. Windows에서는 새 PowerShell 창을 여세요 |
-| `Error: no provider credentials found` | 불러온 키가 없어요. 3단계를 다시 한 다음 4단계로 확인하세요 |
+| `command not found: agentiloop` | `~/.local/bin`이 PATH에 없어요. 먼저 새 터미널 창을 여세요. 그래도 안 되면 `~/.local/bin/agentiloop --setup`을 실행하고, PATH에 추가할지 물어보면 예라고 답하세요. Windows에서는 새 PowerShell 창을 여세요 |
+| `Error: no provider credentials found` | 저장된 키가 없어요. `agentiloop --setup`을 실행한 다음 (3단계), 4단계로 확인하세요 |
 | macOS: *"agentiloop" cannot be opened* / *unidentified developer* | `curl` 대신 브라우저로 다운로드하면 이런 일이 생겨요. `xattr -d com.apple.quarantine ~/.local/bin/agentiloop`를 실행하세요 |
 | Windows: *Windows protected your PC* | **More info** → **Run anyway**를 클릭하세요 |
-| `401` / `invalid x-api-key` / 인증 오류 | 키가 틀렸거나 공백 또는 따옴표가 들어 있어요. 다시 복사하고 프로필의 해당 줄을 확인하세요 |
+| `401` / `invalid x-api-key` / 인증 오류 | 키가 틀렸거나 공백 또는 따옴표가 섞여서 붙여 넣어졌어요. 다시 복사하고 `agentiloop --setup`을 실행해서 새로 입력하세요 |
 | Ollama: model not found | `ollama list`를 실행하고 정확한 이름을 `-m`으로 전달하세요 |
 | 계속 예전 모델이나 프로바이더를 사용해요 | 마지막 선택을 기억하기 때문이에요. `-p` / `-m`을 전달해서 바꾸거나, `agentiloop --reset`을 실행해서 처음부터 다시 시작하세요 |
 
@@ -281,32 +280,82 @@ cargo install --path crates/agentiloop-cli
 
 ### 2단계: 모델 연결하기
 
-AgentiLoop는 대화할 모델이 필요해요.
+AgentiLoop는 대화할 모델이 필요해요. **이를 위해 환경 변수를 설정할 필요는 없어요**: 내장 설정 마법사가 몇 가지 질문을 하고 모든 것을 대신 저장해 줘요.
 
-**가장 쉬운 방법:** 그냥 `agentiloop`를 실행하세요. 키가 설정되지 않은 컴퓨터에서는 짧은 마법사가 시작돼요. 어떤 프로바이더를 쓸지 묻고, 키를 받고 (입력은 숨겨져요), 연결을 확인하고, 모델을 고르게 한 뒤, 키를 `~/.agentiloop/env`에 저장해요 (AgentiLoop만 읽어요). `agentiloop --setup`으로 언제든 다시 실행할 수 있고, `agentiloop --reset`은 모든 것을 처음 상태로 되돌려요.
+#### 설정 마법사 (추천)
+
+그냥 `agentiloop`를 실행하세요. 처음에 아직 키가 설정되어 있지 않으면 마법사가 알아서 시작돼요. 1분 정도 걸리고 다섯 가지를 물어봐요:
+
+1. **어떤 프로바이더** — Claude, OpenAI, 로컬 OpenAI 호환 서버 (Ollama, LM Studio, …) 또는 oMLX. 번호를 입력하세요.
+2. **API 키** — 입력은 숨겨져서 화면에 아무것도 표시되지 않아요. 로컬 서버에는 보통 필요 없고, 같은 Mac의 oMLX라면 마법사가 oMLX 자체 설정에서 키를 읽어 오므로 묻지도 않아요.
+3. **연결 확인** — 마법사가 바로 프로바이더와 통신해요. 키가 틀렸으면 알려 주고 다시 시도할 수 있게 해 줘요. 성공하기 전까지는 아무것도 저장되지 않아요.
+4. **어떤 모델** — 프로바이더가 돌려준 목록에서 하나를 고르거나, Enter를 눌러 기본값을 사용하세요. 나중에 `/model`로 언제든 바꿀 수 있어요.
+5. **키를 어디에 보관할지** — Enter를 눌러 기본값인 `~/.agentiloop/env`를 사용하세요. AgentiLoop만 읽는 비공개 파일이에요. (키를 셸이나 macOS 키체인에도 두고 싶은 분들을 위한 다른 선택지는 아래 *고급*에서 다뤄요.)
+
+그러면 `All set`이라고 표시되고 프롬프트로 이어져요. 일반 터미널에서 Claude를 선택하고 기본값을 그대로 받아들인 전체 실행 과정은 이렇게 보여요 (모델 목록은 다를 수 있어요):
+
+```text
+$ agentiloop
+Welcome to AgentiLoop! Let's set things up (about a minute).
+Settings are kept in /Users/you/.agentiloop. Run `agentiloop --setup` or `/setup` to redo this, `agentiloop --reset` to start over.
+
+Which model provider do you want to use?
+  1  Claude (Anthropic) — API key from console.anthropic.com
+  2  OpenAI — API key from platform.openai.com
+  3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)
+  4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)
+Provider [1-4, default 1]: 1
+Anthropic API key (starts with sk-ant-, input hidden):
+Checking the connection…
+Connected (8 model(s) available).
+
+Pick a model (change it any time with /model):
+   1  claude-sonnet-5  (default)
+   2  claude-…
+   3  claude-…
+   …
+Model [1-8, an id, or Enter for claude-sonnet-5]:
+
+Where should the credential be saved?
+  1  /Users/you/.agentiloop/env (recommended; only agentiloop reads it, file mode 600)
+  2  Also add it to /Users/you/.zshrc so other tools in your terminal see it
+  3  macOS Keychain, with a line in /Users/you/.zshrc that reads it (nothing stored in plain text)
+Save to [1-3, default 1]:
+saved to /Users/you/.agentiloop/env
+
+All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
+```
+
+이게 전부예요. 이제부터 `agentiloop`는 바로 프롬프트로 시작돼요.
+
+Claude에는 일반 API 키 (`sk-ant-api…`)나 Claude Code 토큰 (`sk-ant-oat01-…`, `claude setup-token`으로 받을 수 있어요) 중 어느 것이든 붙여 넣을 수 있어요. AgentiLoop가 어떤 종류인지 알아서 감지해요. 3번 (Ollama, LM Studio, …)을 선택했다면 마법사가 서버 URL도 묻고 기본값으로 `http://localhost:11434/v1`을 제시하므로, 로컬 Ollama라면 Enter만 누르면 돼요.
+
+**같은 마법사, 전체 화면으로.** 마법사는 사용 중인 인터페이스 안에서 실행돼요. `--tui`로 시작하면 같은 질문이 전체 화면 인터페이스 안에 나타나고, 끝나면 이미 프롬프트에 있어요:
 
 <img src="docs/setup-wizard-tui.png" width="900" alt="전체 화면 TUI 안에서 실행되는 설정 마법사: 프로바이더, 숨겨진 API 키, 연결 확인, 모델 목록, 키 저장 위치, 그리고 첫 프롬프트" />
+
+**언제든 다시 실행하거나 다시 하기:**
 
 ```bash
 agentiloop --setup          # 일반 터미널에서 마법사
 agentiloop --setup --tui    # 전체 화면 TUI 안에서 마법사 (스크린샷처럼)
-/setup                      # 실행 중인 세션에서 다시 실행 (REPL 또는 TUI)
+/setup                      # 실행 중인 세션 안에서 (REPL 또는 TUI)
+agentiloop --reset          # 모든 것을 잊고 처음 상태에서 시작
 ```
 
-마법사는 사용 중인 인터페이스 안에서 실행돼요. `agentiloop --setup`은 일반 터미널에서 질문하고, `agentiloop --setup --tui`(또는 기억된 TUI)는 스크린샷처럼 전체 화면 안에서 질문한 뒤 끝나면 바로 프롬프트로 이어져요. 세션 중에는 `/setup`이 양쪽에서 같은 일을 해요.
+<details>
+<summary><b>고급: 키를 직접 설정하기</b> (마법사가 잘 동작했다면 건너뛰세요)</summary>
 
-**직접 하기:** 대신 터미널에서 다음 중 하나를 설정하세요:
+키를 직접 관리하고 싶거나, 아무도 마법사에 답할 수 없는 스크립트나 CI에서 AgentiLoop를 실행한다면, 다음 환경 변수 중 하나를 설정하세요. AgentiLoop는 묻지 않고 그 값을 사용해요:
 
-| 사용하고 싶은 것… | 할 일 |
+| 사용하고 싶은 것… | 설정할 것 |
 |---|---|
 | **Claude** (Anthropic) | `export ANTHROPIC_API_KEY=sk-ant-...` |
 | **OpenAI** | `export OPENAI_API_KEY=sk-...` |
-| **Ollama, LM Studio**, 또는 모든 OpenAI 호환 서버 | `export OPENAI_BASE_URL=http://localhost:11434/v1` (여러분의 서버 주소를 사용하세요. 로컬 서버에는 키가 필요 없어요) |
-| **oMLX** (Apple Silicon의 로컬 모델) | 보통은 아무것도 안 해도 돼요. oMLX를 시작한 다음 `-p omlx`로 AgentiLoop를 실행하세요 (아래 참고) |
+| **Ollama, LM Studio**, 또는 모든 OpenAI 호환 서버 | `export OPENAI_BASE_URL=http://localhost:11434/v1` (여러분의 서버 주소. 로컬 서버에는 키가 필요 없어요) |
+| **oMLX** (Apple Silicon의 로컬 모델) | 보통은 아무것도 안 해도 돼요. oMLX를 시작한 다음 `-p omlx`로 AgentiLoop를 실행하세요 |
 
-Claude에는 일반 API 키 (`sk-ant-api…`) 또는 Claude Code 토큰 (`sk-ant-oat01-…`, `claude setup-token`으로 받을 수 있어요)을 사용할 수 있어요. AgentiLoop가 어떤 종류인지 알아서 감지해요.
-
-**oMLX 세부 사항.** oMLX가 같은 Mac에서 실행 중이면, AgentiLoop는 oMLX 자체의 설정 파일 (`~/.omlx/settings.json`)에서 서버 포트와 API 키를 읽어 오므로 아무것도 export할 필요가 없어요. oMLX가 다른 컴퓨터에서 실행 중이거나 그 설정을 덮어쓰고 싶다면 직접 export하세요:
+**oMLX 세부 사항.** oMLX가 같은 Mac에서 실행 중이면, AgentiLoop는 oMLX 자체의 설정 파일 (`~/.omlx/settings.json`)에서 서버 포트와 API 키를 읽어 와요. oMLX가 다른 컴퓨터에서 실행 중이거나 그 설정을 덮어쓰고 싶다면:
 
 ```sh
 export OMLX_BASE_URL=http://192.168.1.50:7777/v1   # oMLX 서버 주소 (localhost라면 OMLX_PORT=7777)
@@ -315,7 +364,7 @@ export OMLX_API_KEY=...                            # oMLX 설정에 있는 API �
 
 oMLX에서 API 키 검증이 꺼져 있다면 키가 필요 없어요.
 
-`export`는 입력한 터미널 탭에서만 유지돼요. 영구적으로 적용하려면 그 줄을 셸 프로필 (macOS에서는 `~/.zshrc`)에 추가하세요. Mac에서는 키를 파일 대신 키체인에 보관할 수 있어요:
+`export`는 입력한 터미널 탭에서만 유지돼요. 영구적으로 적용하려면 그 줄을 셸 프로필 (macOS에서는 `~/.zshrc`)에 추가해야 하는데, 마법사의 **"Also add it to ~/.zshrc"** 선택지가 바로 이 일을 대신해 줘요. 마찬가지로 마법사의 **"macOS Keychain"** 선택지는 다음 과정을 손대지 않고 해 주는 버전이에요:
 
 ```sh
 # 한 번만: 키를 키체인에 저장해요
@@ -324,6 +373,8 @@ security add-generic-password -a "$USER" -s ANTHROPIC_API_KEY -w "sk-ant-..."
 # ~/.zshrc에 추가: 새 터미널마다 불러와요
 export ANTHROPIC_API_KEY="$(security find-generic-password -a "$USER" -s ANTHROPIC_API_KEY -w 2>/dev/null)"
 ```
+
+</details>
 
 ### 3단계: 실행하기
 
@@ -386,7 +437,7 @@ agentiloop --new          # 새 대화 시작 (이전 대화는 저장된 채로
 
 - `--yes`: 허락 확인을 건너뛰는 것은 매번 신중하게 선택해야 하기 때문이에요
 - `--no-mcp`, `-C`, 그리고 원샷 프롬프트
-- API 키: 이것들은 셸 프로필에 그대로 두세요
+- API 키: 이것들은 `~/.agentiloop/env` (마법사가 써요) 또는 셸 환경에 있고, `settings.json`에는 절대 저장되지 않아요
 
 모든 것을 잊게 하려면 `agentiloop --reset`을 실행하세요.
 

@@ -34,6 +34,16 @@ Créé avec AgentiLoop Agent! C'est notre bébé. Des binaires précompilés pou
 
 ---
 
+## ⚡ Premier lancement : l'assistant de configuration fait tout
+
+Il n'y a rien à configurer à la main. La première fois que vous lancez `agentiloop`, un assistant de configuration intégré démarre tout seul. Il demande quel fournisseur vous voulez (Claude, OpenAI, Ollama / LM Studio ou oMLX), prend votre clé API (saisie masquée), vérifie que la clé fonctionne, vous laisse choisir un modèle et enregistre tout dans `~/.agentiloop`. Environ une minute, pas de fichiers de configuration, pas de lignes `export`.
+
+<img src="docs/setup-wizard-tui.png" width="900" alt="L'assistant de configuration dans l'interface plein écran (TUI) : fournisseur, clé API masquée, test de connexion, liste des modèles, emplacement de la clé, puis la première demande" />
+
+Relancez-le à tout moment avec `agentiloop --setup` (ajoutez `--tui` pour la version plein écran, ou tapez `/setup` dans une session). `agentiloop --reset` oublie tout et repart de zéro. Vous n'avez jamais installé de programme en ligne de commande ? Suivez [Nouveau ici ?](#-nouveau-ici--opérationnel-en-5-minutes) ci-dessous, étape par étape.
+
+---
+
 ## 🚀 Nouveau ici ? Opérationnel en 5 minutes
 
 Pas de Rust, pas de Go, pas de compilation. Vous téléchargez un fichier, vous lui donnez une clé API et vous commencez à discuter. Suivez les étapes dans l'ordre.
@@ -60,7 +70,7 @@ tar xzf agentiloop-macos-arm64.tar.gz
 mkdir -p ~/.local/bin && mv agentiloop-macos-arm64/agentiloop ~/.local/bin/
 ```
 
-Cela place le programme dans `~/.local/bin`, un dossier de votre répertoire personnel. L'étape 3 indique à votre terminal d'aller chercher là.
+Cela place le programme dans `~/.local/bin`, un dossier de votre répertoire personnel. L'assistant de configuration de l'étape 3 propose d'indiquer à votre terminal d'aller chercher là.
 
 **Windows.** Ouvrez **PowerShell** (menu Démarrer → tapez "PowerShell") et collez :
 
@@ -85,84 +95,85 @@ AgentiLoop, c'est l'agent. Le « cerveau » est un modèle d'IA auquel vous le c
 
 Copiez la clé dans un endroit sûr. Vous la collerez à l'étape suivante.
 
-### 3. Enregistrez vos réglages dans votre profil de shell
+### 3. Lancez l'assistant de configuration
 
-Votre **profil de shell** est un petit fichier texte que votre terminal lit chaque fois qu'il ouvre une nouvelle fenêtre. Mettez-y vos réglages et vous n'aurez à le faire qu'une seule fois. Si vous sautez cette étape, vous devrez retaper votre clé dans chaque nouveau terminal. C'est la raison n° 1 pour laquelle les gens restent bloqués.
+Vous ne modifiez aucun fichier et ne tapez aucune commande `export`. AgentiLoop possède un assistant de configuration intégré qui pose quelques questions et enregistre votre clé pour vous.
 
-**De quel fichier s'agit-il ?**
-
-| Système | Shell (par défaut) | Fichier de profil |
-|---|---|---|
-| macOS (Catalina 10.15 et plus récent) | zsh | `~/.zshrc` |
-| La plupart des distributions Linux | bash | `~/.bashrc` |
-| Linux ou Mac avec zsh | zsh | `~/.zshrc` |
-| Shell fish | fish | `~/.config/fish/config.fish` |
-| Windows | PowerShell | pas nécessaire, voir ci-dessous |
-
-Vous ne savez pas quel shell vous utilisez ? Lancez `echo $SHELL`. `~` désigne votre dossier personnel, donc `~/.zshrc` correspond par exemple à `/Users/you/.zshrc`. Les fichiers qui commencent par un point sont masqués dans le Finder et les explorateurs de fichiers, c'est normal.
-
-**Ouvrez le fichier.** Utilisez l'une de ces commandes (elles créent le fichier s'il n'existe pas encore) :
+Comme `~/.local/bin` n'est pas encore dans votre PATH, lancez-le cette fois-ci avec son chemin complet (sous Windows, l'étape 1 a déjà corrigé le PATH, tapez donc simplement `agentiloop`) :
 
 ```sh
-nano ~/.zshrc                        # fonctionne partout, directement dans le terminal
-touch ~/.zshrc && open -e ~/.zshrc   # macOS : l'ouvre dans TextEdit
+~/.local/bin/agentiloop
 ```
 
-(Linux avec bash : utilisez `~/.bashrc` au lieu de `~/.zshrc`.)
+L'assistant vous guide à travers cinq courtes étapes. Appuyez sur **Enter** pour accepter une valeur par défaut, ou tapez un numéro :
 
-**Ajoutez ces lignes à la fin.** Gardez uniquement la ligne de clé dont vous avez besoin, et collez votre vraie clé entre les guillemets :
+1. **Fournisseur** : tapez `1` pour Claude, `2` pour OpenAI, `3` pour Ollama.
+2. **Clé API** : collez la clé de l'étape 2 et appuyez sur Enter. L'écran reste vide pendant que vous collez ; c'est voulu, la clé est masquée. Ollama n'a pas besoin de clé : appuyez sur Enter pour l'adresse du serveur, puis à nouveau pour la clé.
+3. **Test de connexion** : l'assistant essaie la clé immédiatement. En cas d'échec, il vous dit pourquoi et vous laisse réessayer. Rien n'est enregistré tant que ça ne fonctionne pas.
+4. **Modèle** : appuyez sur Enter pour celui par défaut, ou tapez un numéro de la liste.
+5. **Où enregistrer la clé** : appuyez sur Enter. Elle reste ainsi dans `~/.agentiloop/env`, un fichier privé que seul AgentiLoop lit.
 
-```sh
-# AgentiLoop
-export PATH="$HOME/.local/bin:$PATH"
+Enfin, l'assistant remarque que `~/.local/bin` n'est pas dans votre PATH et demande `Add it to PATH in /Users/you/.zshrc?`. Appuyez sur **Enter** (oui). Il affiche alors `All set` et vous êtes à l'invite.
 
-export ANTHROPIC_API_KEY="sk-ant-paste-your-key-here"          # Claude
-# export OPENAI_API_KEY="sk-paste-your-key-here"               # OpenAI
-# export OPENAI_BASE_URL="http://localhost:11434/v1"           # Ollama (pas besoin de clé)
+Voici à quoi ressemble l'ensemble quand vous choisissez Claude et acceptez les valeurs par défaut :
+
+```text
+$ ~/.local/bin/agentiloop
+Welcome to AgentiLoop! Let's set things up (about a minute).
+Settings are kept in /Users/you/.agentiloop. Run `agentiloop --setup` or `/setup` to redo this, `agentiloop --reset` to start over.
+
+Which model provider do you want to use?
+  1  Claude (Anthropic) — API key from console.anthropic.com
+  2  OpenAI — API key from platform.openai.com
+  3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)
+  4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)
+Provider [1-4, default 1]: 1
+Anthropic API key (starts with sk-ant-, input hidden):
+Checking the connection…
+Connected (8 model(s) available).
+
+Pick a model (change it any time with /model):
+   1  claude-sonnet-5  (default)
+   2  claude-…
+   3  claude-…
+   …
+Model [1-8, an id, or Enter for claude-sonnet-5]:
+
+Where should the credential be saved?
+  1  /Users/you/.agentiloop/env (recommended; only agentiloop reads it, file mode 600)
+  2  Also add it to /Users/you/.zshrc so other tools in your terminal see it
+  3  macOS Keychain, with a line in /Users/you/.zshrc that reads it (nothing stored in plain text)
+Save to [1-3, default 1]:
+saved to /Users/you/.agentiloop/env
+
+`/Users/you/.local/bin` is not on your PATH, so `agentiloop` only works with its full path.
+Add it to PATH in /Users/you/.zshrc? [Y/n]
+updated /Users/you/.zshrc (between `# >>> agentiloop >>>` and `# <<< agentiloop <<<`); it applies to new terminals
+
+All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
 ```
 
-**Enregistrez et fermez.** Dans nano : **Ctrl-O**, **Enter**, puis **Ctrl-X**. Dans TextEdit : **⌘S**, puis fermez la fenêtre.
+Vous pouvez commencer à discuter ici même, ou taper `/exit` et passer à l'étape 4. Vous vous êtes trompé ? `agentiloop --setup` relance l'assistant, et `agentiloop --reset` efface tout ce qu'il a enregistré.
 
-**Chargez-le.** Ouvrez une nouvelle fenêtre de terminal, ou lancez :
+> 🔒 **Gardez votre clé secrète.** `~/.agentiloop/env` n'est lisible que par vous. Ne collez pas la clé dans des discussions et ne la commitez pas dans git. Sur Mac, l'option 3 de la dernière question la range plutôt dans le Trousseau, elle n'est donc jamais sur le disque en clair.
 
-```sh
-source ~/.zshrc
-```
-
-**fish** utilise une syntaxe différente. Mettez ceci dans `~/.config/fish/config.fish` :
-
-```fish
-fish_add_path $HOME/.local/bin
-set -gx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
-```
-
-**Windows (PowerShell).** Sous Windows, il n'y a pas de fichier de profil à modifier pour cela. Enregistrez plutôt la clé comme variable d'environnement utilisateur (c'est aussi ce que fait l'assistant de configuration si vous choisissez l'option 2) :
-
-```powershell
-setx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
-# ou : setx OPENAI_API_KEY "sk-..."   /   setx OPENAI_BASE_URL "http://localhost:11434/v1"
-```
-
-Ensuite, **fermez PowerShell et ouvrez une nouvelle fenêtre**. `setx` n'a pas d'effet sur la fenêtre dans laquelle il est lancé. Vous pouvez aussi le faire à la souris : Démarrer → *Edit environment variables for your account* → *New…*.
-
-> 🔒 **Gardez votre clé secrète.** Ne commitez pas votre fichier de profil dans git et ne collez pas la clé dans des discussions. Sur Mac, vous pouvez plutôt la conserver dans le Trousseau ; voir l'[étape 2 du démarrage rapide](#étape-2--connecter-un-modèle).
+Vous préférez gérer la clé vous-même avec des variables d'environnement ? C'est possible aussi, mais c'est la voie avancée ; voir [Avancé : définir la clé à la main](#étape-2--connecter-un-modèle) dans le démarrage rapide.
 
 ### 4. Vérifiez que tout fonctionne
+
+**Ouvrez une nouvelle fenêtre de terminal** pour qu'elle prenne en compte la modification du PATH faite par l'assistant (Windows : une nouvelle fenêtre PowerShell). Ensuite :
 
 ```sh
 agentiloop --version
 ```
 
-Vous devriez voir `agentiloop 0.0.2`. Vérifiez maintenant que la clé est chargée :
+Vous devriez voir `agentiloop 0.0.2`. Lancez-le maintenant sans option :
 
 ```sh
-echo $ANTHROPIC_API_KEY | cut -c1-10    # macOS / Linux : devrait afficher sk-ant-...
-```
-```powershell
-$env:ANTHROPIC_API_KEY.Substring(0,10)  # Windows PowerShell
+agentiloop
 ```
 
-Si rien ne s'affiche, revenez à l'étape 3. La clé n'est pas encore chargée.
+Il devrait aller directement à l'invite. Si l'assistant redémarre à la place, la clé n'a pas été enregistrée : refaites l'étape 3.
 
 ### 5. Votre première session
 
@@ -176,7 +187,7 @@ cd ~/agentiloop-test
 agentiloop --tui
 ```
 
-Vous utilisez **Ollama** ? Indiquez-lui le fournisseur et un modèle que vous avez téléchargé : `agentiloop -p openai -m qwen2.5-coder --tui`.
+Vous utilisez **Ollama** ? L'assistant a déjà retenu le serveur et le modèle que vous avez choisis. Pour passer à un autre modèle que vous avez téléchargé, tapez `/model` dans la session.
 
 Il ne vous reste qu'à taper ce que vous voulez avec vos propres mots et à appuyer sur **Enter**. Quelques bonnes premières demandes :
 
@@ -247,11 +258,11 @@ Dans une session, tapez `/help` pour voir les commandes du chat (`/model`, `/ses
 
 | Vous voyez | Solution |
 |---|---|
-| `command not found: agentiloop` | `~/.local/bin` n'est pas dans votre PATH. Ajoutez la ligne `export PATH=...` de l'étape 3, puis ouvrez un nouveau terminal. Sous Windows, ouvrez une nouvelle fenêtre PowerShell |
-| `Error: no provider credentials found` | Aucune clé n'est chargée. Refaites l'étape 3, puis vérifiez avec l'étape 4 |
+| `command not found: agentiloop` | `~/.local/bin` n'est pas dans votre PATH. Ouvrez d'abord une nouvelle fenêtre de terminal ; si cela ne suffit pas, lancez `~/.local/bin/agentiloop --setup` et répondez oui quand il propose de l'ajouter au PATH. Sous Windows, ouvrez une nouvelle fenêtre PowerShell |
+| `Error: no provider credentials found` | Aucune clé n'est enregistrée. Lancez `agentiloop --setup` (étape 3), puis vérifiez avec l'étape 4 |
 | macOS : *"agentiloop" cannot be opened* / *unidentified developer* | Cela arrive si vous avez téléchargé avec un navigateur au lieu de `curl`. Lancez `xattr -d com.apple.quarantine ~/.local/bin/agentiloop` |
 | Windows : *Windows protected your PC* | Cliquez sur **More info** → **Run anyway** |
-| `401` / `invalid x-api-key` / erreur d'authentification | La clé est fausse ou contient des espaces ou des guillemets. Copiez-la à nouveau et vérifiez la ligne dans votre profil |
+| `401` / `invalid x-api-key` / erreur d'authentification | La clé est fausse ou a été collée avec des espaces ou des guillemets. Copiez-la à nouveau et lancez `agentiloop --setup` pour la saisir de nouveau |
 | Ollama : modèle introuvable | Lancez `ollama list` et passez le nom exact avec `-m` |
 | Il continue d'utiliser un ancien modèle ou fournisseur | Il se souvient de vos derniers choix. Passez `-p` / `-m` pour les changer, ou lancez `agentiloop --reset` pour repartir de zéro |
 
@@ -281,32 +292,82 @@ Cela compile le programme et place une commande `agentiloop` dans votre PATH, da
 
 ### Étape 2 : connecter un modèle
 
-AgentiLoop a besoin d'un modèle avec qui parler.
+AgentiLoop a besoin d'un modèle avec qui parler. **Vous n'avez aucune variable d'environnement à définir pour cela** : l'assistant de configuration intégré pose quelques questions et enregistre tout pour vous.
 
-**Le plus simple :** lancez simplement `agentiloop`. Sur une machine sans clé configurée, un court assistant démarre : il demande quel fournisseur vous voulez, prend votre clé (saisie masquée), vérifie la connexion, vous laisse choisir un modèle et enregistre la clé dans `~/.agentiloop/env` (seul AgentiLoop le lit). Vous pouvez le relancer à tout moment avec `agentiloop --setup`, et `agentiloop --reset` remet tout à neuf.
+#### L'assistant de configuration (recommandé)
+
+Lancez simplement `agentiloop`. La première fois, quand aucune clé n'est encore configurée, l'assistant démarre tout seul. Il prend environ une minute et pose cinq questions :
+
+1. **Quel fournisseur** — Claude, OpenAI, un serveur local compatible OpenAI (Ollama, LM Studio, …) ou oMLX. Tapez un numéro.
+2. **Votre clé API** — saisie masquée, rien ne s'affiche à l'écran. Les serveurs locaux n'en ont généralement pas besoin ; pour oMLX sur le même Mac, l'assistant lit la clé dans les propres réglages d'oMLX, il ne la demande donc même pas.
+3. **Test de connexion** — l'assistant contacte le fournisseur immédiatement. Si la clé est fausse, il vous le dit et propose de réessayer ; rien n'est enregistré tant que ça ne fonctionne pas.
+4. **Quel modèle** — choisissez-en un dans la liste renvoyée par le fournisseur, ou appuyez sur Enter pour celui par défaut. Vous pourrez en changer à tout moment avec `/model`.
+5. **Où conserver la clé** — appuyez sur Enter pour l'emplacement par défaut, `~/.agentiloop/env`, un fichier privé que seul AgentiLoop lit. (Les autres choix, pour ceux qui veulent aussi la clé dans leur shell ou dans le Trousseau macOS, sont décrits sous *Avancé* ci-dessous.)
+
+Ensuite, il affiche `All set` et vous dépose à l'invite. Voici une exécution complète dans le terminal classique, en choisissant Claude et en acceptant les valeurs par défaut (votre liste de modèles sera différente) :
+
+```text
+$ agentiloop
+Welcome to AgentiLoop! Let's set things up (about a minute).
+Settings are kept in /Users/you/.agentiloop. Run `agentiloop --setup` or `/setup` to redo this, `agentiloop --reset` to start over.
+
+Which model provider do you want to use?
+  1  Claude (Anthropic) — API key from console.anthropic.com
+  2  OpenAI — API key from platform.openai.com
+  3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)
+  4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)
+Provider [1-4, default 1]: 1
+Anthropic API key (starts with sk-ant-, input hidden):
+Checking the connection…
+Connected (8 model(s) available).
+
+Pick a model (change it any time with /model):
+   1  claude-sonnet-5  (default)
+   2  claude-…
+   3  claude-…
+   …
+Model [1-8, an id, or Enter for claude-sonnet-5]:
+
+Where should the credential be saved?
+  1  /Users/you/.agentiloop/env (recommended; only agentiloop reads it, file mode 600)
+  2  Also add it to /Users/you/.zshrc so other tools in your terminal see it
+  3  macOS Keychain, with a line in /Users/you/.zshrc that reads it (nothing stored in plain text)
+Save to [1-3, default 1]:
+saved to /Users/you/.agentiloop/env
+
+All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
+```
+
+C'est tout. Désormais, `agentiloop` démarre directement à l'invite.
+
+Pour Claude, vous pouvez coller soit une clé API normale (`sk-ant-api…`), soit un jeton Claude Code (`sk-ant-oat01-…`, obtenu avec `claude setup-token`) ; AgentiLoop détecte de quel type il s'agit. Si vous avez choisi l'option 3 (Ollama, LM Studio, …), l'assistant demande aussi l'URL du serveur et propose `http://localhost:11434/v1` par défaut ; pour un Ollama local, il suffit donc d'appuyer sur Enter.
+
+**Le même assistant, en plein écran.** L'assistant s'exécute dans l'interface que vous utilisez. Lancez-le avec `--tui` et les mêmes questions apparaissent dans l'interface plein écran ; quand il a terminé, vous êtes déjà à l'invite :
 
 <img src="docs/setup-wizard-tui.png" width="900" alt="L'assistant de configuration dans l'interface plein écran (TUI) : fournisseur, clé API masquée, test de connexion, liste des modèles, emplacement de la clé, puis la première demande" />
+
+**Relancez-le ou recommencez à tout moment :**
 
 ```bash
 agentiloop --setup          # assistant dans le terminal classique
 agentiloop --setup --tui    # assistant dans la TUI plein écran (comme sur la capture)
-/setup                      # le relancer depuis une session en cours (REPL ou TUI)
+/setup                      # depuis une session en cours (REPL ou TUI)
+agentiloop --reset          # tout oublier et repartir de zéro
 ```
 
-L'assistant s'exécute dans l'interface que vous utilisez. `agentiloop --setup` pose ses questions dans le terminal classique ; `agentiloop --setup --tui` (ou une TUI mémorisée) les pose dans l'interface plein écran, comme sur la capture, et vous amène directement à l'invite une fois terminé. Dans une session en cours, `/setup` fait la même chose dans les deux.
+<details>
+<summary><b>Avancé : définir la clé à la main</b> (passez cette partie si l'assistant a fonctionné pour vous)</summary>
 
-**À la main :** définissez plutôt l'une de ces variables dans votre terminal :
+Si vous préférez gérer la clé vous-même, ou si vous exécutez AgentiLoop dans un script ou en CI où personne ne peut répondre à l'assistant, définissez l'une de ces variables d'environnement et AgentiLoop l'utilisera sans rien demander :
 
-| Je veux utiliser… | Faites ceci |
+| Je veux utiliser… | Définissez ceci |
 |---|---|
 | **Claude** (Anthropic) | `export ANTHROPIC_API_KEY=sk-ant-...` |
 | **OpenAI** | `export OPENAI_API_KEY=sk-...` |
-| **Ollama, LM Studio** ou tout serveur compatible OpenAI | `export OPENAI_BASE_URL=http://localhost:11434/v1` (utilisez l'adresse de votre serveur ; pas besoin de clé pour les serveurs locaux) |
-| **oMLX** (modèles locaux sur Apple Silicon) | En général, rien. Lancez oMLX, puis lancez AgentiLoop avec `-p omlx` (voir ci-dessous) |
+| **Ollama, LM Studio** ou tout serveur compatible OpenAI | `export OPENAI_BASE_URL=http://localhost:11434/v1` (l'adresse de votre serveur ; pas besoin de clé pour les serveurs locaux) |
+| **oMLX** (modèles locaux sur Apple Silicon) | En général, rien. Lancez oMLX, puis lancez AgentiLoop avec `-p omlx` |
 
-Pour Claude, vous pouvez utiliser une clé API normale (`sk-ant-api…`) ou un jeton Claude Code (`sk-ant-oat01-…`, que vous obtenez avec `claude setup-token`). AgentiLoop détecte de quel type il s'agit.
-
-**Détails sur oMLX.** Quand oMLX tourne sur le même Mac, AgentiLoop lit le port du serveur et la clé API dans le propre fichier de réglages d'oMLX (`~/.omlx/settings.json`) ; vous n'avez donc rien à exporter. Si oMLX tourne sur une autre machine, ou si vous voulez remplacer ces réglages, exportez-les vous-même :
+**Détails sur oMLX.** Quand oMLX tourne sur le même Mac, AgentiLoop lit le port du serveur et la clé API dans le propre fichier de réglages d'oMLX (`~/.omlx/settings.json`). Si oMLX tourne sur une autre machine, ou si vous voulez remplacer ces réglages :
 
 ```sh
 export OMLX_BASE_URL=http://192.168.1.50:7777/v1   # l'adresse du serveur oMLX (ou OMLX_PORT=7777 pour localhost)
@@ -315,7 +376,7 @@ export OMLX_API_KEY=...                            # la clé API des réglages d
 
 Si la vérification de clé API est désactivée dans oMLX, aucune clé n'est nécessaire.
 
-Un `export` ne dure que pour l'onglet de terminal dans lequel vous l'avez tapé. Pour le rendre permanent, ajoutez la ligne à votre profil de shell (`~/.zshrc` sur macOS). Sur Mac, vous pouvez garder la clé dans le Trousseau plutôt que dans le fichier :
+Un `export` ne dure que pour l'onglet de terminal dans lequel vous l'avez tapé. Pour le rendre permanent, vous ajouteriez la ligne à votre profil de shell (`~/.zshrc` sur macOS), ce qui est exactement ce que fait pour vous le choix **« Also add it to ~/.zshrc »** de l'assistant. De même, le choix **« macOS Keychain »** de l'assistant est la version automatique de ceci :
 
 ```sh
 # une seule fois : enregistrez la clé dans votre Trousseau
@@ -324,6 +385,8 @@ security add-generic-password -a "$USER" -s ANTHROPIC_API_KEY -w "sk-ant-..."
 # dans ~/.zshrc : chargez-la pour chaque nouveau terminal
 export ANTHROPIC_API_KEY="$(security find-generic-password -a "$USER" -s ANTHROPIC_API_KEY -w 2>/dev/null)"
 ```
+
+</details>
 
 ### Étape 3 : lancer
 
@@ -386,7 +449,7 @@ Certaines choses ne sont **jamais** retenues, volontairement :
 
 - `--yes` : sauter les demandes de permission doit être un choix délibéré à chaque fois
 - `--no-mcp`, `-C` et les demandes ponctuelles
-- Les clés API : elles restent dans votre profil de shell
+- Les clés API : elles vivent dans `~/.agentiloop/env` (écrit par l'assistant) ou dans l'environnement de votre shell, jamais dans `settings.json`
 
 Pour tout oublier, lancez `agentiloop --reset`.
 

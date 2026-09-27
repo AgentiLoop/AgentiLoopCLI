@@ -34,6 +34,16 @@ AgentiLoop 是一个在终端中运行的 AI 编程智能体，理念与 Claude 
 
 ---
 
+## ⚡ 第一次运行：设置向导搞定一切
+
+没有任何东西需要手动配置。第一次运行 `agentiloop` 时，内置的设置向导会自动启动。它会询问你想用哪个提供方（Claude、OpenAI、Ollama / LM Studio 或 oMLX），接收你的 API 密钥（隐藏输入），检查密钥是否有效，让你选择模型，然后把所有内容保存到 `~/.agentiloop`。大约一分钟，没有配置文件，没有 `export` 行。
+
+<img src="docs/setup-wizard-tui.png" width="900" alt="在全屏 TUI 中运行的设置向导：提供方、隐藏的 API 密钥、连接检查、模型列表、密钥保存位置，然后是第一条提示" />
+
+你可以随时用 `agentiloop --setup` 再次运行它（加上 `--tui` 使用全屏版本，或在会话中输入 `/setup`）。`agentiloop --reset` 会忘掉一切，从初始状态重新开始。从来没有安装过命令行程序？请按照下面的[第一次使用？](#-第一次使用5-分钟即可上手)一步一步来。
+
+---
+
 ## 🚀 第一次使用？5 分钟即可上手
 
 不需要 Rust，不需要 Go，也不需要编译。你只需下载一个文件，提供一个 API 密钥，就可以开始对话了。请按顺序完成以下步骤。
@@ -60,7 +70,7 @@ tar xzf agentiloop-macos-arm64.tar.gz
 mkdir -p ~/.local/bin && mv agentiloop-macos-arm64/agentiloop ~/.local/bin/
 ```
 
-这会把程序放到 `~/.local/bin`，也就是你主目录下的一个文件夹。第 3 步会告诉终端去那里查找它。
+这会把程序放到 `~/.local/bin`，也就是你主目录下的一个文件夹。第 3 步中的设置向导会提议让终端去那里查找它。
 
 **Windows。** 打开 **PowerShell**（开始菜单 → 输入 "PowerShell"）并粘贴：
 
@@ -85,84 +95,85 @@ AgentiLoop 是智能体，而它的"大脑"是你为它连接的 AI 模型。请
 
 把密钥复制到一个安全的地方。下一步会用到它。
 
-### 3. 在 shell 配置文件中保存设置
+### 3. 运行设置向导
 
-你的 **shell 配置文件**是一个小文本文件，终端每次打开新窗口时都会读取它。把设置写在那里，你只需要做一次。如果跳过这一步，你就得在每个新终端里重新输入密钥。这是大家卡住的头号原因。
+你不需要编辑任何文件，也不需要输入任何 `export` 命令。AgentiLoop 内置了一个设置向导，它会问你几个问题，并为你保存密钥。
 
-**是哪个文件？**
-
-| 系统 | Shell（默认） | 配置文件 |
-|---|---|---|
-| macOS（Catalina 10.15 及更高版本） | zsh | `~/.zshrc` |
-| 大多数 Linux 发行版 | bash | `~/.bashrc` |
-| 使用 zsh 的 Linux 或 Mac | zsh | `~/.zshrc` |
-| fish shell | fish | `~/.config/fish/config.fish` |
-| Windows | PowerShell | 不需要，见下文 |
-
-不确定自己用的是哪个 shell？运行 `echo $SHELL`。`~` 表示你的主文件夹，所以 `~/.zshrc` 例如就是 `/Users/you/.zshrc`。以点开头的文件在 Finder 和文件浏览器中是隐藏的，这很正常。
-
-**打开文件。** 使用下面任意一种方式（如果文件还不存在，它们会创建该文件）：
+因为 `~/.local/bin` 还不在你的 PATH 中，这一次请用完整路径启动它（在 Windows 上第 1 步已经设置好了 PATH，所以直接输入 `agentiloop` 即可）：
 
 ```sh
-nano ~/.zshrc                        # 在任何地方都能用，直接在终端里编辑
-touch ~/.zshrc && open -e ~/.zshrc   # macOS：在 TextEdit 中打开
+~/.local/bin/agentiloop
 ```
 
-（使用 bash 的 Linux：用 `~/.bashrc` 代替 `~/.zshrc`。）
+向导会带你完成五个简短的步骤。按 **Enter** 接受默认值，或者输入一个数字：
 
-**在文件末尾添加以下几行。** 只保留你需要的那行密钥，并把你真实的密钥粘贴到引号之间：
+1. **提供方**：输入 `1` 选择 Claude，`2` 选择 OpenAI，`3` 选择 Ollama。
+2. **API 密钥**：粘贴第 2 步中的密钥，然后按 Enter。粘贴时屏幕上不会有任何显示；这是故意的，密钥是隐藏的。Ollama 不需要密钥：在服务器地址处按 Enter，在密钥处再按一次 Enter。
+3. **连接检查**：向导会立即试用这个密钥。如果失败，它会说明原因并让你重试。在成功之前不会保存任何内容。
+4. **模型**：按 Enter 使用默认模型，或从列表中输入一个数字。
+5. **密钥保存位置**：按 Enter。这样它会保存在 `~/.agentiloop/env` 中，这是一个只有 AgentiLoop 会读取的私有文件。
 
-```sh
-# AgentiLoop
-export PATH="$HOME/.local/bin:$PATH"
+最后，向导会注意到 `~/.local/bin` 不在你的 PATH 中，并询问 `Add it to PATH in /Users/you/.zshrc?`。按 **Enter**（表示是）。然后它会显示 `All set`，你就进入了提示符。
 
-export ANTHROPIC_API_KEY="sk-ant-paste-your-key-here"          # Claude
-# export OPENAI_API_KEY="sk-paste-your-key-here"               # OpenAI
-# export OPENAI_BASE_URL="http://localhost:11434/v1"           # Ollama（无需密钥）
+下面是选择 Claude 并接受默认值时的完整过程：
+
+```text
+$ ~/.local/bin/agentiloop
+Welcome to AgentiLoop! Let's set things up (about a minute).
+Settings are kept in /Users/you/.agentiloop. Run `agentiloop --setup` or `/setup` to redo this, `agentiloop --reset` to start over.
+
+Which model provider do you want to use?
+  1  Claude (Anthropic) — API key from console.anthropic.com
+  2  OpenAI — API key from platform.openai.com
+  3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)
+  4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)
+Provider [1-4, default 1]: 1
+Anthropic API key (starts with sk-ant-, input hidden):
+Checking the connection…
+Connected (8 model(s) available).
+
+Pick a model (change it any time with /model):
+   1  claude-sonnet-5  (default)
+   2  claude-…
+   3  claude-…
+   …
+Model [1-8, an id, or Enter for claude-sonnet-5]:
+
+Where should the credential be saved?
+  1  /Users/you/.agentiloop/env (recommended; only agentiloop reads it, file mode 600)
+  2  Also add it to /Users/you/.zshrc so other tools in your terminal see it
+  3  macOS Keychain, with a line in /Users/you/.zshrc that reads it (nothing stored in plain text)
+Save to [1-3, default 1]:
+saved to /Users/you/.agentiloop/env
+
+`/Users/you/.local/bin` is not on your PATH, so `agentiloop` only works with its full path.
+Add it to PATH in /Users/you/.zshrc? [Y/n]
+updated /Users/you/.zshrc (between `# >>> agentiloop >>>` and `# <<< agentiloop <<<`); it applies to new terminals
+
+All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
 ```
 
-**保存并关闭。** 在 nano 中：按 **Ctrl-O**、**Enter**，然后按 **Ctrl-X**。在 TextEdit 中：按 **⌘S**，然后关闭窗口。
+你可以直接在这里开始对话，也可以输入 `/exit` 然后继续第 4 步。弄错了？`agentiloop --setup` 会重新运行向导，`agentiloop --reset` 会清除它保存的所有内容。
 
-**加载设置。** 打开一个新的终端窗口，或者运行：
+> 🔒 **请保管好你的密钥。** `~/.agentiloop/env` 只有你自己能读取。不要把密钥粘贴到聊天中，也不要提交到 git。在 Mac 上，最后一个问题中的选项 3 会把它存放在钥匙串中，这样它永远不会以明文形式出现在磁盘上。
 
-```sh
-source ~/.zshrc
-```
-
-**fish** 使用不同的语法。把下面的内容放进 `~/.config/fish/config.fish`：
-
-```fish
-fish_add_path $HOME/.local/bin
-set -gx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
-```
-
-**Windows（PowerShell）。** Windows 没有需要为此编辑的配置文件。请改为把密钥保存为用户环境变量（在设置向导中选 2 也会这样做）：
-
-```powershell
-setx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
-# 或者：setx OPENAI_API_KEY "sk-..."   /   setx OPENAI_BASE_URL "http://localhost:11434/v1"
-```
-
-然后**关闭 PowerShell 并打开一个新窗口**。`setx` 不会影响运行它的那个窗口。你也可以用鼠标完成：开始 → *Edit environment variables for your account* → *New…*。
-
-> 🔒 **请保管好你的密钥。** 不要把配置文件提交到 git，也不要把密钥粘贴到聊天中。在 Mac 上，你也可以把它存放在钥匙串中；请参阅[快速入门的第 2 步](#第-2-步连接模型)。
+更想自己用环境变量管理密钥？这也可以，但这是高级路线；请参阅快速入门中的[高级：手动设置密钥](#第-2-步连接模型)。
 
 ### 4. 检查是否正常工作
+
+**打开一个新的终端窗口**，让它加载向导所做的 PATH 更改（Windows：新的 PowerShell 窗口）。然后：
 
 ```sh
 agentiloop --version
 ```
 
-你应该会看到 `agentiloop 0.0.2`。接下来检查密钥是否已加载：
+你应该会看到 `agentiloop 0.0.2`。接下来不带任何选项运行它：
 
 ```sh
-echo $ANTHROPIC_API_KEY | cut -c1-10    # macOS / Linux：应输出 sk-ant-...
-```
-```powershell
-$env:ANTHROPIC_API_KEY.Substring(0,10)  # Windows PowerShell
+agentiloop
 ```
 
-如果什么都没有输出，请回到第 3 步。密钥还没有加载。
+它应该直接进入提示符。如果向导又启动了，说明密钥没有保存成功：请再完成一次第 3 步。
 
 ### 5. 你的第一次会话
 
@@ -176,7 +187,7 @@ cd ~/agentiloop-test
 agentiloop --tui
 ```
 
-使用 **Ollama**？告诉它提供方以及你已拉取的模型：`agentiloop -p openai -m qwen2.5-coder --tui`。
+使用 **Ollama**？向导已经记住了服务器和你选择的模型。要切换到另一个你已拉取的模型，在会话中输入 `/model`。
 
 现在只需用日常语言输入你想做的事，然后按 **Enter**。下面是一些不错的入门提示：
 
@@ -247,11 +258,11 @@ Options:
 
 | 你看到的 | 解决方法 |
 |---|---|
-| `command not found: agentiloop` | `~/.local/bin` 不在你的 PATH 中。添加第 3 步中的 `export PATH=...` 那一行，然后打开一个新终端。在 Windows 上，打开一个新的 PowerShell 窗口 |
-| `Error: no provider credentials found` | 没有加载任何密钥。重新完成第 3 步，然后按第 4 步检查 |
+| `command not found: agentiloop` | `~/.local/bin` 不在你的 PATH 中。先打开一个新的终端窗口；如果还不行，运行 `~/.local/bin/agentiloop --setup`，当它提议把它添加到 PATH 时选择是。在 Windows 上，打开一个新的 PowerShell 窗口 |
+| `Error: no provider credentials found` | 没有保存任何密钥。运行 `agentiloop --setup`（第 3 步），然后按第 4 步检查 |
 | macOS：*"agentiloop" cannot be opened* / *unidentified developer* | 如果你是用浏览器而不是 `curl` 下载的，就会出现这种情况。运行 `xattr -d com.apple.quarantine ~/.local/bin/agentiloop` |
 | Windows：*Windows protected your PC* | 点击 **More info** → **Run anyway** |
-| `401` / `invalid x-api-key` / 身份验证错误 | 密钥不正确，或者其中含有空格或引号。重新复制密钥，并检查配置文件中的那一行 |
+| `401` / `invalid x-api-key` / 身份验证错误 | 密钥不正确，或者粘贴时带上了空格或引号。重新复制密钥，然后运行 `agentiloop --setup` 重新输入 |
 | Ollama：model not found | 运行 `ollama list`，然后用 `-m` 传入准确的名称 |
 | 它一直在使用旧的模型或提供方 | 它会记住你上次的选择。传入 `-p` / `-m` 来更改，或运行 `agentiloop --reset` 从头开始 |
 
@@ -281,32 +292,82 @@ cargo install --path crates/agentiloop-cli
 
 ### 第 2 步：连接模型
 
-AgentiLoop 需要一个可以对话的模型。
+AgentiLoop 需要一个可以对话的模型。**你不需要为此设置任何环境变量**：内置的设置向导会问你几个问题，并为你保存所有内容。
 
-**最简单的方式：** 直接运行 `agentiloop`。在没有配置密钥的机器上，它会启动一个简短的向导：询问你想用哪个提供方，接收你的密钥（隐藏输入），检查连接，让你选择模型，然后把密钥保存到 `~/.agentiloop/env`（只有 AgentiLoop 会读取它）。你可以随时用 `agentiloop --setup` 重新运行向导，`agentiloop --reset` 则把一切恢复到初始状态。
+#### 设置向导（推荐）
+
+直接运行 `agentiloop`。第一次运行时，如果还没有配置密钥，向导会自动启动。它大约需要一分钟，会询问五件事：
+
+1. **使用哪个提供方** — Claude、OpenAI、本地兼容 OpenAI 的服务器（Ollama、LM Studio……）或 oMLX。输入一个数字。
+2. **你的 API 密钥** — 隐藏输入，屏幕上不会显示任何内容。本地服务器通常不需要密钥；如果 oMLX 运行在同一台 Mac 上，向导会从 oMLX 自己的设置中读取密钥，所以根本不会问。
+3. **连接检查** — 向导会立即与提供方通信。如果密钥不正确，它会告诉你并让你重试；在成功之前不会保存任何内容。
+4. **使用哪个模型** — 从提供方返回的列表中选择一个，或按 Enter 使用默认模型。之后可以随时用 `/model` 更改。
+5. **把密钥保存在哪里** — 按 Enter 使用默认位置 `~/.agentiloop/env`，这是一个只有 AgentiLoop 会读取的私有文件。（其他选项适合那些还想把密钥放进 shell 或 macOS 钥匙串的人，见下文的*高级*部分。）
+
+然后它会显示 `All set`，并把你带到提示符。下面是在普通终端中选择 Claude 并接受默认值的完整过程（你的模型列表会有所不同）：
+
+```text
+$ agentiloop
+Welcome to AgentiLoop! Let's set things up (about a minute).
+Settings are kept in /Users/you/.agentiloop. Run `agentiloop --setup` or `/setup` to redo this, `agentiloop --reset` to start over.
+
+Which model provider do you want to use?
+  1  Claude (Anthropic) — API key from console.anthropic.com
+  2  OpenAI — API key from platform.openai.com
+  3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)
+  4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)
+Provider [1-4, default 1]: 1
+Anthropic API key (starts with sk-ant-, input hidden):
+Checking the connection…
+Connected (8 model(s) available).
+
+Pick a model (change it any time with /model):
+   1  claude-sonnet-5  (default)
+   2  claude-…
+   3  claude-…
+   …
+Model [1-8, an id, or Enter for claude-sonnet-5]:
+
+Where should the credential be saved?
+  1  /Users/you/.agentiloop/env (recommended; only agentiloop reads it, file mode 600)
+  2  Also add it to /Users/you/.zshrc so other tools in your terminal see it
+  3  macOS Keychain, with a line in /Users/you/.zshrc that reads it (nothing stored in plain text)
+Save to [1-3, default 1]:
+saved to /Users/you/.agentiloop/env
+
+All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
+```
+
+就是这样。从现在起，`agentiloop` 会直接进入提示符。
+
+对于 Claude，你可以粘贴普通的 API 密钥（`sk-ant-api…`），也可以粘贴 Claude Code 令牌（`sk-ant-oat01-…`，可通过 `claude setup-token` 获取）；AgentiLoop 会自动识别是哪一种。如果你选择了选项 3（Ollama、LM Studio……），向导还会询问服务器 URL，并提供 `http://localhost:11434/v1` 作为默认值，所以对于本地 Ollama 只需按 Enter。
+
+**同一个向导，全屏版本。** 向导会在你使用的界面中运行。加上 `--tui` 启动，同样的问题会出现在全屏界面里；完成后你已经处于提示符：
 
 <img src="docs/setup-wizard-tui.png" width="900" alt="在全屏 TUI 中运行的设置向导：提供方、隐藏的 API 密钥、连接检查、模型列表、密钥保存位置，然后是第一条提示" />
+
+**随时重新运行或重做：**
 
 ```bash
 agentiloop --setup          # 在普通终端中运行向导
 agentiloop --setup --tui    # 在全屏 TUI 中运行向导（如截图所示）
-/setup                      # 在运行中的会话里重新运行（REPL 或 TUI 均可）
+/setup                      # 在运行中的会话里（REPL 或 TUI 均可）
+agentiloop --reset          # 忘掉一切，从初始状态重新开始
 ```
 
-向导会在你使用的界面中运行。`agentiloop --setup` 在普通终端里提问；`agentiloop --setup --tui`（或记住的 TUI）像截图那样在全屏界面里提问，完成后直接进入提示符。在会话中，`/setup` 在两种界面里都能做同样的事。
+<details>
+<summary><b>高级：手动设置密钥</b>（如果向导对你有效，可跳过这部分）</summary>
 
-**手动方式：** 改为在终端中设置以下其中一项：
+如果你更愿意自己管理密钥，或者你在脚本或 CI 中运行 AgentiLoop、没有人能回答向导的问题，请设置以下其中一个环境变量，AgentiLoop 会直接使用它而不再询问：
 
-| 我想使用… | 这样做 |
+| 我想使用… | 设置这个 |
 |---|---|
 | **Claude**（Anthropic） | `export ANTHROPIC_API_KEY=sk-ant-...` |
 | **OpenAI** | `export OPENAI_API_KEY=sk-...` |
-| **Ollama、LM Studio** 或任何兼容 OpenAI 的服务器 | `export OPENAI_BASE_URL=http://localhost:11434/v1`（使用你的服务器地址；本地服务器无需密钥） |
-| **oMLX**（Apple Silicon 上的本地模型） | 通常什么都不用做。启动 oMLX，然后用 `-p omlx` 运行 AgentiLoop（见下文） |
+| **Ollama、LM Studio** 或任何兼容 OpenAI 的服务器 | `export OPENAI_BASE_URL=http://localhost:11434/v1`（你的服务器地址；本地服务器无需密钥） |
+| **oMLX**（Apple Silicon 上的本地模型） | 通常什么都不用做。启动 oMLX，然后用 `-p omlx` 运行 AgentiLoop |
 
-对于 Claude，你可以使用普通的 API 密钥（`sk-ant-api…`），也可以使用 Claude Code 令牌（`sk-ant-oat01-…`，可通过 `claude setup-token` 获取）。AgentiLoop 会自动识别是哪一种。
-
-**oMLX 详情。** 当 oMLX 运行在同一台 Mac 上时，AgentiLoop 会从 oMLX 自己的设置文件（`~/.omlx/settings.json`）中读取服务器端口和 API 密钥，所以你不需要导出任何变量。如果 oMLX 运行在另一台机器上，或者你想覆盖这些设置，请自行导出：
+**oMLX 详情。** 当 oMLX 运行在同一台 Mac 上时，AgentiLoop 会从 oMLX 自己的设置文件（`~/.omlx/settings.json`）中读取服务器端口和 API 密钥。如果 oMLX 运行在另一台机器上，或者你想覆盖这些设置：
 
 ```sh
 export OMLX_BASE_URL=http://192.168.1.50:7777/v1   # oMLX 服务器的地址（本机可用 OMLX_PORT=7777）
@@ -315,7 +376,7 @@ export OMLX_API_KEY=...                            # oMLX 设置中的 API 密�
 
 如果 oMLX 关闭了 API 密钥验证，则不需要密钥。
 
-`export` 只在你输入它的那个终端标签页中有效。要让它永久生效，请把这一行添加到你的 shell 配置文件中（macOS 上为 `~/.zshrc`）。在 Mac 上，你可以把密钥存放在钥匙串中，而不是写在文件里：
+`export` 只在你输入它的那个终端标签页中有效。要让它永久生效，你需要把这一行添加到你的 shell 配置文件中（macOS 上为 `~/.zshrc`），而这正是向导的 **"也添加到 ~/.zshrc"** 选项为你做的事。同样，向导的 **"macOS 钥匙串"** 选项就是下面这段的免动手版本：
 
 ```sh
 # 只需一次：把密钥存入钥匙串
@@ -324,6 +385,8 @@ security add-generic-password -a "$USER" -s ANTHROPIC_API_KEY -w "sk-ant-..."
 # 写在 ~/.zshrc 中：每个新终端都会加载它
 export ANTHROPIC_API_KEY="$(security find-generic-password -a "$USER" -s ANTHROPIC_API_KEY -w 2>/dev/null)"
 ```
+
+</details>
 
 ### 第 3 步：运行
 
@@ -386,7 +449,7 @@ agentiloop --new          # 开始一段新对话（旧对话仍会保存）
 
 - `--yes`：跳过权限询问必须每次都是有意识的选择
 - `--no-mcp`、`-C` 和单次提示
-- API 密钥：它们保留在你的 shell 配置文件中
+- API 密钥：它们存放在 `~/.agentiloop/env`（由向导写入）或你的 shell 环境中，绝不会写入 `settings.json`
 
 要清除所有记忆，请运行 `agentiloop --reset`。
 

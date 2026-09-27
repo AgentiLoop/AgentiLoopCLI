@@ -34,6 +34,16 @@ AgentiLoop Agent! で作られました。私たちの自慢の子です。macOS
 
 ---
 
+## ⚡ 初回起動: セットアップウィザードがすべてやってくれます
+
+手動で設定するものは何もありません。`agentiloop` を初めて実行すると、組み込みのセットアップウィザードが自動的に起動します。使いたいプロバイダー (Claude、OpenAI、Ollama / LM Studio、または oMLX) を尋ね、API キーを受け取り (入力は隠されます)、キーが動くことを確認し、モデルを選ばせてから、すべてを `~/.agentiloop` に保存します。所要時間は 1 分ほどで、設定ファイルも `export` 行も不要です。
+
+<img src="docs/setup-wizard-tui.png" width="900" alt="フルスクリーン TUI 内で動くセットアップウィザード: プロバイダー、隠された API キー、接続確認、モデル一覧、キーの保存先、そして最初のプロンプト" />
+
+`agentiloop --setup` でいつでも再実行できます (フルスクリーン版にするには `--tui` を追加するか、セッション中に `/setup` と入力します)。`agentiloop --reset` はすべてを忘れて初期状態からやり直します。コマンドラインのプログラムをインストールしたことがありませんか？ 下の[はじめての方へ](#-はじめての方へ-5-分で使い始めましょう)を、順番どおりに進めてください。
+
+---
+
 ## 🚀 はじめての方へ: 5 分で使い始めましょう
 
 Rust も Go もコンパイルも不要です。ファイルを 1 つダウンロードし、API キーを設定すれば、すぐにチャットを始められます。手順どおりに進めてください。
@@ -60,7 +70,7 @@ tar xzf agentiloop-macos-arm64.tar.gz
 mkdir -p ~/.local/bin && mv agentiloop-macos-arm64/agentiloop ~/.local/bin/
 ```
 
-これでプログラムがホームディレクトリ内のフォルダー `~/.local/bin` に置かれます。ステップ 3 で、ターミナルがそこを探すように設定します。
+これでプログラムがホームディレクトリ内のフォルダー `~/.local/bin` に置かれます。ステップ 3 のセットアップウィザードが、ターミナルがそこを探すように設定することを提案してくれます。
 
 **Windows。** **PowerShell** を開き (スタートメニュー → 「PowerShell」と入力)、次を貼り付けます:
 
@@ -85,84 +95,85 @@ AgentiLoop はエージェントです。「頭脳」となるのは、接続す
 
 キーを安全な場所にコピーしておきましょう。次のステップで貼り付けます。
 
-### 3. 設定をシェルプロファイルに保存する
+### 3. セットアップウィザードを実行する
 
-**シェルプロファイル**とは、ターミナルが新しいウィンドウを開くたびに読み込む小さなテキストファイルです。ここに設定を書いておけば、この作業は一度だけで済みます。これを省くと、新しいターミナルを開くたびにキーを入力し直さなければなりません。これが、つまずく原因の第 1 位です。
+ファイルを編集したり、`export` コマンドを入力したりする必要はありません。AgentiLoop には組み込みのセットアップウィザードがあり、いくつか質問したうえでキーを保存してくれます。
 
-**どのファイルですか？**
-
-| システム | シェル (デフォルト) | プロファイルファイル |
-|---|---|---|
-| macOS (Catalina 10.15 以降) | zsh | `~/.zshrc` |
-| ほとんどの Linux ディストリビューション | bash | `~/.bashrc` |
-| zsh を使っている Linux または Mac | zsh | `~/.zshrc` |
-| fish シェル | fish | `~/.config/fish/config.fish` |
-| Windows | PowerShell | 不要、下記参照 |
-
-どのシェルを使っているかわからない場合は、`echo $SHELL` を実行してください。`~` はホームフォルダーを意味するので、`~/.zshrc` は例えば `/Users/you/.zshrc` です。ドットで始まるファイルは Finder やファイルブラウザーでは非表示になりますが、これは正常です。
-
-**ファイルを開きます。** 次のどちらかを使ってください (ファイルがまだなければ作成されます):
+`~/.local/bin` はまだ PATH に入っていないので、今回だけはフルパスで起動します (Windows ではステップ 1 で PATH がすでに設定済みなので、`agentiloop` と入力するだけです):
 
 ```sh
-nano ~/.zshrc                        # どこでも使えます、ターミナル内で直接編集
-touch ~/.zshrc && open -e ~/.zshrc   # macOS: テキストエディットで開きます
+~/.local/bin/agentiloop
 ```
 
-(bash を使っている Linux の場合: `~/.zshrc` の代わりに `~/.bashrc` を使ってください。)
+ウィザードは 5 つの短いステップを案内します。**Enter** を押すとデフォルトを受け入れ、番号を入力すると選択できます:
 
-**次の行を末尾に追加します。** 必要なキーの行だけを残し、引用符の間に実際のキーを貼り付けてください:
+1. **プロバイダー**: Claude なら `1`、OpenAI なら `2`、Ollama なら `3` を入力します。
+2. **API キー**: ステップ 2 のキーを貼り付けて Enter を押します。貼り付けても画面には何も表示されませんが、これは意図的なもので、キーが隠されています。Ollama にはキーが不要です: サーバーアドレスで Enter、キーでもう一度 Enter を押してください。
+3. **接続確認**: ウィザードはすぐにキーを試します。失敗した場合は理由を表示し、再入力させてくれます。うまくいくまで何も保存されません。
+4. **モデル**: Enter を押してデフォルトにするか、一覧から番号を入力します。
+5. **キーの保存先**: Enter を押します。これでキーは `~/.agentiloop/env` という、AgentiLoop だけが読むプライベートなファイルに保存されます。
 
-```sh
-# AgentiLoop
-export PATH="$HOME/.local/bin:$PATH"
+最後に、ウィザードは `~/.local/bin` が PATH に入っていないことに気づき、`Add it to PATH in /Users/you/.zshrc?` と尋ねます。**Enter** (はい) を押してください。すると `All set` と表示され、プロンプトに入ります。
 
-export ANTHROPIC_API_KEY="sk-ant-paste-your-key-here"          # Claude
-# export OPENAI_API_KEY="sk-paste-your-key-here"               # OpenAI
-# export OPENAI_BASE_URL="http://localhost:11434/v1"           # Ollama (キー不要)
+Claude を選んでデフォルトを受け入れた場合、全体の流れはこのようになります:
+
+```text
+$ ~/.local/bin/agentiloop
+Welcome to AgentiLoop! Let's set things up (about a minute).
+Settings are kept in /Users/you/.agentiloop. Run `agentiloop --setup` or `/setup` to redo this, `agentiloop --reset` to start over.
+
+Which model provider do you want to use?
+  1  Claude (Anthropic) — API key from console.anthropic.com
+  2  OpenAI — API key from platform.openai.com
+  3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)
+  4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)
+Provider [1-4, default 1]: 1
+Anthropic API key (starts with sk-ant-, input hidden):
+Checking the connection…
+Connected (8 model(s) available).
+
+Pick a model (change it any time with /model):
+   1  claude-sonnet-5  (default)
+   2  claude-…
+   3  claude-…
+   …
+Model [1-8, an id, or Enter for claude-sonnet-5]:
+
+Where should the credential be saved?
+  1  /Users/you/.agentiloop/env (recommended; only agentiloop reads it, file mode 600)
+  2  Also add it to /Users/you/.zshrc so other tools in your terminal see it
+  3  macOS Keychain, with a line in /Users/you/.zshrc that reads it (nothing stored in plain text)
+Save to [1-3, default 1]:
+saved to /Users/you/.agentiloop/env
+
+`/Users/you/.local/bin` is not on your PATH, so `agentiloop` only works with its full path.
+Add it to PATH in /Users/you/.zshrc? [Y/n]
+updated /Users/you/.zshrc (between `# >>> agentiloop >>>` and `# <<< agentiloop <<<`); it applies to new terminals
+
+All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
 ```
 
-**保存して閉じます。** nano の場合: **Ctrl-O**、**Enter**、そして **Ctrl-X**。テキストエディットの場合: **⌘S** を押してからウィンドウを閉じます。
+ここでそのままチャットを始めてもいいですし、`/exit` と入力してステップ 4 に進んでもかまいません。間違えましたか？ `agentiloop --setup` でウィザードをもう一度実行でき、`agentiloop --reset` で保存した内容をすべて消去できます。
 
-**読み込みます。** 新しいターミナルウィンドウを開くか、次を実行してください:
+> 🔒 **キーは秘密にしてください。** `~/.agentiloop/env` はあなただけが読めるファイルです。キーをチャットに貼り付けたり、git にコミットしたりしないでください。Mac では、最後の質問で 3 を選ぶと代わりにキーチェーンに保存されるので、平文でディスクに置かれることはありません。
 
-```sh
-source ~/.zshrc
-```
-
-**fish** は構文が異なります。次を `~/.config/fish/config.fish` に書いてください:
-
-```fish
-fish_add_path $HOME/.local/bin
-set -gx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
-```
-
-**Windows (PowerShell)。** Windows には、このために編集するプロファイルファイルはありません。代わりに、キーをユーザー環境変数として保存します (セットアップウィザードで 2 を選んだ場合も同じことをします):
-
-```powershell
-setx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
-# または: setx OPENAI_API_KEY "sk-..."   /   setx OPENAI_BASE_URL "http://localhost:11434/v1"
-```
-
-その後、**PowerShell を閉じて新しいウィンドウを開いてください**。`setx` は、実行したウィンドウ自体には反映されません。マウス操作でも設定できます: スタート → *Edit environment variables for your account* → *New…*。
-
-> 🔒 **キーは秘密にしてください。** プロファイルファイルを git にコミットしたり、キーをチャットに貼り付けたりしないでください。Mac では、代わりにキーチェーンに保存することもできます。[クイックスタートのステップ 2](#ステップ-2-モデルを接続する) を参照してください。
+環境変数を使ってキーを自分で管理したいですか？ それも可能ですが、上級者向けの方法です。クイックスタートの[上級者向け: キーを手動で設定する](#ステップ-2-モデルを接続する)を参照してください。
 
 ### 4. 動作を確認する
+
+ウィザードによる PATH の変更を反映させるため、**新しいターミナルウィンドウを開いてください** (Windows では新しい PowerShell ウィンドウ)。そのうえで:
 
 ```sh
 agentiloop --version
 ```
 
-`agentiloop 0.0.2` と表示されるはずです。次に、キーが読み込まれているか確認します:
+`agentiloop 0.0.2` と表示されるはずです。次に、オプションなしで実行します:
 
 ```sh
-echo $ANTHROPIC_API_KEY | cut -c1-10    # macOS / Linux: sk-ant-... と表示されるはずです
-```
-```powershell
-$env:ANTHROPIC_API_KEY.Substring(0,10)  # Windows PowerShell
+agentiloop
 ```
 
-何も表示されない場合は、ステップ 3 に戻ってください。キーがまだ読み込まれていません。
+そのままプロンプトが開くはずです。代わりにウィザードがもう一度起動した場合は、キーが保存されていません。ステップ 3 をもう一度やり直してください。
 
 ### 5. 最初のセッション
 
@@ -176,7 +187,7 @@ cd ~/agentiloop-test
 agentiloop --tui
 ```
 
-**Ollama** を使っていますか？ プロバイダーと、pull 済みのモデルを指定してください: `agentiloop -p openai -m qwen2.5-coder --tui`。
+**Ollama** を使っていますか？ ウィザードがサーバーと選んだモデルをすでに記憶しています。pull 済みの別のモデルに切り替えるには、セッション中に `/model` と入力してください。
 
 あとは、やりたいことを普通の言葉で入力して **Enter** を押すだけです。最初に試すのにおすすめのプロンプト:
 
@@ -247,11 +258,11 @@ Options:
 
 | 表示される内容 | 解決策 |
 |---|---|
-| `command not found: agentiloop` | `~/.local/bin` が PATH に入っていません。ステップ 3 の `export PATH=...` の行を追加してから、新しいターミナルを開いてください。Windows では、新しい PowerShell ウィンドウを開いてください |
-| `Error: no provider credentials found` | キーが読み込まれていません。ステップ 3 をやり直し、ステップ 4 で確認してください |
+| `command not found: agentiloop` | `~/.local/bin` が PATH に入っていません。まず新しいターミナルウィンドウを開いてください。それでも直らなければ `~/.local/bin/agentiloop --setup` を実行し、PATH に追加するか聞かれたら「はい」と答えてください。Windows では、新しい PowerShell ウィンドウを開いてください |
+| `Error: no provider credentials found` | キーが保存されていません。`agentiloop --setup` を実行し (ステップ 3)、ステップ 4 で確認してください |
 | macOS: *"agentiloop" cannot be opened* / *unidentified developer* | `curl` ではなくブラウザーでダウンロードした場合に起こります。`xattr -d com.apple.quarantine ~/.local/bin/agentiloop` を実行してください |
 | Windows: *Windows protected your PC* | **More info** → **Run anyway** をクリックしてください |
-| `401` / `invalid x-api-key` / 認証エラー | キーが間違っているか、スペースや引用符が含まれています。もう一度コピーして、プロファイル内の行を確認してください |
+| `401` / `invalid x-api-key` / 認証エラー | キーが間違っているか、スペースや引用符が混ざった状態で貼り付けられています。もう一度コピーして、`agentiloop --setup` を実行して入力し直してください |
 | Ollama: model not found | `ollama list` を実行して、正確な名前を `-m` で渡してください |
 | 古いモデルやプロバイダーが使われ続ける | 前回の選択を記憶しているためです。`-p` / `-m` を渡して変更するか、`agentiloop --reset` を実行して最初からやり直してください |
 
@@ -281,32 +292,82 @@ cargo install --path crates/agentiloop-cli
 
 ### ステップ 2: モデルを接続する
 
-AgentiLoop には、対話するためのモデルが必要です。
+AgentiLoop には、対話するためのモデルが必要です。**そのために環境変数を設定する必要はありません**: 組み込みのセットアップウィザードがいくつか質問して、すべてを保存してくれます。
 
-**いちばん簡単な方法:** `agentiloop` を実行するだけです。キーが設定されていないマシンでは短いウィザードが起動し、使いたいプロバイダーを尋ね、キーを受け取り (入力は隠されます)、接続を確認し、モデルを選ばせてから、キーを `~/.agentiloop/env` に保存します (AgentiLoop だけが読みます)。`agentiloop --setup` でいつでもやり直せ、`agentiloop --reset` ですべてを初期状態に戻せます。
+#### セットアップウィザード (おすすめ)
+
+`agentiloop` を実行するだけです。初回、まだキーが設定されていないときは、ウィザードが自動的に起動します。所要時間は 1 分ほどで、次の 5 つを尋ねます:
+
+1. **どのプロバイダーか** — Claude、OpenAI、ローカルの OpenAI 互換サーバー (Ollama、LM Studio、…)、または oMLX。番号を入力します。
+2. **API キー** — 入力は隠され、画面には何も表示されません。ローカルサーバーでは通常不要です。同じ Mac 上の oMLX の場合、ウィザードは oMLX 自身の設定からキーを読み込むので、そもそも尋ねられません。
+3. **接続確認** — ウィザードはその場でプロバイダーと通信します。キーが間違っていればそう伝えて、再入力を促します。うまくいくまで何も保存されません。
+4. **どのモデルか** — プロバイダーが返した一覧から 1 つ選ぶか、Enter を押してデフォルトにします。後から `/model` でいつでも変更できます。
+5. **キーの保存先** — Enter を押してデフォルトの `~/.agentiloop/env` にします。これは AgentiLoop だけが読むプライベートなファイルです。(キーをシェルや macOS のキーチェーンにも置きたい人向けの他の選択肢は、下の*上級者向け*で説明します。)
+
+その後 `All set` と表示され、プロンプトに入ります。通常のターミナルで Claude を選び、デフォルトを受け入れた場合の一連の流れはこうなります (モデルの一覧はお使いの環境によって異なります):
+
+```text
+$ agentiloop
+Welcome to AgentiLoop! Let's set things up (about a minute).
+Settings are kept in /Users/you/.agentiloop. Run `agentiloop --setup` or `/setup` to redo this, `agentiloop --reset` to start over.
+
+Which model provider do you want to use?
+  1  Claude (Anthropic) — API key from console.anthropic.com
+  2  OpenAI — API key from platform.openai.com
+  3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)
+  4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)
+Provider [1-4, default 1]: 1
+Anthropic API key (starts with sk-ant-, input hidden):
+Checking the connection…
+Connected (8 model(s) available).
+
+Pick a model (change it any time with /model):
+   1  claude-sonnet-5  (default)
+   2  claude-…
+   3  claude-…
+   …
+Model [1-8, an id, or Enter for claude-sonnet-5]:
+
+Where should the credential be saved?
+  1  /Users/you/.agentiloop/env (recommended; only agentiloop reads it, file mode 600)
+  2  Also add it to /Users/you/.zshrc so other tools in your terminal see it
+  3  macOS Keychain, with a line in /Users/you/.zshrc that reads it (nothing stored in plain text)
+Save to [1-3, default 1]:
+saved to /Users/you/.agentiloop/env
+
+All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
+```
+
+これで完了です。以降は `agentiloop` を実行すると、そのままプロンプトが開きます。
+
+Claude では、通常の API キー (`sk-ant-api…`) と Claude Code のトークン (`sk-ant-oat01-…`、`claude setup-token` で取得できます) のどちらでも貼り付けられます。AgentiLoop がどちらの種類かを自動で判別します。3 (Ollama、LM Studio、…) を選んだ場合、ウィザードはサーバーの URL も尋ね、デフォルトとして `http://localhost:11434/v1` を提示するので、ローカルの Ollama なら Enter を押すだけです。
+
+**同じウィザードをフルスクリーンで。** ウィザードは使っているインターフェースの中で動きます。`--tui` を付けて起動すると、同じ質問がフルスクリーン画面の中に表示され、終わるとそのままプロンプトに入っています:
 
 <img src="docs/setup-wizard-tui.png" width="900" alt="フルスクリーン TUI 内で動くセットアップウィザード: プロバイダー、隠された API キー、接続確認、モデル一覧、キーの保存先、そして最初のプロンプト" />
+
+**いつでも再実行・やり直しできます:**
 
 ```bash
 agentiloop --setup          # 通常のターミナルでウィザード
 agentiloop --setup --tui    # フルスクリーン TUI の中でウィザード (スクリーンショットのように)
-/setup                      # 実行中のセッションから再実行 (REPL でも TUI でも)
+/setup                      # 実行中のセッションの中から (REPL でも TUI でも)
+agentiloop --reset          # すべてを忘れて初期状態からやり直す
 ```
 
-ウィザードは使っているインターフェースの中で動きます。`agentiloop --setup` は通常のターミナルで質問し、`agentiloop --setup --tui` (または記憶された TUI) はスクリーンショットのようにフルスクリーン画面の中で質問して、終わるとそのままプロンプトに入ります。セッション中は `/setup` がどちらでも同じことをします。
+<details>
+<summary><b>上級者向け: キーを手動で設定する</b> (ウィザードでうまくいった場合はスキップしてください)</summary>
 
-**手動で:** 代わりに、ターミナルで次のいずれかを設定してください:
+キーを自分で管理したい場合や、誰もウィザードに答えられないスクリプトや CI で AgentiLoop を動かす場合は、次の環境変数のいずれかを設定してください。AgentiLoop は何も尋ねずにそれを使います:
 
-| 使いたいもの… | やること |
+| 使いたいもの… | 設定するもの |
 |---|---|
 | **Claude** (Anthropic) | `export ANTHROPIC_API_KEY=sk-ant-...` |
 | **OpenAI** | `export OPENAI_API_KEY=sk-...` |
-| **Ollama、LM Studio**、または任意の OpenAI 互換サーバー | `export OPENAI_BASE_URL=http://localhost:11434/v1` (お使いのサーバーのアドレスを指定します。ローカルサーバーならキーは不要です) |
-| **oMLX** (Apple Silicon 上のローカルモデル) | 通常は何もしなくて大丈夫です。oMLX を起動してから、`-p omlx` を付けて AgentiLoop を実行します (下記参照) |
+| **Ollama、LM Studio**、または任意の OpenAI 互換サーバー | `export OPENAI_BASE_URL=http://localhost:11434/v1` (お使いのサーバーのアドレス。ローカルサーバーならキーは不要です) |
+| **oMLX** (Apple Silicon 上のローカルモデル) | 通常は何もしなくて大丈夫です。oMLX を起動してから、`-p omlx` を付けて AgentiLoop を実行します |
 
-Claude では、通常の API キー (`sk-ant-api…`) または Claude Code のトークン (`sk-ant-oat01-…`、`claude setup-token` で取得できます) を使えます。AgentiLoop がどちらの種類かを自動で判別します。
-
-**oMLX の詳細。** oMLX が同じ Mac で動いている場合、AgentiLoop は oMLX 自身の設定ファイル (`~/.omlx/settings.json`) からサーバーのポートと API キーを読み込むので、何も export する必要はありません。oMLX が別のマシンで動いている場合や、その設定を上書きしたい場合は、自分で export してください:
+**oMLX の詳細。** oMLX が同じ Mac で動いている場合、AgentiLoop は oMLX 自身の設定ファイル (`~/.omlx/settings.json`) からサーバーのポートと API キーを読み込みます。oMLX が別のマシンで動いている場合や、その設定を上書きしたい場合は:
 
 ```sh
 export OMLX_BASE_URL=http://192.168.1.50:7777/v1   # oMLX サーバーのアドレス (localhost なら OMLX_PORT=7777)
@@ -315,7 +376,7 @@ export OMLX_API_KEY=...                            # oMLX の設定にある API
 
 oMLX で API キーの検証がオフになっている場合、キーは不要です。
 
-`export` は、入力したターミナルのタブでしか有効になりません。永続的にするには、その行をシェルプロファイル (macOS では `~/.zshrc`) に追加してください。Mac では、キーをファイルではなくキーチェーンに保存することもできます:
+`export` は、入力したターミナルのタブでしか有効になりません。永続的にするには、その行をシェルプロファイル (macOS では `~/.zshrc`) に追加することになりますが、これはまさにウィザードの **「Also add it to ~/.zshrc」** の選択肢がやってくれることです。同様に、ウィザードの **「macOS Keychain」** の選択肢は、次の手順を自動でやってくれるものです:
 
 ```sh
 # 一度だけ: キーをキーチェーンに保存します
@@ -324,6 +385,8 @@ security add-generic-password -a "$USER" -s ANTHROPIC_API_KEY -w "sk-ant-..."
 # ~/.zshrc に記述: 新しいターミナルを開くたびに読み込みます
 export ANTHROPIC_API_KEY="$(security find-generic-password -a "$USER" -s ANTHROPIC_API_KEY -w 2>/dev/null)"
 ```
+
+</details>
 
 ### ステップ 3: 実行する
 
@@ -386,7 +449,7 @@ agentiloop --new          # 新しい会話を開始 (以前の会話は保存�
 
 - `--yes`: 許可の確認をスキップするのは、毎回意識して選ぶべきことだからです
 - `--no-mcp`、`-C`、ワンショットのプロンプト
-- API キー: これらはシェルプロファイルに保存したままにします
+- API キー: これらは `~/.agentiloop/env` (ウィザードが書き込みます) またはシェルの環境変数に置かれ、`settings.json` には決して保存されません
 
 すべてを忘れさせるには、`agentiloop --reset` を実行してください。
 
