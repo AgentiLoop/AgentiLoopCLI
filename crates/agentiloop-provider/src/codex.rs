@@ -227,7 +227,7 @@ fn http_error(status: u16, text: &str) -> anyhow::Error {
 
 /// Conversation → Responses `input` items. Tool calls and results become
 /// `function_call` / `function_call_output` items (no server-side state: `store:false`).
-fn to_input(history: &[Message]) -> Vec<Value> {
+pub(crate) fn to_input(history: &[Message]) -> Vec<Value> {
     let mut out = Vec::new();
     for m in history {
         let (role, kind) = match m.role {
@@ -292,80 +292,90 @@ impl Provider for CodexProvider {
         on_text: &mut (dyn for<'a> FnMut(&'a str) + Send),
     ) -> anyhow::Result<ProviderResponse> {
         let resp = self.send("/responses", Some(&self.request_body(&req))).await?;
-        let mut body = resp.bytes_stream();
-        let mut buf: Vec<u8> = Vec::new();
-        let mut content = Vec::new();
-        let (mut stop, mut input_tokens, mut output_tokens) = (StopReason::EndTurn, 0, 0);
+        read_stream(resp, on_text, "codex").await
+    }
+}
 
-        while let Some(chunk) = body.next().await {
-            buf.extend_from_slice(&chunk.context("reading Codex stream")?);
-            while let Some(nl) = buf.iter().position(|&b| b == b'\n') {
-                let line: Vec<u8> = buf.drain(..=nl).collect();
-                let line = String::from_utf8_lossy(&line);
-                let Some(data) = line.trim_end().strip_prefix("data:") else { continue };
-                let Ok(ev) = serde_json::from_str::<Value>(data.trim_start()) else { continue };
-                match ev["type"].as_str().unwrap_or_default() {
-                    "response.output_text.delta" => {
-                        if let Some(d) = ev["delta"].as_str() {
-                            on_text(d);
-                        }
+/// Parse a Responses API SSE stream (Codex backend or api.openai.com
+/// `/v1/responses`) into one assistant turn. `who` prefixes stream errors.
+pub(crate) async fn read_stream(
+    resp: reqwest::Response,
+    on_text: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    who: &str,
+) -> anyhow::Result<ProviderResponse> {
+    let mut body = resp.bytes_stream();
+    let mut buf: Vec<u8> = Vec::new();
+    let mut content = Vec::new();
+    let (mut stop, mut input_tokens, mut output_tokens) = (StopReason::EndTurn, 0, 0);
+
+    while let Some(chunk) = body.next().await {
+        buf.extend_from_slice(&chunk.with_context(|| format!("reading {who} stream"))?);
+        while let Some(nl) = buf.iter().position(|&b| b == b'\n') {
+            let line: Vec<u8> = buf.drain(..=nl).collect();
+            let line = String::from_utf8_lossy(&line);
+            let Some(data) = line.trim_end().strip_prefix("data:") else { continue };
+            let Ok(ev) = serde_json::from_str::<Value>(data.trim_start()) else { continue };
+            match ev["type"].as_str().unwrap_or_default() {
+                "response.output_text.delta" => {
+                    if let Some(d) = ev["delta"].as_str() {
+                        on_text(d);
                     }
-                    // Completed items carry the full text / call arguments.
-                    "response.output_item.done" => {
-                        let item = &ev["item"];
-                        match item["type"].as_str() {
-                            Some("message") => {
-                                let text: String =
-                                    item["content"].as_array().into_iter().flatten().filter_map(|c| c["text"].as_str()).collect();
-                                if !text.is_empty() {
-                                    content.push(ContentBlock::Text { text });
-                                }
-                            }
-                            Some("function_call") => {
-                                let name = item["name"].as_str().unwrap_or_default().to_string();
-                                let args = item["arguments"].as_str().filter(|a| !a.trim().is_empty()).unwrap_or("{}");
-                                let input = serde_json::from_str(args)
-                                    .with_context(|| format!("model sent invalid JSON arguments for `{name}`: {args}"))?;
-                                let id = item["call_id"].as_str().or(item["id"].as_str()).unwrap_or_default().to_string();
-                                content.push(ContentBlock::ToolUse { id, name, input });
-                            }
-                            _ => {}
-                        }
-                    }
-                    "response.completed" | "response.incomplete" => {
-                        let r = &ev["response"];
-                        input_tokens = r["usage"]["input_tokens"].as_u64().unwrap_or(0);
-                        output_tokens = r["usage"]["output_tokens"].as_u64().unwrap_or(0);
-                        if ev["type"] == "response.incomplete" {
-                            stop = match r["incomplete_details"]["reason"].as_str() {
-                                Some("max_output_tokens") => StopReason::MaxTokens,
-                                _ => StopReason::Other,
-                            };
-                        }
-                    }
-                    "response.failed" => {
-                        let msg = ev["response"]["error"]["message"].as_str().unwrap_or("response.failed");
-                        anyhow::bail!("codex: {msg}");
-                    }
-                    "error" => {
-                        let msg = ev["message"].as_str().or(ev["error"]["message"].as_str()).unwrap_or("stream error");
-                        anyhow::bail!("codex: {msg}");
-                    }
-                    _ => {}
                 }
+                // Completed items carry the full text / call arguments.
+                "response.output_item.done" => {
+                    let item = &ev["item"];
+                    match item["type"].as_str() {
+                        Some("message") => {
+                            let text: String =
+                                item["content"].as_array().into_iter().flatten().filter_map(|c| c["text"].as_str()).collect();
+                            if !text.is_empty() {
+                                content.push(ContentBlock::Text { text });
+                            }
+                        }
+                        Some("function_call") => {
+                            let name = item["name"].as_str().unwrap_or_default().to_string();
+                            let args = item["arguments"].as_str().filter(|a| !a.trim().is_empty()).unwrap_or("{}");
+                            let input = serde_json::from_str(args)
+                                .with_context(|| format!("model sent invalid JSON arguments for `{name}`: {args}"))?;
+                            let id = item["call_id"].as_str().or(item["id"].as_str()).unwrap_or_default().to_string();
+                            content.push(ContentBlock::ToolUse { id, name, input });
+                        }
+                        _ => {}
+                    }
+                }
+                "response.completed" | "response.incomplete" => {
+                    let r = &ev["response"];
+                    input_tokens = r["usage"]["input_tokens"].as_u64().unwrap_or(0);
+                    output_tokens = r["usage"]["output_tokens"].as_u64().unwrap_or(0);
+                    if ev["type"] == "response.incomplete" {
+                        stop = match r["incomplete_details"]["reason"].as_str() {
+                            Some("max_output_tokens") => StopReason::MaxTokens,
+                            _ => StopReason::Other,
+                        };
+                    }
+                }
+                "response.failed" => {
+                    let msg = ev["response"]["error"]["message"].as_str().unwrap_or("response.failed");
+                    anyhow::bail!("{who}: {msg}");
+                }
+                "error" => {
+                    let msg = ev["message"].as_str().or(ev["error"]["message"].as_str()).unwrap_or("stream error");
+                    anyhow::bail!("{who}: {msg}");
+                }
+                _ => {}
             }
         }
-
-        if content.iter().any(|b| matches!(b, ContentBlock::ToolUse { .. })) {
-            stop = StopReason::ToolUse;
-        }
-        Ok(ProviderResponse {
-            message: Message { role: Role::Assistant, content },
-            stop_reason: stop,
-            input_tokens,
-            output_tokens,
-        })
     }
+
+    if content.iter().any(|b| matches!(b, ContentBlock::ToolUse { .. })) {
+        stop = StopReason::ToolUse;
+    }
+    Ok(ProviderResponse {
+        message: Message { role: Role::Assistant, content },
+        stop_reason: stop,
+        input_tokens,
+        output_tokens,
+    })
 }
 
 #[cfg(test)]

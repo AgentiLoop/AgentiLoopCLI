@@ -102,6 +102,46 @@ impl OpenAIProvider {
         }
     }
 
+    /// Real OpenAI goes through `/v1/responses`: current models (gpt-6-*)
+    /// reject function tools on `/v1/chat/completions` whenever reasoning is
+    /// on — which it is by default — while Responses takes tools either way.
+    /// Same wire format as the Codex backend, so its converters and SSE
+    /// parser are reused. Every other compatible server keeps chat/completions.
+    fn uses_responses(&self) -> bool {
+        self.name == "openai" && self.base_url.starts_with("https://api.openai.com")
+    }
+
+    async fn send_responses(&self, req: &ProviderRequest) -> anyhow::Result<reqwest::Response> {
+        let mut body = serde_json::json!({
+            "model": req.model,
+            "instructions": req.system,
+            "input": crate::codex::to_input(&req.messages),
+            "max_output_tokens": req.max_tokens,
+            "store": false,
+            "stream": true,
+        });
+        if !req.tools.is_empty() {
+            body["tools"] = req
+                .tools
+                .iter()
+                .map(|t| serde_json::json!({"type": "function", "name": t.name, "description": t.description, "parameters": t.input_schema}))
+                .collect();
+        }
+        let resp = self
+            .auth(self.client.post(format!("{}/responses", self.base_url)))
+            .header("accept", "text/event-stream")
+            .json(&body)
+            .send()
+            .await
+            .with_context(|| format!("request to {} failed", self.base_url))?;
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp.text().await.context("reading error body")?;
+            return Err(self.http_error(status, &text));
+        }
+        Ok(resp)
+    }
+
     async fn send_chat(&self, req: &ProviderRequest, stream: bool) -> anyhow::Result<reqwest::Response> {
         let body = self.wire_request(req, stream);
         let resp = self
@@ -522,6 +562,9 @@ impl Provider for OpenAIProvider {
     }
 
     async fn complete(&self, req: ProviderRequest) -> anyhow::Result<ProviderResponse> {
+        if self.uses_responses() {
+            return self.complete_stream(req, &mut |_| {}).await;
+        }
         let resp = self.send_chat(&req, false).await?;
         let text = resp.text().await.context("reading response body")?;
         let wire: WireResponse = serde_json::from_str(&text).context("decoding OpenAI response")?;
@@ -545,6 +588,10 @@ impl Provider for OpenAIProvider {
         req: ProviderRequest,
         on_text: &mut (dyn for<'a> FnMut(&'a str) + Send),
     ) -> anyhow::Result<ProviderResponse> {
+        if self.uses_responses() {
+            let resp = self.send_responses(&req).await?;
+            return crate::codex::read_stream(resp, on_text, self.name).await;
+        }
         let resp = self.send_chat(&req, true).await?;
         let mut body = resp.bytes_stream();
 
@@ -1060,5 +1107,13 @@ data: [DONE]
         assert_eq!(local["max_tokens"], 16);
         assert!(local.get("max_completion_tokens").is_none());
     }
-}
 
+    // gpt-6-* 400 on chat/completions tools with reasoning on; only real
+    // OpenAI is moved to /v1/responses.
+    #[test]
+    fn only_official_openai_uses_responses() {
+        assert!(OpenAIProvider::new("k", DEFAULT_BASE_URL).uses_responses());
+        assert!(!OpenAIProvider::new("k", "http://localhost:11434/v1").uses_responses());
+        assert!(!OpenAIProvider::new("k", DEFAULT_BASE_URL).with_identity("omlx", "").uses_responses());
+    }
+}
