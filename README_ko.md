@@ -30,7 +30,7 @@ Rust로 작성되었고 macOS, Linux, Windows에서 실행돼요. Claude (Anthro
 
 AgentiLoop Agent!로 만들었어요. 저희가 정성껏 키운 아이예요. macOS, Linux, Windows용 사전 빌드된 바이너리는 [Releases](https://github.com/AgentiLoop/AgentiLoopCLI/releases) 페이지에 있고, Rust로 소스에서 직접 컴파일할 수도 있어요.
 
-<img width="2048" height="1152" alt="AgentiLoop가 코딩하는 모습" src="https://github.com/user-attachments/assets/d910bbd2-b47d-4c4a-89af-ac0753ccf279" />
+<img src="docs/pong.png" width="900" alt="AgentiLoop가 프롬프트 하나로 SwiftUI Atari 스타일 Pong 게임을 작성, 빌드, 실행하는 모습. 실시간 diff와 실행 중인 게임 창" />
 
 ---
 

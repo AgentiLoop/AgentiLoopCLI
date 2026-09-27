@@ -30,7 +30,7 @@ AgentiLoop — это ИИ-агент для программирования, �
 
 Создано с помощью AgentiLoop Agent! Это наше детище. Готовые сборки для macOS, Linux и Windows доступны на странице [Releases](https://github.com/AgentiLoop/AgentiLoopCLI/releases), либо вы можете скомпилировать программу из исходников с помощью Rust.
 
-<img width="2048" height="1152" alt="AgentiLoop пишет код" src="https://github.com/user-attachments/assets/d910bbd2-b47d-4c4a-89af-ac0753ccf279" />
+<img src="docs/pong.png" width="900" alt="AgentiLoop пишет, собирает и запускает игру Pong в стиле Atari на SwiftUI по одному запросу: живой diff и окно запущенной игры" />
 
 ---
 

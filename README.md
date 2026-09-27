@@ -8,10 +8,6 @@
 
 ---
 
-<img width="1550" height="970" alt="image" src="https://github.com/user-attachments/assets/f66375f7-f547-4699-8ff1-624676b84411" />
-
----
-
 **Take it for a spin!** Read the README and see how long it takes you to get AgentiLoop up and running. If you hit any issues, let us know. We'd love your feedback.
 
 **Bonus:** A Go version is available too: **AgentiLoopGo** → https://github.com/AgentiLoop/AgentiLoopGo
@@ -34,7 +30,7 @@ It's written in Rust and runs on macOS, Linux and Windows. It works with Claude 
 
 Created with AgentiLoop Agent! This is our baby. Prebuilt binaries for macOS, Linux and Windows are on the [Releases](https://github.com/AgentiLoop/AgentiLoopCLI/releases) page, or compile it from source with Rust.
 
-<img width="2048" height="1152" alt="AgentiLoop Coding in action" src="https://github.com/user-attachments/assets/d910bbd2-b47d-4c4a-89af-ac0753ccf279" />
+<img src="docs/pong.png" width="900" alt="AgentiLoop writing, building and launching an Atari-style Pong game in SwiftUI from a single prompt, with the live diff and the running game window" />
 
 ---
 

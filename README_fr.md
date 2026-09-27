@@ -30,7 +30,7 @@ Il est écrit en Rust et fonctionne sur macOS, Linux et Windows. Il fonctionne a
 
 Créé avec AgentiLoop Agent! C'est notre bébé. Des binaires précompilés pour macOS, Linux et Windows sont disponibles sur la page [Releases](https://github.com/AgentiLoop/AgentiLoopCLI/releases), ou vous pouvez le compiler depuis les sources avec Rust.
 
-<img width="2048" height="1152" alt="AgentiLoop en train de coder" src="https://github.com/user-attachments/assets/d910bbd2-b47d-4c4a-89af-ac0753ccf279" />
+<img src="docs/pong.png" width="900" alt="AgentiLoop écrit, compile et lance un jeu Pong façon Atari en SwiftUI à partir d'une seule demande, avec le diff en direct et la fenêtre du jeu en cours" />
 
 ---
 

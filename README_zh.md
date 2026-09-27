@@ -30,7 +30,7 @@ AgentiLoop 是一个在终端中运行的 AI 编程智能体，理念与 Claude 
 
 由 AgentiLoop Agent! 创建。这是我们的心血之作。macOS、Linux 和 Windows 的预编译二进制文件可以在 [Releases](https://github.com/AgentiLoop/AgentiLoopCLI/releases) 页面下载，你也可以用 Rust 从源码编译。
 
-<img width="2048" height="1152" alt="AgentiLoop 编程实况" src="https://github.com/user-attachments/assets/d910bbd2-b47d-4c4a-89af-ac0753ccf279" />
+<img src="docs/pong.png" width="900" alt="AgentiLoop 根据一条提示用 SwiftUI 编写、构建并启动 Atari 风格的 Pong 游戏，展示实时 diff 和正在运行的游戏窗口" />
 
 ---
 
