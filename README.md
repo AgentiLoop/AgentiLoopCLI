@@ -64,7 +64,7 @@ tar xzf agentiloop-macos-arm64.tar.gz
 mkdir -p ~/.local/bin && mv agentiloop-macos-arm64/agentiloop ~/.local/bin/
 ```
 
-That puts the program in `~/.local/bin`, a folder in your home directory. Step 3 tells your terminal to look there.
+That puts the program in `~/.local/bin`, a folder in your home directory. The setup wizard in step 3 offers to tell your terminal to look there.
 
 **Windows.** Open **PowerShell** (Start menu → type "PowerShell") and paste:
 
@@ -89,84 +89,85 @@ AgentiLoop is the agent. The "brain" is an AI model that you connect it to. Pick
 
 Copy the key somewhere safe. You'll paste it in the next step.
 
-### 3. Save your settings in your shell profile
+### 3. Run the setup wizard
 
-Your **shell profile** is a small text file that your terminal reads every time it opens a new window. Put your settings there and you only have to do this once. If you skip it, you'd have to type your key again in every new terminal. That's the #1 reason people get stuck.
+You don't edit any files or type any `export` commands. AgentiLoop has a built-in setup wizard that asks a few questions and saves your key for you.
 
-**Which file is it?**
-
-| System | Shell (default) | Profile file |
-|---|---|---|
-| macOS (Catalina 10.15 and newer) | zsh | `~/.zshrc` |
-| Most Linux distros | bash | `~/.bashrc` |
-| Linux or Mac with zsh | zsh | `~/.zshrc` |
-| fish shell | fish | `~/.config/fish/config.fish` |
-| Windows | PowerShell | none needed, see below |
-
-Not sure which shell you use? Run `echo $SHELL`. `~` means your home folder, so `~/.zshrc` is e.g. `/Users/you/.zshrc`. Files that start with a dot are hidden in Finder and file browsers, which is normal.
-
-**Open the file.** Use one of these (they create the file if it doesn't exist yet):
+Because `~/.local/bin` isn't on your PATH yet, start it with its full path this one time (on Windows step 1 already fixed the PATH, so just type `agentiloop`):
 
 ```sh
-nano ~/.zshrc                        # works everywhere, right in the terminal
-touch ~/.zshrc && open -e ~/.zshrc   # macOS: opens it in TextEdit
+~/.local/bin/agentiloop
 ```
 
-(Linux with bash: use `~/.bashrc` instead of `~/.zshrc`.)
+The wizard walks you through five short steps. Press **Enter** to accept a default, or type a number:
 
-**Add these lines at the bottom.** Keep only the key line you need, and paste your real key between the quotes:
+1. **Provider**: type `1` for Claude, `2` for OpenAI, `3` for Ollama.
+2. **API key**: paste the key from step 2 and press Enter. The screen stays blank while you paste; that's on purpose, the key is hidden. Ollama needs no key: press Enter for the server address and again for the key.
+3. **Connection check**: the wizard tries the key right away. If it fails it says why and lets you try again. Nothing is saved until it works.
+4. **Model**: press Enter for the default, or type a number from the list.
+5. **Where to save the key**: press Enter. That keeps it in `~/.agentiloop/env`, a private file only AgentiLoop reads.
 
-```sh
-# AgentiLoop
-export PATH="$HOME/.local/bin:$PATH"
+Last, the wizard notices that `~/.local/bin` isn't on your PATH and asks `Add it to PATH in /Users/you/.zshrc?`. Press **Enter** (yes). Then it prints `All set` and you're at the prompt.
 
-export ANTHROPIC_API_KEY="sk-ant-paste-your-key-here"          # Claude
-# export OPENAI_API_KEY="sk-paste-your-key-here"               # OpenAI
-# export OPENAI_BASE_URL="http://localhost:11434/v1"           # Ollama (no key needed)
+Here is what the whole thing looks like when you choose Claude and accept the defaults:
+
+```text
+$ ~/.local/bin/agentiloop
+Welcome to AgentiLoop! Let's set things up (about a minute).
+Settings are kept in /Users/you/.agentiloop. Run `agentiloop --setup` or `/setup` to redo this, `agentiloop --reset` to start over.
+
+Which model provider do you want to use?
+  1  Claude (Anthropic) — API key from console.anthropic.com
+  2  OpenAI — API key from platform.openai.com
+  3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)
+  4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)
+Provider [1-4, default 1]: 1
+Anthropic API key (starts with sk-ant-, input hidden):
+Checking the connection…
+Connected (8 model(s) available).
+
+Pick a model (change it any time with /model):
+   1  claude-sonnet-5  (default)
+   2  claude-…
+   3  claude-…
+   …
+Model [1-8, an id, or Enter for claude-sonnet-5]:
+
+Where should the credential be saved?
+  1  /Users/you/.agentiloop/env (recommended; only agentiloop reads it, file mode 600)
+  2  Also add it to /Users/you/.zshrc so other tools in your terminal see it
+  3  macOS Keychain, with a line in /Users/you/.zshrc that reads it (nothing stored in plain text)
+Save to [1-3, default 1]:
+saved to /Users/you/.agentiloop/env
+
+`/Users/you/.local/bin` is not on your PATH, so `agentiloop` only works with its full path.
+Add it to PATH in /Users/you/.zshrc? [Y/n]
+updated /Users/you/.zshrc (between `# >>> agentiloop >>>` and `# <<< agentiloop <<<`); it applies to new terminals
+
+All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
 ```
 
-**Save and close.** In nano: **Ctrl-O**, **Enter**, then **Ctrl-X**. In TextEdit: **⌘S**, then close the window.
+You can start chatting right here, or type `/exit` and carry on with step 4. Made a mistake? `agentiloop --setup` runs the wizard again, and `agentiloop --reset` wipes everything it saved.
 
-**Load it.** Either open a new terminal window, or run:
+> 🔒 **Keep your key private.** `~/.agentiloop/env` is readable only by you. Don't paste the key into chats or commit it to git. On a Mac, option 3 in the last question stores it in the Keychain instead, so it's never on disk in plain text.
 
-```sh
-source ~/.zshrc
-```
-
-**fish** uses a different syntax. Put this in `~/.config/fish/config.fish`:
-
-```fish
-fish_add_path $HOME/.local/bin
-set -gx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
-```
-
-**Windows (PowerShell).** Windows has no profile file to edit for this. Save the key as a user environment variable instead (this is also what the setup wizard does when you pick option 2):
-
-```powershell
-setx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
-# or: setx OPENAI_API_KEY "sk-..."   /   setx OPENAI_BASE_URL "http://localhost:11434/v1"
-```
-
-Then **close PowerShell and open a new window**. `setx` doesn't affect the window it runs in. You can also do this with the mouse: Start → *Edit environment variables for your account* → *New…*.
-
-> 🔒 **Keep your key private.** Don't commit your profile file to git or paste the key into chats. On a Mac you can keep it in the Keychain instead; see [Step 2 of the Quick start](#step-2-connect-a-model).
+Prefer to manage the key yourself with environment variables? That works too, but it's the advanced route; see [Advanced: setting the key by hand](#step-2-connect-a-model) in the Quick start.
 
 ### 4. Check that it works
+
+**Open a new terminal window** so it picks up the PATH change from the wizard (Windows: a new PowerShell window). Then:
 
 ```sh
 agentiloop --version
 ```
 
-You should see `agentiloop 0.0.2`. Now check that the key is loaded:
+You should see `agentiloop 0.0.2`. Now run it with no options:
 
 ```sh
-echo $ANTHROPIC_API_KEY | cut -c1-10    # macOS / Linux: should print sk-ant-...
-```
-```powershell
-$env:ANTHROPIC_API_KEY.Substring(0,10)  # Windows PowerShell
+agentiloop
 ```
 
-If it prints nothing, go back to step 3. The key isn't loaded yet.
+It should go straight to the prompt. If the wizard starts again instead, the key didn't get saved: go through step 3 once more.
 
 ### 5. Your first session
 
@@ -180,7 +181,7 @@ cd ~/agentiloop-test
 agentiloop --tui
 ```
 
-Using **Ollama**? Tell it the provider and a model you've pulled: `agentiloop -p openai -m qwen2.5-coder --tui`.
+Using **Ollama**? The wizard already remembered the server and the model you picked. To switch to another model you've pulled, type `/model` inside the session.
 
 Now just type what you want in plain English and press **Enter**. Some good first prompts:
 
@@ -251,11 +252,11 @@ Inside a session, type `/help` to see the chat commands (`/model`, `/sessions`, 
 
 | You see | Fix |
 |---|---|
-| `command not found: agentiloop` | `~/.local/bin` isn't on your PATH. Add the `export PATH=...` line from step 3, then open a new terminal. On Windows, open a new PowerShell window |
-| `Error: no provider credentials found` | No key is loaded. Redo step 3, then check it with step 4 |
+| `command not found: agentiloop` | `~/.local/bin` isn't on your PATH. Open a new terminal window first; if that doesn't help, run `~/.local/bin/agentiloop --setup` and say yes when it offers to add it to PATH. On Windows, open a new PowerShell window |
+| `Error: no provider credentials found` | No key is saved. Run `agentiloop --setup` (step 3), then check with step 4 |
 | macOS: *"agentiloop" cannot be opened* / *unidentified developer* | This happens if you downloaded with a browser instead of `curl`. Run `xattr -d com.apple.quarantine ~/.local/bin/agentiloop` |
 | Windows: *Windows protected your PC* | Click **More info** → **Run anyway** |
-| `401` / `invalid x-api-key` / authentication error | The key is wrong or has spaces or quotes in it. Copy it again and check the line in your profile |
+| `401` / `invalid x-api-key` / authentication error | The key is wrong or was pasted with spaces or quotes. Copy it again and run `agentiloop --setup` to enter it afresh |
 | Ollama: model not found | Run `ollama list` and pass the exact name with `-m` |
 | It keeps using an old model or provider | It remembers your last choices. Pass `-p` / `-m` to change them, or run `agentiloop --reset` to start over |
 
@@ -285,32 +286,82 @@ This builds the program and puts an `agentiloop` command on your PATH, in `~/.ca
 
 ### Step 2: Connect a model
 
-AgentiLoop needs a model to talk to.
+AgentiLoop needs a model to talk to. **You don't have to set any environment variables for this**: the built-in setup wizard asks a few questions and saves everything for you.
 
-**Easiest:** just run `agentiloop`. On a machine with no key set up it starts a short wizard that asks which provider you want, takes your key (typed hidden), checks the connection, lets you pick a model and saves the key to `~/.agentiloop/env` (only AgentiLoop reads it). You can rerun it any time with `agentiloop --setup`, and `agentiloop --reset` puts everything back to brand new.
+#### The setup wizard (recommended)
+
+Just run `agentiloop`. The first time, when no key is set up yet, the wizard starts on its own. It takes about a minute and asks five things:
+
+1. **Which provider** — Claude, OpenAI, a local OpenAI-compatible server (Ollama, LM Studio, …) or oMLX. Type a number.
+2. **Your API key** — typed hidden, nothing shows on screen. Local servers usually need none; for oMLX on the same Mac the wizard reads the key from oMLX's own settings, so it doesn't even ask.
+3. **Connection check** — the wizard talks to the provider right away. If the key is wrong it tells you and offers to try again; nothing is saved until it works.
+4. **Which model** — pick one from the list the provider returned, or press Enter for the default. You can change it any time later with `/model`.
+5. **Where to keep the key** — press Enter for the default, `~/.agentiloop/env`, a private file only AgentiLoop reads. (The other choices, for people who also want the key in their shell or in the macOS Keychain, are covered under *Advanced* below.)
+
+Then it says `All set` and drops you at the prompt. Here is a full run on the plain terminal, choosing Claude and accepting the defaults (your model list will differ):
+
+```text
+$ agentiloop
+Welcome to AgentiLoop! Let's set things up (about a minute).
+Settings are kept in /Users/you/.agentiloop. Run `agentiloop --setup` or `/setup` to redo this, `agentiloop --reset` to start over.
+
+Which model provider do you want to use?
+  1  Claude (Anthropic) — API key from console.anthropic.com
+  2  OpenAI — API key from platform.openai.com
+  3  Ollama, LM Studio or another OpenAI-compatible server (local, usually no key)
+  4  oMLX (local Apple Silicon server; reads ~/.omlx/settings.json)
+Provider [1-4, default 1]: 1
+Anthropic API key (starts with sk-ant-, input hidden):
+Checking the connection…
+Connected (8 model(s) available).
+
+Pick a model (change it any time with /model):
+   1  claude-sonnet-5  (default)
+   2  claude-…
+   3  claude-…
+   …
+Model [1-8, an id, or Enter for claude-sonnet-5]:
+
+Where should the credential be saved?
+  1  /Users/you/.agentiloop/env (recommended; only agentiloop reads it, file mode 600)
+  2  Also add it to /Users/you/.zshrc so other tools in your terminal see it
+  3  macOS Keychain, with a line in /Users/you/.zshrc that reads it (nothing stored in plain text)
+Save to [1-3, default 1]:
+saved to /Users/you/.agentiloop/env
+
+All set: anthropic / claude-sonnet-5. Type a request at the prompt, /help for commands, /exit to leave.
+```
+
+That's it. From now on `agentiloop` starts straight into the prompt.
+
+For Claude you can paste either a normal API key (`sk-ant-api…`) or a Claude Code token (`sk-ant-oat01-…`, from `claude setup-token`); AgentiLoop detects which kind it is. If you picked option 3 (Ollama, LM Studio, …) the wizard also asks for the server URL and offers `http://localhost:11434/v1` as the default, so for a local Ollama you just press Enter.
+
+**Same wizard, full-screen.** The wizard runs in whichever interface you use. Start it with `--tui` and the same questions appear inside the full-screen interface; when it finishes you are already at the prompt:
 
 <img src="docs/setup-wizard-tui.png" width="900" alt="The setup wizard running inside the full-screen TUI: provider, hidden API key, connection check, model list, where to save the key, then the first prompt" />
+
+**Rerun or redo it any time:**
 
 ```bash
 agentiloop --setup          # wizard on the plain terminal
 agentiloop --setup --tui    # wizard inside the full-screen TUI (as in the screenshot)
-/setup                      # rerun it from inside a running session (REPL or TUI)
+/setup                      # from inside a running session (REPL or TUI)
+agentiloop --reset          # forget everything and start from brand new
 ```
 
-The wizard runs in whichever interface you use. `agentiloop --setup` asks its questions on the plain terminal; `agentiloop --setup --tui` (or a remembered TUI) asks them inside the full-screen interface, as in the screenshot, and drops you straight into the prompt when it is done. Inside a running session, `/setup` does the same in both.
+<details>
+<summary><b>Advanced: setting the key by hand</b> (skip this if the wizard worked for you)</summary>
 
-**By hand:** set one of these in your terminal instead:
+If you'd rather manage the key yourself, or you are running AgentiLoop in a script or CI where nobody can answer the wizard, set one of these environment variables and AgentiLoop will use it without asking:
 
-| I want to use… | Do this |
+| I want to use… | Set this |
 |---|---|
 | **Claude** (Anthropic) | `export ANTHROPIC_API_KEY=sk-ant-...` |
 | **OpenAI** | `export OPENAI_API_KEY=sk-...` |
-| **Ollama, LM Studio**, or any OpenAI-compatible server | `export OPENAI_BASE_URL=http://localhost:11434/v1` (use your server's address; no key needed for local servers) |
-| **oMLX** (local models on Apple Silicon) | Usually nothing. Start oMLX, then run AgentiLoop with `-p omlx` (see below) |
+| **Ollama, LM Studio**, or any OpenAI-compatible server | `export OPENAI_BASE_URL=http://localhost:11434/v1` (your server's address; no key needed for local servers) |
+| **oMLX** (local models on Apple Silicon) | Usually nothing. Start oMLX, then run AgentiLoop with `-p omlx` |
 
-For Claude you can use a normal API key (`sk-ant-api…`) or a Claude Code token (`sk-ant-oat01-…`, which you get from `claude setup-token`). AgentiLoop detects which kind it is.
-
-**oMLX details.** When oMLX runs on the same Mac, AgentiLoop reads the server port and API key from oMLX's own settings file (`~/.omlx/settings.json`), so you don't need to export anything. If oMLX runs on another machine, or you want to override those settings, export them yourself:
+**oMLX details.** When oMLX runs on the same Mac, AgentiLoop reads the server port and API key from oMLX's own settings file (`~/.omlx/settings.json`). If oMLX runs on another machine, or you want to override those settings:
 
 ```sh
 export OMLX_BASE_URL=http://192.168.1.50:7777/v1   # the oMLX server's address (or OMLX_PORT=7777 for localhost)
@@ -319,7 +370,7 @@ export OMLX_API_KEY=...                            # the API key from oMLX's set
 
 If oMLX has API key verification turned off, no key is needed.
 
-An `export` only lasts for the terminal tab you typed it in. To make it permanent, add the line to your shell profile (`~/.zshrc` on macOS). On a Mac you can keep the key in the Keychain rather than in the file:
+An `export` only lasts for the terminal tab you typed it in. To make it permanent you'd add the line to your shell profile (`~/.zshrc` on macOS), which is exactly what the wizard's **"Also add it to ~/.zshrc"** choice does for you. Likewise the wizard's **"macOS Keychain"** choice is the hands-free version of this:
 
 ```sh
 # one time: store the key in your Keychain
@@ -328,6 +379,8 @@ security add-generic-password -a "$USER" -s ANTHROPIC_API_KEY -w "sk-ant-..."
 # in ~/.zshrc: load it for every new terminal
 export ANTHROPIC_API_KEY="$(security find-generic-password -a "$USER" -s ANTHROPIC_API_KEY -w 2>/dev/null)"
 ```
+
+</details>
 
 ### Step 3: Run it
 
@@ -390,7 +443,7 @@ Some things are **never** remembered on purpose:
 
 - `--yes`: skipping permission prompts has to be a deliberate choice every time
 - `--no-mcp`, `-C` and one-shot prompts
-- API keys: those stay in your shell profile
+- API keys: those live in `~/.agentiloop/env` (written by the wizard) or your shell environment, never in `settings.json`
 
 To forget everything, delete `~/.agentiloop/settings.json`.
 
