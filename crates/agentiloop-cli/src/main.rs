@@ -111,92 +111,132 @@ async fn main() -> Result<()> {
     // so a bare `agentiloop` reopens with the same provider, model, UI and session.
     let mut saved = settings::load();
     let interactive = cli.prompt.is_empty();
-    if cli.setup || wizard::should_run(interactive, cli.provider.is_some()) {
-        wizard::run(&mut wizard::Terminal, &mut saved).await?;
-    }
-    let last = saved.last.clone();
-    let use_tui = interactive && !cli.no_tui && (cli.tui || last.tui);
-    let max_turns = cli.max_turns.or(last.max_turns).unwrap_or(50);
-    let compact_at = cli.compact_at.or(last.compact_at).unwrap_or(150_000);
+    let use_tui = interactive && !cli.no_tui && (cli.tui || saved.last.tui);
 
-    let provider = agentiloop_provider::from_env(cli.provider.as_deref().or(last.provider.as_deref()))?;
-    let mut tools = agentiloop_tools::default_registry();
-    let mcp = if cli.no_mcp {
-        agentiloop_mcp::McpManager::default()
-    } else {
-        let paths = agentiloop_mcp::config::default_paths(settings::mcp_config_path(), &cwd);
-        agentiloop_mcp::McpManager::start(&paths, &cwd).await
-    };
-    mcp.register_tools(&mut tools);
-    if !mcp.is_empty() {
-        eprintln!("mcp: {} server(s) connected, {} tool(s)", mcp.servers.len(), mcp.tool_count());
-        for (name, err) in &mcp.errors {
-            eprintln!("mcp: {name} failed: {err}");
-        }
-    }
-    // The TUI answers permission prompts through its own channel-backed policy.
+    // The TUI owns the screen from the very start, so the setup wizard and any
+    // startup messages go through it; without it they go to the terminal.
     let (ui_tx, ui_rx) = tokio::sync::mpsc::unbounded_channel::<tui::UiMsg>();
-    let policy: agentiloop_core::permission::SharedPolicy = if use_tui && !cli.yes {
-        std::sync::Arc::new(tui::ChannelPolicy::new(ui_tx.clone()))
+    let (in_tx, mut in_rx) = tokio::sync::mpsc::unbounded_channel::<tui::Input>();
+    let ui = if use_tui {
+        let app = tui::App::new(format!(" AgentiLoop  {} ", cwd.display())).with_history_file(settings::history_path());
+        Some(tokio::task::spawn_blocking(move || tui::run(app, ui_rx, in_tx)))
     } else {
-        permission::policy(cli.yes)
+        None
     };
-    let sessions_dir = settings::sessions_dir();
-
-    // Resume, if asked — or automatically for a plain interactive launch, as long as the
-    // last session here used the same provider. The session's model wins unless --model was given.
-    let auto_continue = interactive && cli.resume.is_none() && !cli.continue_last && !cli.new;
-    let resumed = match (&cli.resume, cli.continue_last || auto_continue, &sessions_dir) {
-        (Some(id), _, Some(dir)) => Some(Session::load(dir, id)?),
-        (None, true, Some(dir)) => Session::latest_for(dir, &cwd)?,
-        _ => None,
-    }
-    .filter(|s| !auto_continue || s.provider == provider.name());
-    if cli.continue_last && resumed.is_none() {
-        eprintln!("no previous session for {}; starting fresh", cwd.display());
-    }
-
-    let model = match cli
-        .model
-        .or_else(|| resumed.as_ref().map(|s| s.model.clone()))
-        .or_else(|| saved.model_for(provider.name()).map(str::to_string))
-    {
-        Some(m) => m,
-        // Local servers (oMLX) have no fixed catalog: take whatever is served first.
-        None if provider.default_model().is_empty() => provider
-            .list_models()
-            .await
-            .with_context(|| format!("could not get the model list from {}", provider.name()))?
-            .into_iter()
-            .next()
-            .map(|m| m.id)
-            .with_context(|| format!("{} serves no models; load one or pass --model", provider.name()))?,
-        None => provider.default_model().to_string(),
-    };
-    let config = AgentConfig { model, max_turns, compact_at_tokens: compact_at, ..Default::default() };
-
-    // Remember this launch (model per provider always; UI options only for interactive runs).
-    saved.set_model(provider.name(), &config.model);
-    if interactive {
-        saved.last = settings::LastLaunch {
-            provider: Some(provider.name().to_string()),
-            tui: use_tui,
-            max_turns: Some(max_turns),
-            compact_at: Some(compact_at),
-        };
-    }
-    if let Err(e) = settings::save(&saved) {
-        tracing::warn!("could not save settings: {e:#}");
-    }
-
-    let mut agent = Agent::new(provider.clone(), tools, policy, config, ToolContext { cwd: cwd.clone() });
-    let mut session = match resumed {
-        Some(s) => {
-            eprintln!("resumed session {} ({} messages): {}", s.id, s.history.len(), s.title());
-            agent.history = s.history.clone();
-            s
+    let note = |s: String| {
+        if use_tui {
+            let _ = ui_tx.send(tui::UiMsg::Line(s));
+        } else {
+            eprintln!("{s}");
         }
-        None => Session::new(cwd.clone(), provider.name(), agent.model()),
+    };
+
+    // Everything that can fail before the agent exists runs here so that, with the
+    // TUI up, the screen is restored before the error reaches stderr.
+    let booted = async {
+        if cli.setup || wizard::should_run(interactive, cli.provider.is_some()) {
+            if use_tui {
+                let mut setup = tui::SetupPrompter { tx: ui_tx.clone(), rx: &mut in_rx };
+                wizard::run(&mut setup, &mut saved).await?;
+            } else {
+                wizard::run(&mut wizard::Terminal, &mut saved).await?;
+            }
+        }
+        let last = saved.last.clone();
+        let max_turns = cli.max_turns.or(last.max_turns).unwrap_or(50);
+        let compact_at = cli.compact_at.or(last.compact_at).unwrap_or(150_000);
+
+        let provider = agentiloop_provider::from_env(cli.provider.as_deref().or(last.provider.as_deref()))?;
+        let mut tools = agentiloop_tools::default_registry();
+        let mcp = if cli.no_mcp {
+            agentiloop_mcp::McpManager::default()
+        } else {
+            let paths = agentiloop_mcp::config::default_paths(settings::mcp_config_path(), &cwd);
+            agentiloop_mcp::McpManager::start(&paths, &cwd).await
+        };
+        mcp.register_tools(&mut tools);
+        if !mcp.is_empty() {
+            note(format!("mcp: {} server(s) connected, {} tool(s)", mcp.servers.len(), mcp.tool_count()));
+            for (name, err) in &mcp.errors {
+                note(format!("mcp: {name} failed: {err}"));
+            }
+        }
+        // The TUI answers permission prompts through its own channel-backed policy.
+        let policy: agentiloop_core::permission::SharedPolicy = if use_tui && !cli.yes {
+            std::sync::Arc::new(tui::ChannelPolicy::new(ui_tx.clone()))
+        } else {
+            permission::policy(cli.yes)
+        };
+        let sessions_dir = settings::sessions_dir();
+
+        // Resume, if asked — or automatically for a plain interactive launch, as long as the
+        // last session here used the same provider. The session's model wins unless --model was given.
+        let auto_continue = interactive && cli.resume.is_none() && !cli.continue_last && !cli.new;
+        let resumed = match (&cli.resume, cli.continue_last || auto_continue, &sessions_dir) {
+            (Some(id), _, Some(dir)) => Some(Session::load(dir, id)?),
+            (None, true, Some(dir)) => Session::latest_for(dir, &cwd)?,
+            _ => None,
+        }
+        .filter(|s| !auto_continue || s.provider == provider.name());
+        if cli.continue_last && resumed.is_none() {
+            note(format!("no previous session for {}; starting fresh", cwd.display()));
+        }
+
+        let model = match cli
+            .model
+            .clone()
+            .or_else(|| resumed.as_ref().map(|s| s.model.clone()))
+            .or_else(|| saved.model_for(provider.name()).map(str::to_string))
+        {
+            Some(m) => m,
+            // Local servers (oMLX) have no fixed catalog: take whatever is served first.
+            None if provider.default_model().is_empty() => provider
+                .list_models()
+                .await
+                .with_context(|| format!("could not get the model list from {}", provider.name()))?
+                .into_iter()
+                .next()
+                .map(|m| m.id)
+                .with_context(|| format!("{} serves no models; load one or pass --model", provider.name()))?,
+            None => provider.default_model().to_string(),
+        };
+        let config = AgentConfig { model, max_turns, compact_at_tokens: compact_at, ..Default::default() };
+
+        // Remember this launch (model per provider always; UI options only for interactive runs).
+        saved.set_model(provider.name(), &config.model);
+        if interactive {
+            saved.last = settings::LastLaunch {
+                provider: Some(provider.name().to_string()),
+                tui: use_tui,
+                max_turns: Some(max_turns),
+                compact_at: Some(compact_at),
+            };
+        }
+        if let Err(e) = settings::save(&saved) {
+            tracing::warn!("could not save settings: {e:#}");
+        }
+
+        let mut agent = Agent::new(provider.clone(), tools, policy, config, ToolContext { cwd: cwd.clone() });
+        let session = match resumed {
+            Some(s) => {
+                note(format!("resumed session {} ({} messages): {}", s.id, s.history.len(), s.title()));
+                agent.history = s.history.clone();
+                s
+            }
+            None => Session::new(cwd.clone(), provider.name(), agent.model()),
+        };
+        Ok::<_, anyhow::Error>((provider, mcp, sessions_dir, agent, session))
+    }
+    .await;
+    let (provider, mcp, sessions_dir, mut agent, mut session) = match booted {
+        Ok(b) => b,
+        Err(e) => {
+            if let Some(ui) = ui {
+                drop(ui_tx);
+                ui.await??;
+            }
+            return Err(e);
+        }
     };
 
     if !cli.prompt.is_empty() {
@@ -207,15 +247,13 @@ async fn main() -> Result<()> {
         return res;
     }
 
-    if use_tui {
+    if let Some(ui) = ui {
         let status = |agent: &Agent, session: &Session| {
             format!(" AgentiLoop  {}  {}  {}  session {} ", cwd.display(), provider.name(), agent.model(), session.id)
         };
-        let (in_tx, mut in_rx) = tokio::sync::mpsc::unbounded_channel::<tui::Input>();
-        let app = tui::App::new(status(&agent, &session)).with_history_file(settings::history_path());
+        let _ = ui_tx.send(tui::UiMsg::Status(status(&agent, &session)));
         // A continued session shows its earlier conversation, not an empty screen.
         replay_tui(&ui_tx, &agent.history);
-        let ui = tokio::task::spawn_blocking(move || tui::run(app, ui_rx, in_tx));
         let mut tracker = diff::Tracker::new(cwd.clone());
         // Agent side: one prompt or slash command at a time, until the UI hangs up.
         while let Some(tui::Input::Submit(line)) = in_rx.recv().await {
