@@ -361,7 +361,13 @@ impl Provider for OpenAIProvider {
         Ok(list
             .data
             .into_iter()
-            .map(|m| ModelInfo { id: m.id.clone(), display_name: m.id, created_at: String::new() })
+            .map(|m| ModelInfo {
+                id: m.id.clone(),
+                display_name: m.id,
+                created_at: String::new(),
+                max_input_tokens: None,
+                max_tokens: None,
+            })
             .collect())
     }
 

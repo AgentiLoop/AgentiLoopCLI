@@ -30,7 +30,14 @@ impl Provider for ScriptedProvider {
         "mock"
     }
     async fn list_models(&self) -> anyhow::Result<Vec<ModelInfo>> {
-        Ok(vec![])
+        // The catalog reports limits for `mock` only; other ids are unknown.
+        Ok(vec![ModelInfo {
+            id: "mock".into(),
+            display_name: "Mock".into(),
+            created_at: String::new(),
+            max_input_tokens: Some(1_000_000),
+            max_tokens: Some(128_000),
+        }])
     }
     async fn complete(&self, req: ProviderRequest) -> anyhow::Result<ProviderResponse> {
         self.requests.lock().unwrap().push(req);
@@ -245,7 +252,7 @@ fn big(t: &str, input_tokens: u64) -> ProviderResponse {
 #[test]
 fn compact_replaces_history_with_summary_via_provider() {
     let p = ScriptedProvider::new(vec![text("first"), text("SUMMARY")]);
-    let mut a = agent_with(p.clone(), AgentConfig { compact_at_tokens: 0, ..Default::default() });
+    let mut a = agent_with(p.clone(), AgentConfig { compact_at_tokens: Some(0), ..Default::default() });
     collect(&mut a, "do a thing").0.unwrap();
     assert_eq!(a.history.len(), 2);
 
@@ -282,7 +289,7 @@ fn compact_on_empty_history_is_noop() {
 #[test]
 fn compact_fails_on_empty_summary_and_keeps_history() {
     let p = ScriptedProvider::new(vec![text("first"), text("   ")]);
-    let mut a = agent_with(p, AgentConfig { compact_at_tokens: 0, ..Default::default() });
+    let mut a = agent_with(p, AgentConfig { compact_at_tokens: Some(0), ..Default::default() });
     collect(&mut a, "x").0.unwrap();
     let rt = tokio::runtime::Runtime::new().unwrap();
     let err = rt.block_on(a.compact()).unwrap_err().to_string();
@@ -294,7 +301,7 @@ fn compact_fails_on_empty_summary_and_keeps_history() {
 fn auto_compacts_before_next_run_when_threshold_reached() {
     // run 1 reports 1000 input tokens (>= threshold 500) → run 2 compacts first.
     let p = ScriptedProvider::new(vec![big("first", 1000), text("SUMMARY"), text("second")]);
-    let mut a = agent_with(p.clone(), AgentConfig { compact_at_tokens: 500, ..Default::default() });
+    let mut a = agent_with(p.clone(), AgentConfig { compact_at_tokens: Some(500), ..Default::default() });
     collect(&mut a, "one").0.unwrap();
     assert_eq!(a.last_input_tokens(), 1000);
 
@@ -320,7 +327,7 @@ fn auto_compacts_mid_loop_after_tool_results() {
     let mut call = tool_call("t1", "echo", json!({"msg": "a"}));
     call.input_tokens = 900;
     let p = ScriptedProvider::new(vec![call, text("SUMMARY"), text("finished")]);
-    let mut a = agent_with(p.clone(), AgentConfig { compact_at_tokens: 500, ..Default::default() });
+    let mut a = agent_with(p.clone(), AgentConfig { compact_at_tokens: Some(500), ..Default::default() });
     let (res, events) = collect(&mut a, "go");
     res.unwrap();
 
@@ -341,7 +348,7 @@ fn auto_compacts_mid_loop_after_tool_results() {
 #[test]
 fn compaction_disabled_when_threshold_is_zero() {
     let p = ScriptedProvider::new(vec![big("first", 1_000_000), text("second")]);
-    let mut a = agent_with(p.clone(), AgentConfig { compact_at_tokens: 0, ..Default::default() });
+    let mut a = agent_with(p.clone(), AgentConfig { compact_at_tokens: Some(0), ..Default::default() });
     collect(&mut a, "one").0.unwrap();
     let (_, events) = collect(&mut a, "two");
     assert!(!events.iter().any(|e| matches!(e, AgentEvent::Compacted { .. })));
@@ -365,4 +372,44 @@ fn transcript_trims_long_tool_results() {
     assert!(t.contains("tool error: "));
     assert!(t.contains("…[3000 more bytes]"), "{t}");
     assert!(t.len() < 2_500, "{}", t.len());
+}
+
+#[test]
+fn limits_come_from_the_provider_catalog() {
+    let p = ScriptedProvider::new(vec![text("ok"), text("ok")]);
+    let mut a = agent(p.clone(), Arc::new(agentiloop_core::permission::AllowAll), 5);
+    assert_eq!(a.limits(), None);
+    collect(&mut a, "hi").0.unwrap();
+
+    // max_tokens on the wire is the model's own cap; compaction at 80% of its window.
+    let l = a.limits().unwrap();
+    assert_eq!(l.max_tokens, 128_000);
+    assert_eq!(l.context_window, Some(1_000_000));
+    assert_eq!(l.compact_at_tokens, 800_000);
+    assert_eq!(p.requests.lock().unwrap()[0].max_tokens, 128_000);
+
+    // Unknown model: limits are cleared and the fallbacks apply.
+    a.set_model("other");
+    assert_eq!(a.limits(), None);
+    collect(&mut a, "hi").0.unwrap();
+    let l = a.limits().unwrap();
+    assert_eq!(l.max_tokens, agentiloop_core::agent::FALLBACK_MAX_TOKENS);
+    assert_eq!(l.context_window, None);
+    assert_eq!(l.compact_at_tokens, agentiloop_core::agent::FALLBACK_COMPACT_AT);
+    assert_eq!(p.requests.lock().unwrap()[1].max_tokens, agentiloop_core::agent::FALLBACK_MAX_TOKENS);
+}
+
+#[test]
+fn config_overrides_beat_the_catalog() {
+    let p = ScriptedProvider::new(vec![text("ok")]);
+    let mut tools = ToolRegistry::new();
+    tools.register(Echo);
+    let config = AgentConfig { model: "mock".into(), max_tokens: Some(1_000), compact_at_tokens: Some(0), ..Default::default() };
+    let mut a = Agent::new(p.clone(), tools, Arc::new(agentiloop_core::permission::AllowAll), config, ToolContext { cwd: std::env::temp_dir() });
+    collect(&mut a, "hi").0.unwrap();
+    let l = a.limits().unwrap();
+    assert_eq!(l.max_tokens, 1_000);
+    assert_eq!(l.compact_at_tokens, 0);
+    assert_eq!(l.context_window, Some(1_000_000));
+    assert_eq!(p.requests.lock().unwrap()[0].max_tokens, 1_000);
 }

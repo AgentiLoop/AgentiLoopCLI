@@ -168,6 +168,27 @@ fn parse_stop_reason(raw: Option<&str>) -> StopReason {
 }
 
 impl AnthropicProvider {
+    /// Authenticated GET of a JSON endpoint under `base_url`.
+    async fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> anyhow::Result<T> {
+        let mut http = self
+            .client
+            .get(format!("{}{path}", self.base_url))
+            .header("anthropic-version", API_VERSION);
+        http = if self.is_oauth() {
+            http.header("authorization", format!("Bearer {}", self.credential))
+                .header("anthropic-beta", "oauth-2025-04-20")
+        } else {
+            http.header("x-api-key", &self.credential)
+        };
+        let resp = http.send().await.with_context(|| format!("request to {path} failed"))?;
+        let status = resp.status();
+        let text = resp.text().await?;
+        if !status.is_success() {
+            anyhow::bail!("Anthropic {}: {}", status, text);
+        }
+        serde_json::from_str(&text).with_context(|| format!("decoding {path}"))
+    }
+
     async fn send_messages(&self, req: &ProviderRequest, stream: bool) -> anyhow::Result<reqwest::Response> {
         let mut system = Vec::with_capacity(2);
         if self.is_oauth() {
@@ -230,24 +251,17 @@ impl Provider for AnthropicProvider {
     /// Fetch the live model catalog from `GET /v1/models`, newest first
     /// (the API already returns them sorted by `created_at` descending).
     async fn list_models(&self) -> anyhow::Result<Vec<ModelInfo>> {
-        let mut http = self
-            .client
-            .get(format!("{}/v1/models?limit=100", self.base_url))
-            .header("anthropic-version", API_VERSION);
-        http = if self.is_oauth() {
-            http.header("authorization", format!("Bearer {}", self.credential))
-                .header("anthropic-beta", "oauth-2025-04-20")
-        } else {
-            http.header("x-api-key", &self.credential)
-        };
-        let resp = http.send().await.context("request to /v1/models failed")?;
-        let status = resp.status();
-        let text = resp.text().await?;
-        if !status.is_success() {
-            anyhow::bail!("Anthropic {}: {}", status, text);
-        }
-        let list: WireModelList = serde_json::from_str(&text).context("decoding /v1/models")?;
+        let list: WireModelList = self.get_json("/v1/models?limit=100").await?;
         Ok(list.data)
+    }
+
+    /// `GET /v1/models/{id}`: carries `max_tokens` and `max_input_tokens`.
+    async fn model_info(&self, id: &str) -> anyhow::Result<Option<ModelInfo>> {
+        match self.get_json::<ModelInfo>(&format!("/v1/models/{id}")).await {
+            Ok(m) => Ok(Some(m)),
+            Err(e) if e.to_string().contains("not_found_error") => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     async fn complete(&self, req: ProviderRequest) -> anyhow::Result<ProviderResponse> {

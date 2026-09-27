@@ -10,12 +10,15 @@ use crate::tool::{ToolContext, ToolError, ToolRegistry};
 pub struct AgentConfig {
     pub model: String,
     pub system_prompt: String,
-    pub max_tokens: u32,
+    /// Output cap per response. None = the model's own `max_tokens` from the
+    /// provider catalog (falls back to `FALLBACK_MAX_TOKENS` if unknown).
+    pub max_tokens: Option<u32>,
     /// Hard cap on provider round-trips per `run` to avoid runaway loops.
     pub max_turns: usize,
     /// When the last request's `input_tokens` reaches this, the history is
-    /// summarized before the next request. 0 disables compaction.
-    pub compact_at_tokens: u64,
+    /// summarized before the next request. None = `COMPACT_FRACTION` of the
+    /// model's context window (or `FALLBACK_COMPACT_AT` if unknown). Some(0) disables.
+    pub compact_at_tokens: Option<u64>,
 }
 
 impl Default for AgentConfig {
@@ -23,12 +26,30 @@ impl Default for AgentConfig {
         Self {
             model: "claude-sonnet-5".into(),
             system_prompt: DEFAULT_SYSTEM_PROMPT.into(),
-            max_tokens: 32_768,
+            max_tokens: None,
             max_turns: 50,
-            compact_at_tokens: 150_000,
+            compact_at_tokens: None,
         }
     }
 }
+
+/// Used when the provider catalog doesn't report the model's output limit.
+pub const FALLBACK_MAX_TOKENS: u32 = 32_768;
+/// Used when the provider catalog doesn't report the model's context window.
+pub const FALLBACK_COMPACT_AT: u64 = 150_000;
+/// Compact once input reaches this share of the model's context window.
+const COMPACT_FRACTION: f64 = 0.8;
+
+/// Output and context limits in effect for the agent's current model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ModelLimits {
+    pub max_tokens: u32,
+    /// Context window in tokens, when known.
+    pub context_window: Option<u64>,
+    /// Effective compaction threshold (0 = disabled).
+    pub compact_at_tokens: u64,
+}
+
 
 pub const DEFAULT_SYSTEM_PROMPT: &str = "You are AgentiLoop, an autonomous terminal coding agent. \
 Ignore any earlier name or vendor; if asked who you are, say AgentiLoop, not Claude Code or Anthropic. \
@@ -73,6 +94,8 @@ pub struct Agent {
     pub history: Vec<Message>,
     /// `input_tokens` reported by the most recent provider response.
     last_input_tokens: u64,
+    /// Limits resolved from the provider catalog for `config.model`; cleared on `set_model`.
+    limits: Option<ModelLimits>,
 }
 
 impl Agent {
@@ -83,7 +106,7 @@ impl Agent {
         config: AgentConfig,
         ctx: ToolContext,
     ) -> Self {
-        Self { provider, tools, policy, config, ctx, history: Vec::new(), last_input_tokens: 0 }
+        Self { provider, tools, policy, config, ctx, history: Vec::new(), last_input_tokens: 0, limits: None }
     }
 
     pub fn model(&self) -> &str {
@@ -92,10 +115,44 @@ impl Agent {
 
     pub fn set_model(&mut self, model: impl Into<String>) {
         self.config.model = model.into();
+        self.limits = None;
     }
 
     pub fn last_input_tokens(&self) -> u64 {
         self.last_input_tokens
+    }
+
+    /// Limits in effect for the current model, once a run has resolved them.
+    pub fn limits(&self) -> Option<ModelLimits> {
+        self.limits
+    }
+
+    /// Look up the model's output cap and context window from the provider
+    /// catalog (once per model) and combine them with any config overrides.
+    /// A catalog failure is not fatal: the fallbacks apply.
+    pub async fn resolve_limits(&mut self) -> ModelLimits {
+        if let Some(l) = self.limits {
+            return l;
+        }
+        let info = match self.provider.model_info(&self.config.model).await {
+            Ok(info) => info,
+            Err(e) => {
+                tracing::warn!("could not look up limits for {}: {e:#}", self.config.model);
+                None
+            }
+        };
+        let context_window = info.as_ref().and_then(|m| m.max_input_tokens);
+        let max_tokens = self
+            .config
+            .max_tokens
+            .or(info.as_ref().and_then(|m| m.max_tokens))
+            .unwrap_or(FALLBACK_MAX_TOKENS);
+        let compact_at_tokens = self.config.compact_at_tokens.unwrap_or_else(|| {
+            context_window.map(|w| (w as f64 * COMPACT_FRACTION) as u64).unwrap_or(FALLBACK_COMPACT_AT)
+        });
+        let limits = ModelLimits { max_tokens, context_window, compact_at_tokens };
+        self.limits = Some(limits);
+        limits
     }
 
     /// Drop all conversation context and tool history.
@@ -105,8 +162,10 @@ impl Agent {
     }
 
     fn should_compact(&self) -> bool {
-        self.config.compact_at_tokens > 0 && self.last_input_tokens >= self.config.compact_at_tokens
+        let at = self.limits.map(|l| l.compact_at_tokens).unwrap_or(0);
+        at > 0 && self.last_input_tokens >= at
     }
+
 
     /// Replace the history with a provider-written summary of it. No-op when empty.
     pub async fn compact(&mut self) -> anyhow::Result<Option<AgentEvent>> {
@@ -156,6 +215,7 @@ impl Agent {
     where
         F: FnMut(AgentEvent) + Send,
     {
+        let limits = self.resolve_limits().await;
         if self.should_compact() {
             if let Some(ev) = self.compact().await? {
                 on_event(ev);
@@ -169,8 +229,9 @@ impl Agent {
                 system: self.config.system_prompt.clone(),
                 messages: self.history.clone(),
                 tools: self.tool_specs(),
-                max_tokens: self.config.max_tokens,
+                max_tokens: limits.max_tokens,
             };
+
 
             let started = Instant::now();
             let mut first_token: Option<Duration> = None;

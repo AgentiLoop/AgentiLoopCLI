@@ -36,6 +36,12 @@ pub struct ModelInfo {
     pub display_name: String,
     #[serde(default)]
     pub created_at: String,
+    /// Context window (input limit) in tokens, when the backend reports it.
+    #[serde(default)]
+    pub max_input_tokens: Option<u64>,
+    /// Maximum output tokens per response, when the backend reports it.
+    #[serde(default)]
+    pub max_tokens: Option<u32>,
 }
 
 /// A model backend. Implementations live in `agentiloop-provider`.
@@ -48,6 +54,12 @@ pub trait Provider: Send + Sync {
 
     /// Live model catalog, newest first where the backend supports ordering.
     async fn list_models(&self) -> anyhow::Result<Vec<ModelInfo>>;
+
+    /// Catalog entry for one model id (None when the backend doesn't know it).
+    /// Default scans `list_models`; backends with a per-model endpoint override.
+    async fn model_info(&self, id: &str) -> anyhow::Result<Option<ModelInfo>> {
+        Ok(self.list_models().await?.into_iter().find(|m| m.id == id))
+    }
 
     /// Streaming variant: text deltas are delivered through `on_text` as they
     /// arrive; the assembled response is returned once the stream ends.

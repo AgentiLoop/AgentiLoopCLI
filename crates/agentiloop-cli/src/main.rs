@@ -40,7 +40,7 @@ struct Cli {
     max_turns: Option<usize>,
 
     /// Summarize the conversation once a request reaches this many input tokens (0 = never)
-    /// [default: last used, then 150000].
+    /// [default: last used, then 80% of the model's context window].
     #[arg(long, env = "AGENTILOOP_COMPACT_AT")]
     compact_at: Option<u64>,
 
@@ -144,7 +144,7 @@ async fn main() -> Result<()> {
         }
         let last = saved.last.clone();
         let max_turns = cli.max_turns.or(last.max_turns).unwrap_or(50);
-        let compact_at = cli.compact_at.or(last.compact_at).unwrap_or(150_000);
+        let compact_at = cli.compact_at.or(last.compact_at);
 
         let provider = agentiloop_provider::from_env(cli.provider.as_deref().or(last.provider.as_deref()))?;
         let mut tools = agentiloop_tools::default_registry();
@@ -209,7 +209,7 @@ async fn main() -> Result<()> {
                 provider: Some(provider.name().to_string()),
                 tui: use_tui,
                 max_turns: Some(max_turns),
-                compact_at: Some(compact_at),
+                compact_at,
             };
         }
         if let Err(e) = settings::save(&saved) {
@@ -463,7 +463,13 @@ async fn fetch_models(provider: &dyn Provider) -> Vec<ModelInfo> {
 fn fallback_models() -> Vec<ModelInfo> {
     FALLBACK_MODELS
         .iter()
-        .map(|(id, name)| ModelInfo { id: id.to_string(), display_name: name.to_string(), created_at: String::new() })
+        .map(|(id, name)| ModelInfo {
+            id: id.to_string(),
+            display_name: name.to_string(),
+            created_at: String::new(),
+            max_input_tokens: None,
+            max_tokens: None,
+        })
         .collect()
 }
 
