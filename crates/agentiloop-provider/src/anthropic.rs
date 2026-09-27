@@ -312,6 +312,7 @@ impl Provider for AnthropicProvider {
             }
         }
 
+        let stop_reason = parse_stop_reason(stop_reason.as_deref());
         let content = blocks
             .into_iter()
             .filter_map(|b| match b {
@@ -320,9 +321,15 @@ impl Provider for AnthropicProvider {
                     let input = if json.trim().is_empty() {
                         Value::Object(Default::default())
                     } else {
-                        match serde_json::from_str(&json).with_context(|| format!("decoding tool input for `{name}`")) {
+                        match serde_json::from_str(&json) {
                             Ok(v) => v,
-                            Err(e) => return Some(Err(e)),
+                            Err(_) if stop_reason == StopReason::MaxTokens => {
+                                return Some(Err(anyhow::anyhow!(
+                                    "response hit max_tokens ({}) mid `{name}` call; raise max_tokens or ask for smaller edits",
+                                    req.max_tokens
+                                )))
+                            }
+                            Err(e) => return Some(Err(e).with_context(|| format!("decoding tool input for `{name}`"))),
                         }
                     };
                     Some(Ok(ContentBlock::ToolUse { id, name, input }))
@@ -333,7 +340,7 @@ impl Provider for AnthropicProvider {
 
         Ok(ProviderResponse {
             message: Message { role: Role::Assistant, content },
-            stop_reason: parse_stop_reason(stop_reason.as_deref()),
+            stop_reason,
             input_tokens,
             output_tokens,
         })

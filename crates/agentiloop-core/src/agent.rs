@@ -23,7 +23,7 @@ impl Default for AgentConfig {
         Self {
             model: "claude-sonnet-5".into(),
             system_prompt: DEFAULT_SYSTEM_PROMPT.into(),
-            max_tokens: 8192,
+            max_tokens: 32_768,
             max_turns: 50,
             compact_at_tokens: 150_000,
         }
