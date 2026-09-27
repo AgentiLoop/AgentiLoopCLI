@@ -33,7 +33,7 @@ So "brand new" = no `~/.agentiloop/settings.json` **and** none of the seven cred
   export ANTHROPIC_API_KEY="sk-ant-..."
   # <<< agentiloop <<<
   ```
-  Profile picked from `$SHELL`: zsh → `~/.zshrc`, bash → `~/.bashrc` (macOS bash → `~/.bash_profile`), fish → `~/.config/fish/config.fish`, PowerShell → `$PROFILE` (`$env:X = "..."` syntax). Override with `AGENTILOOP_SHELL_PROFILE=/path` (mirrors `AGENTILOOP_HOME`) so tests never touch the real profile.
+  Profile picked from `$SHELL`: zsh → `~/.zshrc`, bash → `~/.bashrc` (macOS bash → `~/.bash_profile`), fish → `~/.config/fish/config.fish`, pwsh → `~/.config/powershell/profile.ps1`; Windows (no `$SHELL`) → `~/Documents/PowerShell/profile.ps1` (or `WindowsPowerShell/`), using `$env:X = "..."` and `[IO.Path]::PathSeparator` for PATH. Override with `AGENTILOOP_SHELL_PROFILE=/path` (`.fish` / `.ps1` extension picks the syntax) (mirrors `AGENTILOOP_HOME`) so tests never touch the real profile.
 - macOS Keychain option (README already documents this pattern, README.md:308-315): store with `security add-generic-password -a $USER -s ANTHROPIC_API_KEY -w …` and write the `$(security find-generic-password …)` line inside the marked block.
 
 **Decided:** the wizard's default is `~/.agentiloop/env`; the shell-profile block and Keychain are opt-in extras.
