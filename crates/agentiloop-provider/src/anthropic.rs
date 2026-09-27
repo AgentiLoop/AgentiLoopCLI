@@ -452,4 +452,48 @@ data: {\"type\":\"message_stop\"}
         assert_eq!(tools[0].1, "read_file");
         assert_eq!(tools[0].2, &serde_json::json!({"path": "a.rs"}));
     }
+
+    /// Serve `GET /v1/models/{id}` twice: a known model with limits, then a 404.
+    async fn serve_model_info() -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let paths = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = paths.clone();
+        tokio::spawn(async move {
+            for _ in 0..2 {
+                let (mut sock, _) = listener.accept().await.unwrap();
+                let mut req = vec![0u8; 8192];
+                let n = sock.read(&mut req).await.unwrap();
+                let head = String::from_utf8_lossy(&req[..n]).to_string();
+                let path = head.split_whitespace().nth(1).unwrap_or_default().to_string();
+                seen.lock().unwrap().push(path.clone());
+                let (status, body) = if path == "/v1/models/nope" {
+                    ("404 Not Found", r#"{"type":"error","error":{"type":"not_found_error","message":"model: nope"}}"#)
+                } else {
+                    ("200 OK", r#"{"id":"claude-opus-5","display_name":"Claude Opus 5","created_at":"2026-01-01T00:00:00Z","max_input_tokens":1000000,"max_tokens":128000}"#)
+                };
+                let resp = format!(
+                    "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                sock.write_all(resp.as_bytes()).await.unwrap();
+                sock.shutdown().await.unwrap();
+            }
+        });
+        (format!("http://{addr}"), paths)
+    }
+
+    #[tokio::test]
+    async fn model_info_carries_limits_and_unknown_is_none() {
+        let (base_url, paths) = serve_model_info().await;
+        let provider = AnthropicProvider { client: reqwest::Client::new(), credential: "sk-ant-api-test".into(), base_url };
+
+        let m = provider.model_info("claude-opus-5").await.unwrap().expect("known model");
+        assert_eq!(m.max_input_tokens, Some(1_000_000));
+        assert_eq!(m.max_tokens, Some(128_000));
+
+        assert!(provider.model_info("nope").await.unwrap().is_none());
+        assert_eq!(*paths.lock().unwrap(), vec!["/v1/models/claude-opus-5", "/v1/models/nope"]);
+    }
 }
+
