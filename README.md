@@ -38,6 +38,16 @@ Created with AgentiLoop Agent! This is our baby. Prebuilt binaries for macOS, Li
 
 ---
 
+## ⚡ First run: the setup wizard does it all
+
+There is nothing to configure by hand. The first time you run `agentiloop`, a built-in setup wizard starts on its own. It asks which provider you want (Claude, OpenAI, Ollama / LM Studio or oMLX), takes your API key (typed hidden), checks that the key works, lets you pick a model and saves everything in `~/.agentiloop`. About a minute, no config files, no `export` lines.
+
+<img src="docs/setup-wizard-tui.png" width="900" alt="The setup wizard running inside the full-screen TUI: provider, hidden API key, connection check, model list, where to save the key, then the first prompt" />
+
+Run it again any time with `agentiloop --setup` (add `--tui` for the full-screen version, or type `/setup` inside a session). `agentiloop --reset` forgets everything and starts from brand new. Never installed a command-line program before? Follow [New here?](#-new-here-up-and-running-in-5-minutes) below, step by step.
+
+---
+
 ## 🚀 New here? Up and running in 5 minutes
 
 No Rust, no Go, no compiling. You download one file, give it an API key and start chatting. Follow the steps in order.
