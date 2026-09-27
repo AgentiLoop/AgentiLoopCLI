@@ -5,6 +5,7 @@ mod permission;
 mod reset;
 mod settings;
 mod tui;
+mod wizard;
 
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -110,6 +111,9 @@ async fn main() -> Result<()> {
     // so a bare `agentiloop` reopens with the same provider, model, UI and session.
     let mut saved = settings::load();
     let interactive = cli.prompt.is_empty();
+    if cli.setup || wizard::should_run(interactive, cli.provider.is_some()) {
+        wizard::run(&mut saved).await?;
+    }
     let last = saved.last.clone();
     let use_tui = interactive && !cli.no_tui && (cli.tui || last.tui);
     let max_turns = cli.max_turns.or(last.max_turns).unwrap_or(50);
