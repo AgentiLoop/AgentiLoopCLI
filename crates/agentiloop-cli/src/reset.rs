@@ -88,6 +88,16 @@ pub fn has_block(text: &str) -> bool {
     text.lines().any(|l| l.trim() == BLOCK_START)
 }
 
+/// Re-applies the original file's line endings: a CRLF profile (Windows PowerShell,
+/// Git `autocrlf`) stays CRLF instead of being silently rewritten as LF.
+pub fn match_line_endings(original: &str, text: String) -> String {
+    if original.contains("\r\n") {
+        text.replace("\r\n", "\n").replace('\n', "\r\n")
+    } else {
+        text
+    }
+}
+
 /// Drops everything from `BLOCK_START` through `BLOCK_END` (inclusive).
 pub fn remove_block(text: &str) -> String {
     let mut inside = false;
@@ -262,7 +272,7 @@ pub fn run(yes: bool) -> Result<()> {
 
     for p in &blocks {
         let text = std::fs::read_to_string(p)?;
-        std::fs::write(p, remove_block(&text)).with_context(|| format!("writing {}", p.display()))?;
+        std::fs::write(p, match_line_endings(&text, remove_block(&text))).with_context(|| format!("writing {}", p.display()))?;
         println!("removed block from {}", p.display());
     }
     if comment {
@@ -270,7 +280,7 @@ pub fn run(yes: bool) -> Result<()> {
             // Line numbers were taken before the block was removed; recompute on the current text.
             let text = std::fs::read_to_string(p)?;
             let nums: Vec<usize> = stray_lines(&text).into_iter().map(|(n, _)| n).collect();
-            std::fs::write(p, comment_out(&text, &nums)).with_context(|| format!("writing {}", p.display()))?;
+            std::fs::write(p, match_line_endings(&text, comment_out(&text, &nums))).with_context(|| format!("writing {}", p.display()))?;
             println!("commented out {} line(s) in {}", lines.len(), p.display());
         }
     }
@@ -324,5 +334,12 @@ mod tests {
         let out = comment_out("a\nexport OPENAI_API_KEY=x\nb\n", &[2]);
         assert_eq!(out, "a\n# agentiloop-reset: export OPENAI_API_KEY=x\nb\n");
         assert!(stray_lines(&out).is_empty());
+    }
+
+    #[test]
+    fn crlf_profiles_stay_crlf() {
+        let crlf = "a\r\n# >>> agentiloop >>>\r\nexport OPENAI_API_KEY=x\r\n# <<< agentiloop <<<\r\nb\r\n";
+        assert_eq!(match_line_endings(crlf, remove_block(crlf)), "a\r\nb\r\n");
+        assert_eq!(match_line_endings("a\nb\n", "a\nb\n".into()), "a\nb\n");
     }
 }

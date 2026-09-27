@@ -185,6 +185,7 @@ fn write_block(path: &Path, lines: &[String]) -> Result<()> {
     }
     text.push_str(BLOCK_END);
     text.push('\n');
+    let text = crate::reset::match_line_endings(&existing, text);
     std::fs::write(path, text).with_context(|| format!("writing {}", path.display()))
 }
 
