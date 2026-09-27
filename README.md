@@ -291,6 +291,12 @@ AgentiLoop needs a model to talk to.
 
 <img src="docs/setup-wizard-tui.png" width="900" alt="The setup wizard running inside the full-screen TUI: provider, hidden API key, connection check, model list, where to save the key, then the first prompt" />
 
+```bash
+agentiloop --setup          # wizard on the plain terminal
+agentiloop --setup --tui    # wizard inside the full-screen TUI (as in the screenshot)
+/setup                      # rerun it from inside a running session (REPL or TUI)
+```
+
 The wizard runs in whichever interface you use. `agentiloop --setup` asks its questions on the plain terminal; `agentiloop --setup --tui` (or a remembered TUI) asks them inside the full-screen interface, as in the screenshot, and drops you straight into the prompt when it is done. Inside a running session, `/setup` does the same in both.
 
 **By hand:** set one of these in your terminal instead:

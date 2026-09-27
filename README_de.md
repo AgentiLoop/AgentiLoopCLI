@@ -287,6 +287,12 @@ AgentiLoop braucht ein Modell, mit dem es sprechen kann.
 
 <img src="docs/setup-wizard-tui.png" width="900" alt="Der Einrichtungsassistent in der Vollbild-Oberfläche (TUI): Anbieter, verdeckter API-Schlüssel, Verbindungstest, Modellliste, Speicherort des Schlüssels, dann die erste Eingabe" />
 
+```bash
+agentiloop --setup          # Assistent im normalen Terminal
+agentiloop --setup --tui    # Assistent in der Vollbild-TUI (wie im Screenshot)
+/setup                      # in einer laufenden Sitzung erneut starten (REPL oder TUI)
+```
+
 Der Assistent läuft in der Oberfläche, die du benutzt. `agentiloop --setup` stellt seine Fragen im normalen Terminal; `agentiloop --setup --tui` (oder eine gemerkte TUI) stellt sie in der Vollbild-Oberfläche wie im Screenshot und bringt dich danach direkt zur Eingabezeile. In einer laufenden Sitzung macht `/setup` in beiden dasselbe.
 
 **Von Hand:** Setze stattdessen eine dieser Variablen in deinem Terminal:

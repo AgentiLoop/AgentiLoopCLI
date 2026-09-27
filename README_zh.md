@@ -287,6 +287,12 @@ AgentiLoop 需要一个可以对话的模型。
 
 <img src="docs/setup-wizard-tui.png" width="900" alt="在全屏 TUI 中运行的设置向导：提供方、隐藏的 API 密钥、连接检查、模型列表、密钥保存位置，然后是第一条提示" />
 
+```bash
+agentiloop --setup          # 在普通终端中运行向导
+agentiloop --setup --tui    # 在全屏 TUI 中运行向导（如截图所示）
+/setup                      # 在运行中的会话里重新运行（REPL 或 TUI 均可）
+```
+
 向导会在你使用的界面中运行。`agentiloop --setup` 在普通终端里提问；`agentiloop --setup --tui`（或记住的 TUI）像截图那样在全屏界面里提问，完成后直接进入提示符。在会话中，`/setup` 在两种界面里都能做同样的事。
 
 **手动方式：** 改为在终端中设置以下其中一项：
