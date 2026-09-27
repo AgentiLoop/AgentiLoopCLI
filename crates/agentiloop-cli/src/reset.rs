@@ -130,10 +130,47 @@ fn ask(prompt: &str) -> Result<String> {
 }
 
 pub fn unset_hint() -> String {
+    if cfg!(windows) {
+        return format!(
+            "Variables already set in this window stay until you open a new one, or run:\n  Remove-Item Env:{}\nthen run `agentiloop` to see the first-run wizard.",
+            CREDENTIAL_VARS.join(", Env:")
+        );
+    }
     format!(
         "Variables already exported in this terminal stay until you open a new one, or run:\n  unset {}\nthen run `agentiloop` to see the first-run wizard.",
         CREDENTIAL_VARS.join(" ")
     )
+}
+
+/// Windows: which credential variables are persisted as user environment variables
+/// (`HKCU\\Environment`, as written by `setx`). Empty elsewhere.
+fn user_env_present() -> Vec<String> {
+    if !cfg!(windows) {
+        return Vec::new();
+    }
+    CREDENTIAL_VARS
+        .iter()
+        .filter(|k| {
+            std::process::Command::new("reg")
+                .args(["query", "HKCU\\Environment", "/v", k])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success())
+        })
+        .map(|k| k.to_string())
+        .collect()
+}
+
+/// Windows: remove a user environment variable and broadcast the change (what `setx` cannot do).
+fn user_env_delete(key: &str) -> Result<()> {
+    let status = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &format!("[Environment]::SetEnvironmentVariable('{key}', $null, 'User')")])
+        .stdout(std::process::Stdio::null())
+        .status()
+        .context("running `powershell`")?;
+    anyhow::ensure!(status.success(), "could not remove user environment variable {key}");
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]
@@ -178,8 +215,11 @@ pub fn run(yes: bool) -> Result<()> {
         }
     }
     let keychain = &saved.setup.keychain;
+    let mut user_env = saved.setup.user_env.clone();
+    // Windows: credential variables persisted by hand with `setx` (the README's path).
+    let stray_env: Vec<String> = user_env_present().into_iter().filter(|k| !user_env.contains(k)).collect();
 
-    if !home_exists && blocks.is_empty() && strays.is_empty() && keychain.is_empty() {
+    if !home_exists && blocks.is_empty() && strays.is_empty() && keychain.is_empty() && user_env.is_empty() && stray_env.is_empty() {
         println!("Nothing to reset: no {} and no agentiloop lines in your shell profile.", display(&home));
         println!("{}", unset_hint());
         return Ok(());
@@ -195,6 +235,12 @@ pub fn run(yes: bool) -> Result<()> {
     for k in keychain {
         println!("  • delete the macOS Keychain item `{k}`");
     }
+    for k in &user_env {
+        println!("  • remove the Windows user environment variable `{k}` (set by the wizard)");
+    }
+    if !stray_env.is_empty() {
+        println!("  • found user environment variables set by hand (`setx`), not removed unless you say so: {}", stray_env.join(", "));
+    }
     for (p, lines) in &strays {
         println!("  • found hand-written lines in {} (not deleted, see below):", p.display());
         for (n, l) in lines {
@@ -208,6 +254,11 @@ pub fn run(yes: bool) -> Result<()> {
     }
     let comment = !strays.is_empty()
         && (yes || ask("Comment out the hand-written lines above (prefix `# agentiloop-reset: `)? [y/N] ")?.eq_ignore_ascii_case("y"));
+    if !stray_env.is_empty()
+        && (yes || ask("Remove those user environment variables too? [y/N] ")?.eq_ignore_ascii_case("y"))
+    {
+        user_env.extend(stray_env.iter().cloned());
+    }
 
     for p in &blocks {
         let text = std::fs::read_to_string(p)?;
@@ -226,6 +277,12 @@ pub fn run(yes: bool) -> Result<()> {
     for k in keychain {
         match delete_keychain_item(k) {
             Ok(()) => println!("deleted Keychain item {k}"),
+            Err(e) => println!("warning: {e}"),
+        }
+    }
+    for k in &user_env {
+        match user_env_delete(k) {
+            Ok(()) => println!("removed user environment variable {k}"),
             Err(e) => println!("warning: {e}"),
         }
     }

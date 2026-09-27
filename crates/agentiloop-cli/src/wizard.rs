@@ -103,8 +103,8 @@ enum ShellKind {
 }
 
 /// The profile the wizard may append to: `AGENTILOOP_SHELL_PROFILE`, else derived
-/// from `$SHELL`, else (no `$SHELL`, i.e. Windows) the PowerShell profile.
-/// `None` on shells we don't know, where only `~/.agentiloop/env` is offered.
+/// from `$SHELL`. `None` on shells we don't know and on Windows (no `$SHELL`),
+/// where a user environment variable is offered instead (see [`windows_user_env`]).
 fn shell_profile() -> Option<(PathBuf, ShellKind)> {
     let home = dirs::home_dir()?;
     if let Some(p) = std::env::var_os("AGENTILOOP_SHELL_PROFILE") {
@@ -116,11 +116,7 @@ fn shell_profile() -> Option<(PathBuf, ShellKind)> {
         };
         return Some((p, kind));
     }
-    match std::env::var("SHELL") {
-        Ok(sh) => profile_for(&sh, &home, cfg!(target_os = "macos")),
-        Err(_) if cfg!(windows) => Some(powershell_profile(&home)),
-        Err(_) => None,
-    }
+    profile_for(&std::env::var("SHELL").ok()?, &home, cfg!(target_os = "macos"))
 }
 
 fn profile_for(shell: &str, home: &Path, macos: bool) -> Option<(PathBuf, ShellKind)> {
@@ -135,18 +131,31 @@ fn profile_for(shell: &str, home: &Path, macos: bool) -> Option<(PathBuf, ShellK
     })
 }
 
-/// Windows: the CurrentUserAllHosts profile — PowerShell 7's folder if it exists, else Windows PowerShell 5's.
-fn powershell_profile(home: &Path) -> (PathBuf, ShellKind) {
-    let ps7 = home.join("Documents").join("PowerShell");
-    let dir = if ps7.is_dir() { ps7 } else { home.join("Documents").join("WindowsPowerShell") };
-    (dir.join("profile.ps1"), ShellKind::PowerShell)
+/// Windows without a Unix shell: Windows PowerShell 5 ships with `ExecutionPolicy
+/// Restricted`, so a `profile.ps1` would silently never run, and `~\Documents` may live
+/// in OneDrive. Persist as a *user environment variable* instead (the README's `setx`
+/// step); every new terminal window sees it.
+fn windows_user_env() -> bool {
+    cfg!(windows) && std::env::var_os("SHELL").is_none() && std::env::var_os("AGENTILOOP_SHELL_PROFILE").is_none()
+}
+
+/// `setx KEY value`: writes `HKCU\Environment` and broadcasts the change to Explorer.
+pub fn user_env_set(key: &str, value: &str) -> Result<()> {
+    let status = std::process::Command::new("setx")
+        .args([key, value])
+        .stdout(std::process::Stdio::null())
+        .status()
+        .context("running `setx`")?;
+    anyhow::ensure!(status.success(), "setx {key} failed");
+    Ok(())
 }
 
 fn export_line(kind: ShellKind, key: &str, value: &str) -> String {
     match kind {
         ShellKind::Posix => format!("export {key}=\"{value}\""),
         ShellKind::Fish => format!("set -gx {key} \"{value}\""),
-        ShellKind::PowerShell => format!("$env:{key} = \"{value}\""),
+        // Single quotes: PowerShell does not expand `$` or backticks inside them.
+        ShellKind::PowerShell => format!("$env:{key} = '{}'", value.replace('\'', "''")),
     }
 }
 
@@ -154,7 +163,7 @@ fn path_line(kind: ShellKind, dir: &Path) -> String {
     match kind {
         ShellKind::Posix => format!("export PATH=\"{}:$PATH\"", dir.display()),
         ShellKind::Fish => format!("fish_add_path {}", dir.display()),
-        ShellKind::PowerShell => format!("$env:PATH = \"{}\" + [IO.Path]::PathSeparator + $env:PATH", dir.display()),
+        ShellKind::PowerShell => format!("$env:PATH = '{}' + [IO.Path]::PathSeparator + $env:PATH", dir.display()),
     }
 }
 
@@ -182,8 +191,16 @@ fn write_block(path: &Path, lines: &[String]) -> Result<()> {
 /// Directory of the running binary, if it is not already on `PATH`.
 fn exe_dir_missing_from_path() -> Option<PathBuf> {
     let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    // Windows paths compare case-insensitively.
+    let same = |a: &Path, b: &Path| {
+        if cfg!(windows) {
+            a.to_string_lossy().eq_ignore_ascii_case(&b.to_string_lossy())
+        } else {
+            a == b
+        }
+    };
     let on_path = std::env::var_os("PATH")
-        .map(|p| std::env::split_paths(&p).any(|d| d == dir))
+        .map(|p| std::env::split_paths(&p).any(|d| same(&d, &dir)))
         .unwrap_or(false);
     (!on_path).then_some(dir)
 }
@@ -346,7 +363,8 @@ pub async fn run(p: &mut dyn Prompter, saved: &mut settings::Settings) -> Result
 
     // Where the credential lives. ~/.agentiloop/env is always the baseline unless the Keychain holds it.
     let profile = shell_profile();
-    let mut setup = settings::Setup { completed_at: Some(rfc3339_now()), profile: None, keychain: Vec::new() };
+    let user_env = windows_user_env();
+    let mut setup = settings::Setup { completed_at: Some(rfc3339_now()), profile: None, keychain: Vec::new(), user_env: Vec::new() };
     let mut block: Vec<String> = Vec::new();
     if !c.vars.is_empty() {
         p.say("");
@@ -362,6 +380,9 @@ pub async fn run(p: &mut dyn Prompter, saved: &mut settings::Settings) -> Result
                 n = 3;
                 menu.push_str(&format!("\n  3  macOS Keychain, with a line in {} that reads it (nothing stored in plain text)", path.display()));
             }
+        } else if user_env {
+            n = 2;
+            menu.push_str("\n  2  Also save it as a Windows user environment variable (setx), so every new terminal window sees it");
         }
         p.say(&menu);
         let choice = choose(p, "Save to", n, 1).await?;
@@ -381,6 +402,14 @@ pub async fn run(p: &mut dyn Prompter, saved: &mut settings::Settings) -> Result
                 }
                 let _ = path;
             }
+            2 if user_env => {
+                settings::save_env_file(&c.vars)?;
+                for (k, v) in &c.vars {
+                    user_env_set(k, v)?;
+                    setup.user_env.push(k.clone());
+                    p.say(&format!("saved {k} as a user environment variable (new terminal windows will see it)"));
+                }
+            }
             2 => {
                 settings::save_env_file(&c.vars)?;
                 block.extend(c.vars.iter().map(|(k, v)| export_line(kind.unwrap(), k, v)));
@@ -392,12 +421,27 @@ pub async fn run(p: &mut dyn Prompter, saved: &mut settings::Settings) -> Result
         }
     }
 
-    // PATH: offer once, only when a profile is being written or would be.
-    if let (Some(dir), Some((path, kind))) = (exe_dir_missing_from_path(), &profile) {
-        p.say("");
-        p.say(&format!("`{}` is not on your PATH, so `agentiloop` only works with its full path.", dir.display()));
-        if ask_yes(p, &format!("Add it to PATH in {}?", path.display()), true).await? {
-            block.push(path_line(*kind, &dir));
+    // PATH: offer once, only when a profile is being written or would be. On Windows the
+    // README's install step already adds the folder to the user PATH, so just point there.
+    if let Some(dir) = exe_dir_missing_from_path() {
+        match &profile {
+            Some((path, kind)) => {
+                p.say("");
+                p.say(&format!("`{}` is not on your PATH, so `agentiloop` only works with its full path.", dir.display()));
+                if ask_yes(p, &format!("Add it to PATH in {}?", path.display()), true).await? {
+                    block.push(path_line(*kind, &dir));
+                }
+            }
+            None if user_env => {
+                p.say("");
+                p.say(&format!(
+                    "`{}` is not on your PATH. To run `agentiloop` from any folder, add it once in PowerShell:\n  \
+                     [Environment]::SetEnvironmentVariable(\"Path\", [Environment]::GetEnvironmentVariable(\"Path\", \"User\") + \";{}\", \"User\")",
+                    dir.display(),
+                    dir.display()
+                ));
+            }
+            None => {}
         }
     }
     if !block.is_empty() {
@@ -431,15 +475,14 @@ mod tests {
         assert_eq!(profile_for("/opt/fish", h, false).unwrap(), (h.join(".config/fish/config.fish"), ShellKind::Fish));
         assert_eq!(profile_for("/usr/bin/pwsh", h, false).unwrap(), (h.join(".config/powershell/profile.ps1"), ShellKind::PowerShell));
         assert!(profile_for("/bin/tcsh", h, false).is_none());
-        assert_eq!(powershell_profile(h).0, h.join("Documents").join("WindowsPowerShell").join("profile.ps1"));
     }
 
     #[test]
     fn export_lines_per_shell() {
         assert_eq!(export_line(ShellKind::Posix, "A", "b"), "export A=\"b\"");
         assert_eq!(export_line(ShellKind::Fish, "A", "b"), "set -gx A \"b\"");
-        assert_eq!(export_line(ShellKind::PowerShell, "A", "b"), "$env:A = \"b\"");
-        assert_eq!(path_line(ShellKind::PowerShell, Path::new("C:\\bin")), "$env:PATH = \"C:\\bin\" + [IO.Path]::PathSeparator + $env:PATH");
+        assert_eq!(export_line(ShellKind::PowerShell, "A", "b'$c"), "$env:A = 'b''$c'");
+        assert_eq!(path_line(ShellKind::PowerShell, Path::new("C:\\bin")), "$env:PATH = 'C:\\bin' + [IO.Path]::PathSeparator + $env:PATH");
         assert!(keychain_line(ShellKind::Posix, "K").starts_with("export K=\"$(security find-generic-password"));
         assert_eq!(keychain_line(ShellKind::PowerShell, "K"), "$env:K = (security find-generic-password -a $env:USER -s K -w 2>$null)");
         // Everything the wizard writes must be recognised by --reset's stray-line scan when unmarked.

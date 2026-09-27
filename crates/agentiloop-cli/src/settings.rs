@@ -30,6 +30,8 @@ pub struct Setup {
     pub profile: Option<PathBuf>,
     /// macOS Keychain items (service names) the wizard created.
     pub keychain: Vec<String>,
+    /// Windows user environment variables (`setx`) the wizard created.
+    pub user_env: Vec<String>,
 }
 
 /// Remembered launch options. `--yes` and `--no-mcp` are deliberately never remembered.
@@ -165,7 +167,7 @@ mod tests {
         let s: Settings = serde_json::from_str(r#"{"model":"m"}"#).unwrap();
         assert!(s.setup.completed_at.is_none() && s.setup.keychain.is_empty());
         let mut s = Settings::default();
-        s.setup = Setup { completed_at: Some("t".into()), profile: Some("/p".into()), keychain: vec!["K".into()] };
+        s.setup = Setup { completed_at: Some("t".into()), profile: Some("/p".into()), keychain: vec!["K".into()], user_env: vec![] };
         let back: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
         assert_eq!(back.setup.profile.as_deref(), Some(std::path::Path::new("/p")));
         assert_eq!(back.setup.keychain, vec!["K"]);

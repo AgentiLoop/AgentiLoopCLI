@@ -4,7 +4,7 @@
 
 🌐 [English](README.md) · [Español](README_es.md) · [Français](README_fr.md) · [Deutsch](README_de.md) · [中文 (简体)](README_zh.md) · [Русский](README_ru.md) · [한국어](README_ko.md) · [日本語](README_ja.md)
 
-### 🎉 Mac, Windows, Linux용 릴리스 v0.0.2를 공개했어요!
+### 🎉 Mac, Windows, Linux용 릴리스 v0.0.2를 공개했어요!
 
 ---
 
@@ -136,7 +136,7 @@ fish_add_path $HOME/.local/bin
 set -gx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
 ```
 
-**Windows (PowerShell).** Windows에는 이 용도로 편집할 프로필 파일이 없어요. 대신 키를 사용자 환경 변수로 저장하세요:
+**Windows (PowerShell).** Windows에는 이 용도로 편집할 프로필 파일이 없어요. 대신 키를 사용자 환경 변수로 저장하세요 (설정 마법사에서 2번을 고르면 같은 일을 해요):
 
 ```powershell
 setx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
@@ -168,7 +168,7 @@ $env:ANTHROPIC_API_KEY.Substring(0,10)  # Windows PowerShell
 
 프로젝트 폴더로 이동해서 전체 화면 인터페이스를 시작하세요:
 
-먼저 새로 만든 빈 테스트 폴더에서 안전하게 사용해 보세요. 실제 프로젝트에서는 대신 `cd`로 해당 프로젝트 폴더로 이동하세요 (예: `cd ~/code/my-app`).
+먼저 새로 만든 빈 테스트 폴더에서 안전하게 사용해 보세요. 실제 프로젝트에서는 대신 `cd`로 해당 프로젝트 폴더로 이동하세요 (예: `cd ~/code/my-app`).
 
 ```sh
 mkdir -p ~/agentiloop-test
@@ -398,7 +398,7 @@ agentiloop --new          # 새 대화 시작 (이전 대화는 저장된 채로
 | `--yes` | `AGENTILOOP_YES` | 도구를 실행하기 전에 묻지 않아요. ⚠️ 신뢰할 수 있는 자동화 용도로만 사용하세요 |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | MCP 서버를 시작하지 않아요 (아래 참고) |
 | `--setup` | | 첫 설정 마법사를 다시 실행해요 (프로바이더, 키, 모델) |
-| `--reset` | | 처음 상태로: `~/.agentiloop`, 셸 프로파일의 agentiloop 블록, 마법사가 만든 키체인 항목을 삭제해요. 직접 작성한 `export` 줄은 주석 처리만 되고, 그것도 동의할 때만이에요. `--yes`를 붙이면 질문을 건너뛰어요 |
+| `--reset` | | 처음 상태로: `~/.agentiloop`, 셸 프로파일의 agentiloop 블록, 마법사가 만든 키체인 항목 (Windows에서는 마법사가 설정한 사용자 환경 변수)을 삭제해요. 직접 작성한 `export` 줄은 주석 처리만 되고, 그것도 동의할 때만이에요. `--yes`를 붙이면 질문을 건너뛰어요 |
 | `--max-turns <n>` | | 요청 하나당 에이전트가 수행할 수 있는 최대 단계 수 (기본값 50) |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | 긴 대화를 요약할 시점 (기본값 150000, `0` = 요약 안 함) |
 | `-h` / `-V` | | 도움말 / 버전 |

@@ -4,7 +4,7 @@
 
 🌐 [English](README.md) · [Español](README_es.md) · [Français](README_fr.md) · [Deutsch](README_de.md) · [中文 (简体)](README_zh.md) · [Русский](README_ru.md) · [한국어](README_ko.md) · [日本語](README_ja.md)
 
-### 🎉 Nous avons publié la version v0.0.2 pour Mac, Windows et Linux !
+### 🎉 Nous avons publié la version v0.0.2 pour Mac, Windows et Linux !
 
 ---
 
@@ -136,7 +136,7 @@ fish_add_path $HOME/.local/bin
 set -gx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
 ```
 
-**Windows (PowerShell).** Sous Windows, il n'y a pas de fichier de profil à modifier pour cela. Enregistrez plutôt la clé comme variable d'environnement utilisateur :
+**Windows (PowerShell).** Sous Windows, il n'y a pas de fichier de profil à modifier pour cela. Enregistrez plutôt la clé comme variable d'environnement utilisateur (c'est aussi ce que fait l'assistant de configuration si vous choisissez l'option 2) :
 
 ```powershell
 setx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
@@ -168,7 +168,7 @@ Si rien ne s'affiche, revenez à l'étape 3. La clé n'est pas encore chargée.
 
 Allez dans un dossier de projet et lancez l'interface plein écran :
 
-Commencez par un nouveau dossier de test vide pour essayer sans risque. Pour un vrai projet, allez plutôt dans son dossier avec `cd` (par exemple `cd ~/code/my-app`).
+Commencez par un nouveau dossier de test vide pour essayer sans risque. Pour un vrai projet, allez plutôt dans son dossier avec `cd` (par exemple `cd ~/code/my-app`).
 
 ```sh
 mkdir -p ~/agentiloop-test
@@ -398,7 +398,7 @@ Chaque option peut aussi être définie par une variable d'environnement, indiqu
 | `--yes` | `AGENTILOOP_YES` | Ne demande rien avant de lancer les outils. ⚠️ Uniquement pour un usage automatisé et de confiance |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | Ne démarre pas les serveurs MCP (voir ci-dessous) |
 | `--setup` | | Relance l'assistant de première configuration (fournisseur, clé, modèle) |
-| `--reset` | | Retour à neuf : supprime `~/.agentiloop`, le bloc agentiloop de votre profil shell et les éléments du Trousseau créés par l'assistant. Les lignes `export` écrites à la main sont seulement mises en commentaire, et seulement si vous acceptez. Ajoutez `--yes` pour sauter les questions |
+| `--reset` | | Retour à neuf : supprime `~/.agentiloop`, le bloc agentiloop de votre profil shell et les éléments du Trousseau créés par l'assistant (sous Windows : les variables d'environnement utilisateur qu'il a définies). Les lignes `export` écrites à la main sont seulement mises en commentaire, et seulement si vous acceptez. Ajoutez `--yes` pour sauter les questions |
 | `--max-turns <n>` | | Nombre maximal d'étapes que l'agent peut faire par demande (50 par défaut) |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | Quand résumer une longue conversation (150000 par défaut, `0` = jamais) |
 | `-h` / `-V` | | Aide / version |

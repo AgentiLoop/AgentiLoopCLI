@@ -4,7 +4,7 @@
 
 🌐 [English](README.md) · [Español](README_es.md) · [Français](README_fr.md) · [Deutsch](README_de.md) · [中文 (简体)](README_zh.md) · [Русский](README_ru.md) · [한국어](README_ko.md) · [日本語](README_ja.md)
 
-### 🎉 Wir haben Version v0.0.2 für Mac, Windows und Linux veröffentlicht!
+### 🎉 Wir haben Version v0.0.2 für Mac, Windows und Linux veröffentlicht!
 
 ---
 
@@ -136,7 +136,7 @@ fish_add_path $HOME/.local/bin
 set -gx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
 ```
 
-**Windows (PowerShell).** Unter Windows gibt es dafür keine Profildatei zum Bearbeiten. Speichere den Schlüssel stattdessen als Benutzer-Umgebungsvariable:
+**Windows (PowerShell).** Unter Windows gibt es dafür keine Profildatei zum Bearbeiten. Speichere den Schlüssel stattdessen als Benutzer-Umgebungsvariable (das macht auch der Einrichtungsassistent, wenn du Option 2 wählst):
 
 ```powershell
 setx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
@@ -168,7 +168,7 @@ Wenn nichts ausgegeben wird, geh zurück zu Schritt 3. Der Schlüssel ist noch n
 
 Wechsle in einen Projektordner und starte die Vollbild-Oberfläche:
 
-Fang mit einem neuen, leeren Testordner an, dann kannst du gefahrlos ausprobieren. Für ein echtes Projekt wechselst du stattdessen mit `cd` in dessen Ordner (zum Beispiel `cd ~/code/my-app`).
+Fang mit einem neuen, leeren Testordner an, dann kannst du gefahrlos ausprobieren. Für ein echtes Projekt wechselst du stattdessen mit `cd` in dessen Ordner (zum Beispiel `cd ~/code/my-app`).
 
 ```sh
 mkdir -p ~/agentiloop-test
@@ -398,7 +398,7 @@ Jede Option lässt sich auch über eine Umgebungsvariable setzen, die in der zwe
 | `--yes` | `AGENTILOOP_YES` | Fragt nicht, bevor Tools ausgeführt werden. ⚠️ Nur für vertrauenswürdige, automatisierte Nutzung |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | Startet keine MCP-Server (siehe unten) |
 | `--setup` | | Startet den Einrichtungsassistenten erneut (Anbieter, Schlüssel, Modell) |
-| `--reset` | | Zurück auf Anfang: löscht `~/.agentiloop`, den agentiloop-Block in deinem Shell-Profil und die vom Assistenten angelegten Schlüsselbund-Einträge. Von Hand geschriebene `export`-Zeilen werden nur auskommentiert, und nur wenn du zustimmst. Mit `--yes` entfallen die Rückfragen |
+| `--reset` | | Zurück auf Anfang: löscht `~/.agentiloop`, den agentiloop-Block in deinem Shell-Profil und die vom Assistenten angelegten Schlüsselbund-Einträge (unter Windows: die von ihm gesetzten Benutzer-Umgebungsvariablen). Von Hand geschriebene `export`-Zeilen werden nur auskommentiert, und nur wenn du zustimmst. Mit `--yes` entfallen die Rückfragen |
 | `--max-turns <n>` | | Maximale Anzahl Schritte, die der Agent pro Anfrage machen darf (Standard 50) |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | Wann eine lange Unterhaltung zusammengefasst wird (Standard 150000, `0` = nie) |
 | `-h` / `-V` | | Hilfe / Version |

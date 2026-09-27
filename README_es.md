@@ -4,7 +4,7 @@
 
 🌐 [English](README.md) · [Español](README_es.md) · [Français](README_fr.md) · [Deutsch](README_de.md) · [中文 (简体)](README_zh.md) · [Русский](README_ru.md) · [한국어](README_ko.md) · [日本語](README_ja.md)
 
-### 🎉 ¡Hemos publicado la versión v0.0.2 para Mac, Windows y Linux!
+### 🎉 ¡Hemos publicado la versión v0.0.2 para Mac, Windows y Linux!
 
 ---
 
@@ -136,7 +136,7 @@ fish_add_path $HOME/.local/bin
 set -gx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
 ```
 
-**Windows (PowerShell).** Windows no tiene un archivo de perfil que editar para esto. En su lugar, guarda la clave como variable de entorno de usuario:
+**Windows (PowerShell).** Windows no tiene un archivo de perfil que editar para esto. En su lugar, guarda la clave como variable de entorno de usuario (es lo que hace también el asistente de configuración si eliges la opción 2):
 
 ```powershell
 setx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
@@ -168,7 +168,7 @@ Si no muestra nada, vuelve al paso 3. La clave todavía no está cargada.
 
 Ve a una carpeta de proyecto y abre la interfaz a pantalla completa:
 
-Empieza con una carpeta de prueba nueva y vacía para probarlo sin riesgos. Para un proyecto real, entra con `cd` en la carpeta de ese proyecto (por ejemplo `cd ~/code/my-app`).
+Empieza con una carpeta de prueba nueva y vacía para probarlo sin riesgos. Para un proyecto real, entra con `cd` en la carpeta de ese proyecto (por ejemplo `cd ~/code/my-app`).
 
 ```sh
 mkdir -p ~/agentiloop-test
@@ -398,7 +398,7 @@ Cada opción también se puede configurar con una variable de entorno, que apare
 | `--yes` | `AGENTILOOP_YES` | No pregunta antes de ejecutar herramientas. ⚠️ Solo para uso automatizado y de confianza |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | No inicia servidores MCP (mira más abajo) |
 | `--setup` | | Vuelve a ejecutar el asistente de primera configuración (proveedor, clave, modelo) |
-| `--reset` | | Como nuevo: borra `~/.agentiloop`, el bloque de agentiloop en tu perfil de shell y los elementos del Llavero que creó el asistente. Las líneas `export` escritas a mano solo se comentan, y solo si dices que sí. Añade `--yes` para saltarte las preguntas |
+| `--reset` | | Como nuevo: borra `~/.agentiloop`, el bloque de agentiloop en tu perfil de shell y los elementos del Llavero que creó el asistente (en Windows: las variables de entorno de usuario que definió). Las líneas `export` escritas a mano solo se comentan, y solo si dices que sí. Añade `--yes` para saltarte las preguntas |
 | `--max-turns <n>` | | Máximo de pasos que puede dar el agente por petición (50 por defecto) |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | Cuándo resumir una conversación larga (150000 por defecto, `0` = nunca) |
 | `-h` / `-V` | | Ayuda / versión |

@@ -140,7 +140,7 @@ fish_add_path $HOME/.local/bin
 set -gx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
 ```
 
-**Windows (PowerShell).** Windows has no profile file to edit for this. Save the key as a user environment variable instead:
+**Windows (PowerShell).** Windows has no profile file to edit for this. Save the key as a user environment variable instead (this is also what the setup wizard does when you pick option 2):
 
 ```powershell
 setx ANTHROPIC_API_KEY "sk-ant-paste-your-key-here"
@@ -402,7 +402,7 @@ Every option can also be set with an environment variable, shown in the second c
 | `--yes` | `AGENTILOOP_YES` | Don't ask before running tools. ⚠️ Only for trusted, automated use |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | Don't start MCP servers (see below) |
 | `--setup` | | Run the first-time wizard again (provider, key, model) |
-| `--reset` | | Back to brand new: deletes `~/.agentiloop`, the agentiloop block in your shell profile and Keychain items the wizard created. Hand-written `export` lines are only commented out, and only if you say yes. Add `--yes` to skip the questions |
+| `--reset` | | Back to brand new: deletes `~/.agentiloop`, the agentiloop block in your shell profile and Keychain items the wizard created (on Windows: the user environment variables it set). Hand-written `export` lines are only commented out, and only if you say yes. Add `--yes` to skip the questions |
 | `--max-turns <n>` | | Max steps the agent may take per request (default 50) |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | When to summarize a long conversation (default 150000, `0` = never) |
 | `-h` / `-V` | | Help / version |
@@ -436,6 +436,7 @@ Type these at the prompt, in the TUI or the chat:
 | `/clear` | Clear the conversation and start a new one |
 | `/compact` | Summarize the conversation now to free up space |
 | `/mcp` | Show connected MCP servers and their tools |
+| `/setup` | Run the setup wizard again (works in the TUI too). A new key or provider takes effect after a restart |
 | `/help` | List these commands |
 | `/exit` | Quit |
 
