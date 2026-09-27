@@ -74,18 +74,28 @@ fn choose(prompt: &str, n: usize, default: usize) -> Result<usize> {
 enum ShellKind {
     Posix,
     Fish,
+    PowerShell,
 }
 
-/// The profile the wizard may append to: `AGENTILOOP_SHELL_PROFILE`, else derived from `$SHELL`.
-/// `None` on shells we don't know (and on Windows), where only `~/.agentiloop/env` is offered.
+/// The profile the wizard may append to: `AGENTILOOP_SHELL_PROFILE`, else derived
+/// from `$SHELL`, else (no `$SHELL`, i.e. Windows) the PowerShell profile.
+/// `None` on shells we don't know, where only `~/.agentiloop/env` is offered.
 fn shell_profile() -> Option<(PathBuf, ShellKind)> {
     let home = dirs::home_dir()?;
     if let Some(p) = std::env::var_os("AGENTILOOP_SHELL_PROFILE") {
         let p = PathBuf::from(p);
-        let kind = if p.extension().is_some_and(|e| e == "fish") { ShellKind::Fish } else { ShellKind::Posix };
+        let kind = match p.extension().and_then(|e| e.to_str()) {
+            Some("fish") => ShellKind::Fish,
+            Some("ps1") => ShellKind::PowerShell,
+            _ => ShellKind::Posix,
+        };
         return Some((p, kind));
     }
-    profile_for(&std::env::var("SHELL").ok()?, &home, cfg!(target_os = "macos"))
+    match std::env::var("SHELL") {
+        Ok(sh) => profile_for(&sh, &home, cfg!(target_os = "macos")),
+        Err(_) if cfg!(windows) => Some(powershell_profile(&home)),
+        Err(_) => None,
+    }
 }
 
 fn profile_for(shell: &str, home: &Path, macos: bool) -> Option<(PathBuf, ShellKind)> {
@@ -95,14 +105,31 @@ fn profile_for(shell: &str, home: &Path, macos: bool) -> Option<(PathBuf, ShellK
         "bash" if macos => (home.join(".bash_profile"), ShellKind::Posix),
         "bash" => (home.join(".bashrc"), ShellKind::Posix),
         "fish" => (home.join(".config/fish/config.fish"), ShellKind::Fish),
+        "pwsh" => (home.join(".config/powershell/profile.ps1"), ShellKind::PowerShell),
         _ => return None,
     })
+}
+
+/// Windows: the CurrentUserAllHosts profile — PowerShell 7's folder if it exists, else Windows PowerShell 5's.
+fn powershell_profile(home: &Path) -> (PathBuf, ShellKind) {
+    let ps7 = home.join("Documents").join("PowerShell");
+    let dir = if ps7.is_dir() { ps7 } else { home.join("Documents").join("WindowsPowerShell") };
+    (dir.join("profile.ps1"), ShellKind::PowerShell)
 }
 
 fn export_line(kind: ShellKind, key: &str, value: &str) -> String {
     match kind {
         ShellKind::Posix => format!("export {key}=\"{value}\""),
         ShellKind::Fish => format!("set -gx {key} \"{value}\""),
+        ShellKind::PowerShell => format!("$env:{key} = \"{value}\""),
+    }
+}
+
+fn path_line(kind: ShellKind, dir: &Path) -> String {
+    match kind {
+        ShellKind::Posix => format!("export PATH=\"{}:$PATH\"", dir.display()),
+        ShellKind::Fish => format!("fish_add_path {}", dir.display()),
+        ShellKind::PowerShell => format!("$env:PATH = \"{}\" + [IO.Path]::PathSeparator + $env:PATH", dir.display()),
     }
 }
 
@@ -155,6 +182,7 @@ fn keychain_line(kind: ShellKind, key: &str) -> String {
     match kind {
         ShellKind::Posix => format!("export {key}=\"$({lookup})\""),
         ShellKind::Fish => format!("set -gx {key} ({lookup})"),
+        ShellKind::PowerShell => format!("$env:{key} = ({})", lookup.replace("\"$USER\"", "$env:USER").replace("2>/dev/null", "2>$null")),
     }
 }
 
@@ -339,10 +367,7 @@ pub async fn run(saved: &mut settings::Settings) -> Result<()> {
         println!();
         println!("`{}` is not on your PATH, so `agentiloop` only works with its full path.", dir.display());
         if ask_yes(&format!("Add it to PATH in {}?", p.display()), true)? {
-            block.push(match kind {
-                ShellKind::Posix => format!("export PATH=\"{}:$PATH\"", dir.display()),
-                ShellKind::Fish => format!("fish_add_path {}", dir.display()),
-            });
+            block.push(path_line(*kind, &dir));
         }
     }
     if !block.is_empty() {
@@ -374,14 +399,23 @@ mod tests {
         assert_eq!(profile_for("/bin/bash", h, true).unwrap().0, h.join(".bash_profile"));
         assert_eq!(profile_for("/usr/bin/bash", h, false).unwrap().0, h.join(".bashrc"));
         assert_eq!(profile_for("/opt/fish", h, false).unwrap(), (h.join(".config/fish/config.fish"), ShellKind::Fish));
+        assert_eq!(profile_for("/usr/bin/pwsh", h, false).unwrap(), (h.join(".config/powershell/profile.ps1"), ShellKind::PowerShell));
         assert!(profile_for("/bin/tcsh", h, false).is_none());
+        assert_eq!(powershell_profile(h).0, h.join("Documents").join("WindowsPowerShell").join("profile.ps1"));
     }
 
     #[test]
     fn export_lines_per_shell() {
         assert_eq!(export_line(ShellKind::Posix, "A", "b"), "export A=\"b\"");
         assert_eq!(export_line(ShellKind::Fish, "A", "b"), "set -gx A \"b\"");
+        assert_eq!(export_line(ShellKind::PowerShell, "A", "b"), "$env:A = \"b\"");
+        assert_eq!(path_line(ShellKind::PowerShell, Path::new("C:\\bin")), "$env:PATH = \"C:\\bin\" + [IO.Path]::PathSeparator + $env:PATH");
         assert!(keychain_line(ShellKind::Posix, "K").starts_with("export K=\"$(security find-generic-password"));
+        assert_eq!(keychain_line(ShellKind::PowerShell, "K"), "$env:K = (security find-generic-password -a $env:USER -s K -w 2>$null)");
+        // Everything the wizard writes must be recognised by --reset's stray-line scan when unmarked.
+        for l in [export_line(ShellKind::PowerShell, "OPENAI_API_KEY", "x"), export_line(ShellKind::Fish, "OMLX_PORT", "1")] {
+            assert_eq!(crate::reset::stray_lines(&l).len(), 1, "{l}");
+        }
     }
 
     #[test]

@@ -25,17 +25,31 @@ pub const BLOCK_END: &str = "# <<< agentiloop <<<";
 const COMMENT_PREFIX: &str = "# agentiloop-reset: ";
 
 /// Shell profiles worth looking at: `AGENTILOOP_SHELL_PROFILE` alone when set
-/// (so tests never touch the real ones), else the usual zsh/bash/fish files.
+/// (so tests never touch the real ones), else the usual zsh/bash/fish/PowerShell files.
 pub fn candidate_profiles() -> Vec<PathBuf> {
     if let Some(p) = std::env::var_os("AGENTILOOP_SHELL_PROFILE") {
         return vec![PathBuf::from(p)];
     }
     let Some(home) = dirs::home_dir() else { return Vec::new() };
-    [".zshrc", ".zprofile", ".bashrc", ".bash_profile", ".profile", ".config/fish/config.fish"]
-        .iter()
-        .map(|f| home.join(f))
-        .filter(|p| p.is_file())
-        .collect()
+    [
+        ".zshrc",
+        ".zprofile",
+        ".bashrc",
+        ".bash_profile",
+        ".profile",
+        ".config/fish/config.fish",
+        // PowerShell: pwsh on Unix, then PowerShell 7 and Windows PowerShell 5 on Windows.
+        ".config/powershell/profile.ps1",
+        ".config/powershell/Microsoft.PowerShell_profile.ps1",
+        "Documents/PowerShell/profile.ps1",
+        "Documents/PowerShell/Microsoft.PowerShell_profile.ps1",
+        "Documents/WindowsPowerShell/profile.ps1",
+        "Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1",
+    ]
+    .iter()
+    .map(|f| home.join(f))
+    .filter(|p| p.is_file())
+    .collect()
 }
 
 /// Does this profile line set a credential variable or the `~/.local/bin` PATH entry?
