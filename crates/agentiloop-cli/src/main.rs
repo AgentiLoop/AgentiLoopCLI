@@ -254,6 +254,8 @@ async fn main() -> Result<()> {
         let _ = ui_tx.send(tui::UiMsg::Status(status(&agent, &session)));
         // A continued session shows its earlier conversation, not an empty screen.
         replay_tui(&ui_tx, &agent.history);
+        // The last wizard answer left the UI in "Setting up"; the prompt is open now.
+        let _ = ui_tx.send(tui::UiMsg::Idle);
         let mut tracker = diff::Tracker::new(cwd.clone());
         // Agent side: one prompt or slash command at a time, until the UI hangs up.
         while let Some(tui::Input::Submit(line)) = in_rx.recv().await {
