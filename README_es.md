@@ -253,7 +253,7 @@ Dentro de una sesión, escribe `/help` para ver los comandos del chat (`/model`,
 | Windows: *Windows protected your PC* | Haz clic en **More info** → **Run anyway** |
 | `401` / `invalid x-api-key` / error de autenticación | La clave es incorrecta o tiene espacios o comillas. Cópiala de nuevo y revisa la línea en tu perfil |
 | Ollama: modelo no encontrado | Ejecuta `ollama list` y pasa el nombre exacto con `-m` |
-| Sigue usando un modelo o proveedor antiguo | Recuerda tus últimas elecciones. Pasa `-p` / `-m` para cambiarlas, o borra `~/.agentiloop/settings.json` para restablecerlo |
+| Sigue usando un modelo o proveedor antiguo | Recuerda tus últimas elecciones. Pasa `-p` / `-m` para cambiarlas, o ejecuta `agentiloop --reset` para empezar de cero |
 
 ¿Sigues atascado? [Abre un issue](https://github.com/AgentiLoop/AgentiLoopCLI/issues) y pega el comando y el error. Te ayudaremos.
 
@@ -281,7 +281,11 @@ Esto compila el programa y deja un comando `agentiloop` en tu PATH, en `~/.cargo
 
 ### Paso 2: Conecta un modelo
 
-AgentiLoop necesita un modelo con el que hablar. Elige uno de estos:
+AgentiLoop necesita un modelo con el que hablar.
+
+**Lo más fácil:** simplemente ejecuta `agentiloop`. En una máquina sin clave configurada arranca un asistente corto que te pregunta qué proveedor quieres, toma tu clave (escrita de forma oculta), comprueba la conexión, te deja elegir un modelo y guarda la clave en `~/.agentiloop/env` (solo AgentiLoop lo lee). Puedes volver a ejecutarlo en cualquier momento con `agentiloop --setup`, y `agentiloop --reset` lo deja todo como nuevo.
+
+**A mano:** en su lugar, define una de estas variables en tu terminal:
 
 | Quiero usar… | Haz esto |
 |---|---|
@@ -374,7 +378,7 @@ Algunas cosas **nunca** se recuerdan, a propósito:
 - `--no-mcp`, `-C` y las peticiones de una sola vez
 - Las claves de API: esas se quedan en tu perfil de shell
 
-Para olvidarlo todo, borra `~/.agentiloop/settings.json`.
+Para olvidarlo todo, ejecuta `agentiloop --reset`.
 
 ---
 
@@ -393,6 +397,8 @@ Cada opción también se puede configurar con una variable de entorno, que apare
 | `-C, --cwd <folder>` | | Trabaja en una carpeta distinta de la que estás |
 | `--yes` | `AGENTILOOP_YES` | No pregunta antes de ejecutar herramientas. ⚠️ Solo para uso automatizado y de confianza |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | No inicia servidores MCP (mira más abajo) |
+| `--setup` | | Vuelve a ejecutar el asistente de primera configuración (proveedor, clave, modelo) |
+| `--reset` | | Como nuevo: borra `~/.agentiloop`, el bloque de agentiloop en tu perfil de shell y los elementos del Llavero que creó el asistente. Las líneas `export` escritas a mano solo se comentan, y solo si dices que sí. Añade `--yes` para saltarte las preguntas |
 | `--max-turns <n>` | | Máximo de pasos que puede dar el agente por petición (50 por defecto) |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | Cuándo resumir una conversación larga (150000 por defecto, `0` = nunca) |
 | `-h` / `-V` | | Ayuda / versión |
@@ -472,7 +478,8 @@ Todo vive en `~/.agentiloop/`. Define `AGENTILOOP_HOME` para usar otra carpeta, 
 
 | Archivo | Qué contiene |
 |---|---|
-| `settings.json` | El proveedor, los modelos y las opciones recordados. Bórralo para restablecer |
+| `settings.json` | El proveedor, los modelos y las opciones recordados, más lo que el asistente escribió en otros sitios |
+| `env` | Tu clave, escrita por el asistente (`KEY=value`, modo de archivo 600). Se carga al arrancar; un `export` en tu shell tiene prioridad |
 | `sessions/` | Tus conversaciones, un archivo por cada una |
 | `mcp.json` | Tus servidores MCP |
 | `history.txt` | Las peticiones que has escrito (para ↑ / ↓) |

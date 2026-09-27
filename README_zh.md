@@ -253,7 +253,7 @@ Options:
 | Windows：*Windows protected your PC* | 点击 **More info** → **Run anyway** |
 | `401` / `invalid x-api-key` / 身份验证错误 | 密钥不正确，或者其中含有空格或引号。重新复制密钥，并检查配置文件中的那一行 |
 | Ollama：model not found | 运行 `ollama list`，然后用 `-m` 传入准确的名称 |
-| 它一直在使用旧的模型或提供方 | 它会记住你上次的选择。传入 `-p` / `-m` 来更改，或删除 `~/.agentiloop/settings.json` 来重置 |
+| 它一直在使用旧的模型或提供方 | 它会记住你上次的选择。传入 `-p` / `-m` 来更改，或运行 `agentiloop --reset` 从头开始 |
 
 还是卡住了？[提交一个 issue](https://github.com/AgentiLoop/AgentiLoopCLI/issues)，并贴上你运行的命令和错误信息。我们会帮助你。
 
@@ -281,7 +281,11 @@ cargo install --path crates/agentiloop-cli
 
 ### 第 2 步：连接模型
 
-AgentiLoop 需要一个可以对话的模型。请从下面选择一个：
+AgentiLoop 需要一个可以对话的模型。
+
+**最简单的方式：** 直接运行 `agentiloop`。在没有配置密钥的机器上，它会启动一个简短的向导：询问你想用哪个提供方，接收你的密钥（隐藏输入），检查连接，让你选择模型，然后把密钥保存到 `~/.agentiloop/env`（只有 AgentiLoop 会读取它）。你可以随时用 `agentiloop --setup` 重新运行向导，`agentiloop --reset` 则把一切恢复到初始状态。
+
+**手动方式：** 改为在终端中设置以下其中一项：
 
 | 我想使用… | 这样做 |
 |---|---|
@@ -374,7 +378,7 @@ agentiloop --new          # 开始一段新对话（旧对话仍会保存）
 - `--no-mcp`、`-C` 和单次提示
 - API 密钥：它们保留在你的 shell 配置文件中
 
-要清除所有记忆，请删除 `~/.agentiloop/settings.json`。
+要清除所有记忆，请运行 `agentiloop --reset`。
 
 ---
 
@@ -393,6 +397,8 @@ agentiloop --new          # 开始一段新对话（旧对话仍会保存）
 | `-C, --cwd <folder>` | | 在与当前所在位置不同的文件夹中工作 |
 | `--yes` | `AGENTILOOP_YES` | 运行工具前不询问。⚠️ 仅用于可信的自动化场景 |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | 不启动 MCP 服务器（见下文） |
+| `--setup` | | 重新运行首次设置向导（提供方、密钥、模型） |
+| `--reset` | | 恢复初始状态：删除 `~/.agentiloop`、shell 配置文件中的 agentiloop 块，以及向导创建的钥匙串项。手写的 `export` 行只会被注释掉，而且仅在你同意时。加上 `--yes` 可跳过询问 |
 | `--max-turns <n>` | | 智能体每个请求最多可执行的步数（默认 50） |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | 何时对长对话进行总结（默认 150000，`0` = 从不） |
 | `-h` / `-V` | | 帮助 / 版本 |
@@ -472,7 +478,8 @@ agentiloop --yes "run the tests and fix any failures"        # 无人值守，�
 
 | 文件 | 内容 |
 |---|---|
-| `settings.json` | 记住的提供方、模型和选项。删除它即可重置 |
+| `settings.json` | 记住的提供方、模型和选项，以及向导在其他位置写入的内容 |
+| `env` | 向导写入的密钥（`KEY=value`，文件模式 600）。启动时加载；shell 中的 `export` 优先 |
 | `sessions/` | 你的对话，每个对话一个文件 |
 | `mcp.json` | 你的 MCP 服务器 |
 | `history.txt` | 你输入过的提示（用于 ↑ / ↓） |

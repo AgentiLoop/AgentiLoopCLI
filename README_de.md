@@ -253,7 +253,7 @@ Tippe in einer Sitzung `/help`, um die Chat-Befehle zu sehen (`/model`, `/sessio
 | Windows: *Windows protected your PC* | Klick auf **More info** → **Run anyway** |
 | `401` / `invalid x-api-key` / Authentifizierungsfehler | Der Schlüssel ist falsch oder enthält Leerzeichen oder Anführungszeichen. Kopier ihn erneut und prüf die Zeile in deinem Profil |
 | Ollama: Modell nicht gefunden | Führ `ollama list` aus und übergib den exakten Namen mit `-m` |
-| Er benutzt immer noch ein altes Modell oder einen alten Anbieter | Er merkt sich deine letzte Wahl. Übergib `-p` / `-m`, um sie zu ändern, oder lösche `~/.agentiloop/settings.json`, um alles zurückzusetzen |
+| Er benutzt immer noch ein altes Modell oder einen alten Anbieter | Er merkt sich deine letzte Wahl. Übergib `-p` / `-m`, um sie zu ändern, oder führe `agentiloop --reset` aus, um von vorn zu beginnen |
 
 Kommst du immer noch nicht weiter? [Eröffne ein Issue](https://github.com/AgentiLoop/AgentiLoopCLI/issues) und füge den Befehl und die Fehlermeldung ein. Wir helfen dir.
 
@@ -281,7 +281,11 @@ Damit wird das Programm gebaut und ein `agentiloop`-Befehl in deinem PATH abgele
 
 ### Schritt 2: Ein Modell verbinden
 
-AgentiLoop braucht ein Modell, mit dem es sprechen kann. Wähle eins davon:
+AgentiLoop braucht ein Modell, mit dem es sprechen kann.
+
+**Am einfachsten:** Führe einfach `agentiloop` aus. Auf einem Rechner ohne eingerichteten Schlüssel startet ein kurzer Assistent: Er fragt, welchen Anbieter du möchtest, nimmt deinen Schlüssel entgegen (versteckt eingegeben), prüft die Verbindung, lässt dich ein Modell wählen und speichert den Schlüssel in `~/.agentiloop/env` (nur AgentiLoop liest sie). Du kannst ihn jederzeit mit `agentiloop --setup` erneut starten, und `agentiloop --reset` setzt alles auf den Anfangszustand zurück.
+
+**Von Hand:** Setze stattdessen eine dieser Variablen in deinem Terminal:
 
 | Ich möchte nutzen… | So geht's |
 |---|---|
@@ -374,7 +378,7 @@ Manche Dinge werden absichtlich **nie** gemerkt:
 - `--no-mcp`, `-C` und einmalige Anfragen
 - API-Schlüssel: Die bleiben in deinem Shell-Profil
 
-Um alles zu vergessen, lösche `~/.agentiloop/settings.json`.
+Um alles zu vergessen, führe `agentiloop --reset` aus.
 
 ---
 
@@ -393,6 +397,8 @@ Jede Option lässt sich auch über eine Umgebungsvariable setzen, die in der zwe
 | `-C, --cwd <folder>` | | Arbeitet in einem anderen Ordner als dem, in dem du gerade bist |
 | `--yes` | `AGENTILOOP_YES` | Fragt nicht, bevor Tools ausgeführt werden. ⚠️ Nur für vertrauenswürdige, automatisierte Nutzung |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | Startet keine MCP-Server (siehe unten) |
+| `--setup` | | Startet den Einrichtungsassistenten erneut (Anbieter, Schlüssel, Modell) |
+| `--reset` | | Zurück auf Anfang: löscht `~/.agentiloop`, den agentiloop-Block in deinem Shell-Profil und die vom Assistenten angelegten Schlüsselbund-Einträge. Von Hand geschriebene `export`-Zeilen werden nur auskommentiert, und nur wenn du zustimmst. Mit `--yes` entfallen die Rückfragen |
 | `--max-turns <n>` | | Maximale Anzahl Schritte, die der Agent pro Anfrage machen darf (Standard 50) |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | Wann eine lange Unterhaltung zusammengefasst wird (Standard 150000, `0` = nie) |
 | `-h` / `-V` | | Hilfe / Version |
@@ -472,7 +478,8 @@ Alles liegt in `~/.agentiloop/`. Setz `AGENTILOOP_HOME`, um einen anderen Ordner
 
 | Datei | Was drinsteht |
 |---|---|
-| `settings.json` | Gemerkter Anbieter, Modelle und Optionen. Lösch sie, um alles zurückzusetzen |
+| `settings.json` | Gemerkter Anbieter, Modelle und Optionen sowie was der Assistent an anderer Stelle geschrieben hat |
+| `env` | Dein Schlüssel, vom Assistenten geschrieben (`KEY=value`, Dateimodus 600). Wird beim Start geladen; ein `export` in deiner Shell hat Vorrang |
 | `sessions/` | Deine Unterhaltungen, je eine Datei |
 | `mcp.json` | Deine MCP-Server |
 | `history.txt` | Anfragen, die du eingetippt hast (für ↑ / ↓) |

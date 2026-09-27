@@ -253,7 +253,7 @@ Options:
 | Windows: *Windows protected your PC* | **More info** → **Run anyway**를 클릭하세요 |
 | `401` / `invalid x-api-key` / 인증 오류 | 키가 틀렸거나 공백 또는 따옴표가 들어 있어요. 다시 복사하고 프로필의 해당 줄을 확인하세요 |
 | Ollama: model not found | `ollama list`를 실행하고 정확한 이름을 `-m`으로 전달하세요 |
-| 계속 예전 모델이나 프로바이더를 사용해요 | 마지막 선택을 기억하기 때문이에요. `-p` / `-m`을 전달해서 바꾸거나, `~/.agentiloop/settings.json`을 삭제해서 초기화하세요 |
+| 계속 예전 모델이나 프로바이더를 사용해요 | 마지막 선택을 기억하기 때문이에요. `-p` / `-m`을 전달해서 바꾸거나, `agentiloop --reset`을 실행해서 처음부터 다시 시작하세요 |
 
 그래도 해결되지 않나요? [이슈를 열고](https://github.com/AgentiLoop/AgentiLoopCLI/issues) 실행한 명령어와 오류를 붙여 넣어 주세요. 저희가 도와드릴게요.
 
@@ -281,7 +281,11 @@ cargo install --path crates/agentiloop-cli
 
 ### 2단계: 모델 연결하기
 
-AgentiLoop는 대화할 모델이 필요해요. 다음 중 하나를 선택하세요:
+AgentiLoop는 대화할 모델이 필요해요.
+
+**가장 쉬운 방법:** 그냥 `agentiloop`를 실행하세요. 키가 설정되지 않은 컴퓨터에서는 짧은 마법사가 시작돼요. 어떤 프로바이더를 쓸지 묻고, 키를 받고 (입력은 숨겨져요), 연결을 확인하고, 모델을 고르게 한 뒤, 키를 `~/.agentiloop/env`에 저장해요 (AgentiLoop만 읽어요). `agentiloop --setup`으로 언제든 다시 실행할 수 있고, `agentiloop --reset`은 모든 것을 처음 상태로 되돌려요.
+
+**직접 하기:** 대신 터미널에서 다음 중 하나를 설정하세요:
 
 | 사용하고 싶은 것… | 할 일 |
 |---|---|
@@ -374,7 +378,7 @@ agentiloop --new          # 새 대화 시작 (이전 대화는 저장된 채로
 - `--no-mcp`, `-C`, 그리고 원샷 프롬프트
 - API 키: 이것들은 셸 프로필에 그대로 두세요
 
-모든 것을 잊게 하려면 `~/.agentiloop/settings.json`을 삭제하세요.
+모든 것을 잊게 하려면 `agentiloop --reset`을 실행하세요.
 
 ---
 
@@ -393,6 +397,8 @@ agentiloop --new          # 새 대화 시작 (이전 대화는 저장된 채로
 | `-C, --cwd <folder>` | | 지금 있는 폴더가 아닌 다른 폴더에서 작업해요 |
 | `--yes` | `AGENTILOOP_YES` | 도구를 실행하기 전에 묻지 않아요. ⚠️ 신뢰할 수 있는 자동화 용도로만 사용하세요 |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | MCP 서버를 시작하지 않아요 (아래 참고) |
+| `--setup` | | 첫 설정 마법사를 다시 실행해요 (프로바이더, 키, 모델) |
+| `--reset` | | 처음 상태로: `~/.agentiloop`, 셸 프로파일의 agentiloop 블록, 마법사가 만든 키체인 항목을 삭제해요. 직접 작성한 `export` 줄은 주석 처리만 되고, 그것도 동의할 때만이에요. `--yes`를 붙이면 질문을 건너뛰어요 |
 | `--max-turns <n>` | | 요청 하나당 에이전트가 수행할 수 있는 최대 단계 수 (기본값 50) |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | 긴 대화를 요약할 시점 (기본값 150000, `0` = 요약 안 함) |
 | `-h` / `-V` | | 도움말 / 버전 |
@@ -472,7 +478,8 @@ TUI나 채팅의 프롬프트에서 다음을 입력하세요:
 
 | 파일 | 내용 |
 |---|---|
-| `settings.json` | 기억된 프로바이더, 모델, 옵션. 삭제하면 초기화돼요 |
+| `settings.json` | 기억된 프로바이더, 모델, 옵션과 마법사가 다른 곳에 쓴 내용 |
+| `env` | 마법사가 쓴 키 (`KEY=value`, 파일 모드 600). 시작할 때 불러오며, 셸의 `export`가 우선해요 |
 | `sessions/` | 대화 기록, 대화마다 파일 하나 |
 | `mcp.json` | MCP 서버 목록 |
 | `history.txt` | 입력한 프롬프트 (↑ / ↓ 용) |
