@@ -106,6 +106,37 @@ impl OpenAIProvider {
         }
         Ok(resp)
     }
+
+    /// Ollama (local or ollama.com) mounts its native API beside `/v1`:
+    /// `POST /api/show` reports the model's context window under
+    /// `model_info["<family>.context_length"]`, capped by a `num_ctx`
+    /// Modelfile parameter when set. Any other server 404s → None.
+    async fn ollama_context_length(&self, id: &str) -> Option<u64> {
+        let root = self.base_url.strip_suffix("/v1")?;
+        let resp = self
+            .auth(self.client.post(format!("{root}/api/show")))
+            .json(&serde_json::json!({ "model": id }))
+            .send()
+            .await
+            .ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        let show: WireOllamaShow = resp.json().await.ok()?;
+        let model_max = show
+            .model_info
+            .iter()
+            .find(|(k, _)| k.ends_with(".context_length"))
+            .and_then(|(_, v)| v.as_u64());
+        let num_ctx = show.parameters.lines().find_map(|line| {
+            let mut words = line.split_whitespace();
+            (words.next()? == "num_ctx").then(|| words.next()?.parse::<u64>().ok())?
+        });
+        match (model_max, num_ctx) {
+            (Some(m), Some(n)) => Some(m.min(n)),
+            (m, n) => m.or(n),
+        }
+    }
 }
 
 // ---- request wire types -----------------------------------------------------
@@ -261,6 +292,53 @@ struct WireModel {
     id: String,
     #[serde(default)]
     created: u64,
+    /// OpenRouter: context window.
+    #[serde(default)]
+    context_length: Option<u64>,
+    /// vLLM and oMLX: context window.
+    #[serde(default)]
+    max_model_len: Option<u64>,
+    /// OpenRouter: output cap lives under `top_provider`.
+    #[serde(default)]
+    top_provider: Option<WireTopProvider>,
+}
+
+#[derive(Deserialize)]
+struct WireTopProvider {
+    #[serde(default)]
+    max_completion_tokens: Option<u32>,
+}
+
+/// Ollama's native `POST /api/show` reply (only the limit-bearing fields).
+#[derive(Deserialize)]
+struct WireOllamaShow {
+    /// Keyed `"<family>.context_length"`, e.g. `"qwen3.context_length"`.
+    #[serde(default)]
+    model_info: std::collections::HashMap<String, Value>,
+    /// Modelfile parameters, one `name value` per line (`num_ctx 8192`).
+    #[serde(default)]
+    parameters: String,
+}
+
+/// Published limits (context window, max output) for OpenAI's own models,
+/// which `/models` doesn't report. Longest matching prefix wins.
+fn openai_limits(id: &str) -> Option<(u64, u32)> {
+    const TABLE: &[(&str, u64, u32)] = &[
+        ("gpt-5", 400_000, 128_000),
+        ("gpt-4.1", 1_047_576, 32_768),
+        ("gpt-4o", 128_000, 16_384),
+        ("gpt-4-turbo", 128_000, 4_096),
+        ("gpt-3.5-turbo", 16_385, 4_096),
+        ("o1-mini", 128_000, 65_536),
+        ("o1", 200_000, 100_000),
+        ("o3", 200_000, 100_000),
+        ("o4-mini", 200_000, 100_000),
+    ];
+    TABLE
+        .iter()
+        .filter(|(prefix, _, _)| id.starts_with(prefix))
+        .max_by_key(|(prefix, _, _)| prefix.len())
+        .map(|&(_, input, output)| (input, output))
 }
 
 // streaming
@@ -365,10 +443,27 @@ impl Provider for OpenAIProvider {
                 id: m.id.clone(),
                 display_name: m.id,
                 created_at: String::new(),
-                max_input_tokens: None,
-                max_tokens: None,
+                max_input_tokens: m.context_length.or(m.max_model_len),
+                max_tokens: m.top_provider.and_then(|t| t.max_completion_tokens),
             })
             .collect())
+    }
+
+    /// Scans `/models` (OpenRouter, vLLM and oMLX report limits there), then
+    /// asks Ollama's `/api/show` for the context window when the catalog
+    /// didn't carry one, and finally fills in OpenAI's published limits.
+    async fn model_info(&self, id: &str) -> anyhow::Result<Option<ModelInfo>> {
+        let Some(mut info) = self.list_models().await?.into_iter().find(|m| m.id == id) else {
+            return Ok(None);
+        };
+        if info.max_input_tokens.is_none() {
+            info.max_input_tokens = self.ollama_context_length(id).await;
+        }
+        if let Some((input, output)) = openai_limits(id) {
+            info.max_input_tokens.get_or_insert(input);
+            info.max_tokens.get_or_insert(output);
+        }
+        Ok(Some(info))
     }
 
     async fn complete(&self, req: ProviderRequest) -> anyhow::Result<ProviderResponse> {
@@ -621,5 +716,78 @@ data: [DONE]
         assert_eq!(parse_tool_args("x", "").unwrap(), serde_json::json!({}));
         assert_eq!(parse_tool_args("x", "  ").unwrap(), serde_json::json!({}));
         assert!(parse_tool_args("x", "{not json").is_err());
+    }
+
+    /// Serve canned JSON bodies keyed by request path (404 otherwise) for as
+    /// many connections as the test makes.
+    async fn serve_routes(routes: &'static [(&'static str, &'static str)]) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            loop {
+                let (mut sock, _) = listener.accept().await.unwrap();
+                let mut req = vec![0u8; 8192];
+                let n = sock.read(&mut req).await.unwrap_or(0);
+                let head = String::from_utf8_lossy(&req[..n]);
+                let path = head.split_whitespace().nth(1).unwrap_or("");
+                let (status, body) = match routes.iter().find(|(p, _)| *p == path) {
+                    Some((_, body)) => ("200 OK", *body),
+                    None => ("404 Not Found", "{}"),
+                };
+                let reply = format!(
+                    "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                sock.write_all(reply.as_bytes()).await.unwrap();
+                sock.shutdown().await.unwrap();
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    #[tokio::test]
+    async fn list_models_reads_limits_reported_by_catalog() {
+        // OpenRouter shape (context_length + top_provider) and vLLM/oMLX shape (max_model_len).
+        let base = serve_routes(&[(
+            "/models",
+            r#"{"data":[{"id":"a","context_length":131072,"top_provider":{"max_completion_tokens":8192}},{"id":"b","max_model_len":32768}]}"#,
+        )])
+        .await;
+        let models = OpenAIProvider::new("k", base).list_models().await.unwrap();
+        assert_eq!((models[0].max_input_tokens, models[0].max_tokens), (Some(131072), Some(8192)));
+        assert_eq!((models[1].max_input_tokens, models[1].max_tokens), (Some(32768), None));
+    }
+
+    #[tokio::test]
+    async fn model_info_asks_ollama_for_context_window_capped_by_num_ctx() {
+        let base = serve_routes(&[
+            ("/v1/models", r#"{"data":[{"id":"qwen3:4b"}]}"#),
+            ("/api/show", r#"{"model_info":{"qwen3.context_length":262144},"parameters":"stop \"x\"\nnum_ctx 8192"}"#),
+        ])
+        .await;
+        let p = OpenAIProvider::new("k", format!("{base}/v1"));
+        let m = p.model_info("qwen3:4b").await.unwrap().unwrap();
+        assert_eq!((m.max_input_tokens, m.max_tokens), (Some(8192), None));
+        assert!(p.model_info("missing").await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn model_info_fills_in_openai_published_limits() {
+        // No `/v1` suffix, so no Ollama probe; `/models` carries no limits.
+        let base = serve_routes(&[("/models", r#"{"data":[{"id":"gpt-4o-mini"},{"id":"llama3"}]}"#)]).await;
+        let p = OpenAIProvider::new("k", base);
+        let m = p.model_info("gpt-4o-mini").await.unwrap().unwrap();
+        assert_eq!((m.max_input_tokens, m.max_tokens), (Some(128_000), Some(16_384)));
+        let m = p.model_info("llama3").await.unwrap().unwrap();
+        assert_eq!((m.max_input_tokens, m.max_tokens), (None, None));
+    }
+
+    #[test]
+    fn openai_limits_prefer_longest_prefix() {
+        assert_eq!(openai_limits("o1-mini-2024-09-12"), Some((128_000, 65_536)));
+        assert_eq!(openai_limits("o1-preview"), Some((200_000, 100_000)));
+        assert_eq!(openai_limits("gpt-4.1-nano"), Some((1_047_576, 32_768)));
+        assert_eq!(openai_limits("gpt-oss:120b"), None);
     }
 }
