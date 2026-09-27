@@ -172,8 +172,9 @@ impl Agent {
         if self.history.is_empty() {
             return Ok(None);
         }
+        let limits = self.resolve_limits().await;
         let transcript = transcript(&self.history);
-        let req = ProviderRequest {
+        let mut req = ProviderRequest {
             model: self.config.model.clone(),
             system: COMPACT_SYSTEM_PROMPT.into(),
             messages: vec![Message::user_text(format!(
@@ -182,6 +183,7 @@ impl Agent {
             tools: Vec::new(),
             max_tokens: 4096,
         };
+        Self::budget_request(&mut req, limits)?;
         let resp = self.provider.complete(req).await?;
         let summary = resp.message.text();
         anyhow::ensure!(!summary.trim().is_empty(), "compaction produced an empty summary");
@@ -210,6 +212,20 @@ impl Agent {
             .collect()
     }
 
+    /// Reserve input space before applying the model's output ceiling. UTF-8
+    /// bytes plus framing headroom are a conservative estimate, not a tokenizer.
+    fn budget_request(req: &mut ProviderRequest, limits: ModelLimits) -> anyhow::Result<()> {
+        req.max_tokens = req.max_tokens.min(limits.max_tokens);
+        if let Some(window) = limits.context_window {
+            let input = serde_json::to_vec(&(&req.system, &req.messages, &req.tools))?.len() as u64
+                + 256 + 16 * (req.messages.len() + req.tools.len()) as u64;
+            let available = window.saturating_sub(input);
+            anyhow::ensure!(available > 0, "request input exceeds the estimated context budget ({input} of {window} tokens); compact or clear the conversation, reduce the prompt or tools, or use a larger-context model");
+            req.max_tokens = u64::from(req.max_tokens).min(available) as u32;
+        }
+        Ok(())
+    }
+
     /// The core agentic loop: send → if tool_use, execute tools, append results, repeat.
     pub async fn run<F>(&mut self, user_input: &str, mut on_event: F) -> anyhow::Result<()>
     where
@@ -224,13 +240,14 @@ impl Agent {
         self.history.push(Message::user_text(user_input));
 
         for _ in 0..self.config.max_turns {
-            let req = ProviderRequest {
+            let mut req = ProviderRequest {
                 model: self.config.model.clone(),
                 system: self.config.system_prompt.clone(),
                 messages: self.history.clone(),
                 tools: self.tool_specs(),
                 max_tokens: limits.max_tokens,
             };
+            Self::budget_request(&mut req, limits)?;
 
 
             let started = Instant::now();
