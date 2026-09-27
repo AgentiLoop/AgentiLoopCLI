@@ -862,4 +862,175 @@ data: [DONE]
         assert!(is_snapshot_date("2024-09-12"));
         assert!(!is_snapshot_date("preview"));
     }
+
+    /// Serve one canned reply with the given status line, then close.
+    async fn serve_status(status: &'static str, body: &'static str) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut req = vec![0u8; 8192];
+            let _ = sock.read(&mut req).await;
+            let reply = format!(
+                "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            sock.write_all(reply.as_bytes()).await.unwrap();
+            sock.shutdown().await.unwrap();
+        });
+        format!("http://{addr}")
+    }
+
+    #[tokio::test]
+    async fn list_models_sorts_newest_first_then_by_id() {
+        let base = serve_routes(&[("/models", r#"{"data":[{"id":"b","created":1},{"id":"a","created":5},{"id":"c","created":5},{"id":"z"}]}"#)]).await;
+        let models = OpenAIProvider::new("k", base).list_models().await.unwrap();
+        let ids: Vec<&str> = models.iter().map(|m| m.id.as_str()).collect();
+        // Missing `created` counts as 0 → oldest.
+        assert_eq!(ids, ["a", "c", "b", "z"]);
+        assert_eq!(models[0].display_name, "a");
+        assert_eq!(models[0].created_at, "");
+    }
+
+    #[tokio::test]
+    async fn list_models_401_names_provider_and_hint() {
+        let base = serve_status("401 Unauthorized", r#"{"error":{"message":"bad key","type":"invalid_request_error"}}"#).await;
+        let err = OpenAIProvider::new("k", base).list_models().await.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "openai 401 Unauthorized (invalid_request_error): bad key — API key missing or invalid; set OPENAI_API_KEY"
+        );
+
+        let base = serve_status("403 Forbidden", "nope").await;
+        let err = OpenAIProvider::new("k", base).with_identity("omlx", "").list_models().await.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "omlx 403 Forbidden : nope — API key missing or invalid; set OMLX_API_KEY or auth.api_key in ~/.omlx/settings.json"
+        );
+
+        let base = serve_status("500 Internal Server Error", r#"{"error":{"message":"boom"}}"#).await;
+        let err = OpenAIProvider::new("k", base).list_models().await.unwrap_err();
+        assert_eq!(err.to_string(), "openai 500 Internal Server Error (): boom");
+    }
+
+    #[tokio::test]
+    async fn list_models_rejects_malformed_catalog() {
+        let base = serve_routes(&[("/models", r#"{"models":[]}"#)]).await;
+        let err = OpenAIProvider::new("k", base).list_models().await.unwrap_err();
+        assert!(err.to_string().contains("decoding /models"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn model_info_prefers_catalog_limits_over_published_docs() {
+        let base = serve_routes(&[
+            (
+                "/models",
+                r#"{"data":[{"id":"gpt-5","context_length":1000,"top_provider":{"max_completion_tokens":10}},{"id":"gpt-4o-mini","max_model_len":100}]}"#,
+            ),
+            ("/docs/gpt-5.md", DOC_GPT5),
+            ("/docs/gpt-4o-mini.md", DOC_4O_MINI),
+        ])
+        .await;
+        let mut p = OpenAIProvider::new("k", base.clone());
+        p.model_docs_url = format!("{base}/docs");
+        // Both limits from the catalog → docs never consulted.
+        let m = p.model_info("gpt-5").await.unwrap().unwrap();
+        assert_eq!((m.max_input_tokens, m.max_tokens), (Some(1000), Some(10)));
+        // Catalog input only → docs fill just the output cap.
+        let m = p.model_info("gpt-4o-mini").await.unwrap().unwrap();
+        assert_eq!((m.max_input_tokens, m.max_tokens), (Some(100), Some(16_384)));
+    }
+
+    #[tokio::test]
+    async fn model_info_without_doc_page_leaves_limits_empty() {
+        let base = serve_routes(&[
+            ("/models", r#"{"data":[{"id":"gpt-9"},{"id":"o9-2030-01-01"},{"id":"o3"}]}"#),
+            ("/docs/o3.md", "- 200,000 context window\n- 100,000 max output tokens\n"),
+        ])
+        .await;
+        let mut p = OpenAIProvider::new("k", base.clone());
+        p.model_docs_url = format!("{base}/docs");
+        // Unknown OpenAI-looking id: page 404s.
+        let m = p.model_info("gpt-9").await.unwrap().unwrap();
+        assert_eq!((m.max_input_tokens, m.max_tokens), (None, None));
+        // Snapshot whose family page also 404s.
+        let m = p.model_info("o9-2030-01-01").await.unwrap().unwrap();
+        assert_eq!((m.max_input_tokens, m.max_tokens), (None, None));
+        // Ids shorter than a date suffix still resolve.
+        let m = p.model_info("o3").await.unwrap().unwrap();
+        assert_eq!((m.max_input_tokens, m.max_tokens), (Some(200_000), Some(100_000)));
+    }
+
+    #[tokio::test]
+    async fn model_info_docs_unreachable_is_not_an_error() {
+        let base = serve_routes(&[("/models", r#"{"data":[{"id":"gpt-5"}]}"#)]).await;
+        let mut p = OpenAIProvider::new("k", base);
+        p.model_docs_url = "http://127.0.0.1:1/docs".into();
+        let m = p.model_info("gpt-5").await.unwrap().unwrap();
+        assert_eq!((m.max_input_tokens, m.max_tokens), (None, None));
+    }
+
+    #[tokio::test]
+    async fn ollama_context_window_variants() {
+        async fn probe(show: &'static str) -> Option<u64> {
+            let base = serve_routes(Box::leak(vec![("/api/show", show)].into_boxed_slice())).await;
+            OpenAIProvider::new("k", format!("{base}/v1")).ollama_context_length("m").await
+        }
+        // Model max only.
+        assert_eq!(probe(r#"{"model_info":{"llama.context_length":131072}}"#).await, Some(131072));
+        // num_ctx only.
+        assert_eq!(probe(r#"{"parameters":"num_ctx 4096"}"#).await, Some(4096));
+        // num_ctx above the model max doesn't raise it.
+        assert_eq!(probe(r#"{"model_info":{"llama.context_length":8192},"parameters":"num_ctx 32768"}"#).await, Some(8192));
+        // Neither → unknown.
+        assert_eq!(probe(r#"{"model_info":{"general.architecture":"llama"},"parameters":"stop \"x\""}"#).await, None);
+        assert_eq!(probe(r#"{"model_info":{"llama.context_length":"big"}}"#).await, None);
+
+        // Not an Ollama-style base URL → no probe at all (nothing is listening on :1).
+        let p = OpenAIProvider::new("k", "http://127.0.0.1:1");
+        assert_eq!(p.ollama_context_length("m").await, None);
+        // `/api/show` 404 (plain OpenAI-compatible server mounted under /v1).
+        let base = serve_routes(&[]).await;
+        assert_eq!(OpenAIProvider::new("k", format!("{base}/v1")).ollama_context_length("m").await, None);
+    }
+
+    #[test]
+    fn model_doc_parsing_edge_cases() {
+        // Indented list items and thousands separators.
+        assert_eq!(parse_model_doc("  - 1,047,576 context window\n  - 32,768 max output tokens\n"), Some((1_047_576, 32_768)));
+        // Input cap without a context window line still counts.
+        assert_eq!(parse_model_doc("- Maximum input tokens: 272,000\n- 128,000 max output tokens\n"), Some((272_000, 128_000)));
+        // Only the list items count: a matching label in prose is ignored.
+        assert_eq!(parse_model_doc("128,000 context window\n16,384 max output tokens\n"), None);
+        // A label with no number on its line yields nothing.
+        assert_eq!(parse_model_doc("- context window\n- 16,384 max output tokens\n"), None);
+        // Output cap that doesn't fit a u32 is rejected rather than truncated.
+        assert_eq!(parse_model_doc("- 128,000 context window\n- 5,000,000,000 max output tokens\n"), None);
+        // Context window only, no output cap → None.
+        assert_eq!(parse_model_doc("- Maximum input tokens: 272,000\n"), None);
+    }
+
+    #[test]
+    fn snapshot_date_shape() {
+        for s in ["2024-09-12", "2025-04-16", "0000-00-00"] {
+            assert!(is_snapshot_date(s), "{s}");
+        }
+        for s in ["2024-9-12", "2024/09/12", "2024-09-12x", "24-09-12", "abcd-ef-gh", ""] {
+            assert!(!is_snapshot_date(s), "{s}");
+        }
+    }
+
+    #[test]
+    fn identity_and_default_model() {
+        let p = OpenAIProvider::new(" k ", "http://x/v1/");
+        assert_eq!(p.name(), "openai");
+        assert_eq!(p.default_model(), "gpt-4o-mini");
+        assert_eq!(p.api_key, "k");
+        assert_eq!(p.base_url, "http://x/v1");
+        let p = p.with_identity("omlx", "");
+        assert_eq!(p.name(), "omlx");
+        assert_eq!(p.default_model(), "");
+    }
 }
+
