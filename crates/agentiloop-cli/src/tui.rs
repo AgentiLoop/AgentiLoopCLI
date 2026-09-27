@@ -188,6 +188,10 @@ pub struct App {
     pending_paths: HashMap<String, String>,
     /// Screen cells occupied by links in the last frame, for click handling.
     link_hits: RefCell<Vec<LinkHit>>,
+    /// Panes of the last frame a drag may select within (transcript, files, input).
+    sel_areas: RefCell<Vec<Rect>>,
+    /// Current (or last) mouse selection; highlighted until the next click or key.
+    selection: Option<Selection>,
     /// Files changed this session (total diff each), in first-touched order.
     files: Vec<FileDiff>,
     /// Which file's diff the pane shows (the most recently changed one).
@@ -198,6 +202,47 @@ pub struct App {
     show_files: bool,
     /// `Some(secret)` while the setup wizard waits for an answer on the input line.
     asking: Option<bool>,
+}
+
+/// Mouse text selection in screen cells, confined to the pane it started in.
+#[derive(Clone, Copy)]
+struct Selection {
+    area: Rect,
+    anchor: (u16, u16),
+    head: (u16, u16),
+}
+
+impl Selection {
+    /// Selected cells as (row, first col, last col), in reading order.
+    fn rows(&self) -> Vec<(u16, u16, u16)> {
+        let (a, h) = ((self.anchor.1, self.anchor.0), (self.head.1, self.head.0));
+        let ((y0, x0), (y1, x1)) = if a <= h { (a, h) } else { (h, a) };
+        let right = self.area.right().saturating_sub(1);
+        (y0..=y1)
+            .map(|y| (y, if y == y0 { x0 } else { self.area.x }, if y == y1 { x1 } else { right }))
+            .collect()
+    }
+
+    /// The selected text from a rendered frame, trailing blanks trimmed per row.
+    fn text(&self, buf: &ratatui::buffer::Buffer) -> String {
+        let mut out = Vec::new();
+        for (y, x0, x1) in self.rows() {
+            let mut row = String::new();
+            let mut skip = 0;
+            for x in x0..=x1 {
+                if skip > 0 {
+                    skip -= 1;
+                    continue;
+                }
+                let sym = buf[(x, y)].symbol();
+                // A wide glyph's trailing cell is a placeholder, not a space.
+                skip = unicode_width::UnicodeWidthStr::width(sym).saturating_sub(1);
+                row.push_str(sym);
+            }
+            out.push(row.trim_end().to_string());
+        }
+        out.join("\n")
+    }
 }
 
 struct LinkHit {
@@ -213,6 +258,8 @@ pub enum Action {
     Quit,
     /// A link was clicked; open it in the system browser.
     OpenUrl(String),
+    /// A mouse drag ended; copy the selection from the frame on screen.
+    CopySelection,
 }
 
 impl App {
@@ -235,6 +282,8 @@ impl App {
             streaming: false,
             pending_paths: HashMap::new(),
             link_hits: RefCell::new(Vec::new()),
+            sel_areas: RefCell::new(Vec::new()),
+            selection: None,
             files: Vec::new(),
             files_sel: 0,
             pane_rows: Vec::new(),
@@ -375,6 +424,7 @@ impl App {
         if key.kind != KeyEventKind::Press {
             return None;
         }
+        self.selection = None;
         if let Some(req) = self.modal.take() {
             let answer = match key.code {
                 KeyCode::Char('y') | KeyCode::Char('Y') => Answer::Allow,
@@ -491,22 +541,59 @@ impl App {
         self.cursor = self.input.len();
     }
 
-    /// Wheel scrolls the transcript; a left click on a link opens it.
+    /// Wheel scrolls the transcript; a left click on a link opens it; a
+    /// left drag selects text and copies it on release (mouse capture hides
+    /// the terminal's own selection, so the TUI provides one).
     pub fn handle_mouse(&mut self, m: MouseEvent) -> Option<Action> {
+        let pos = (m.column, m.row);
         match m.kind {
-            MouseEventKind::ScrollUp => self.scroll = self.scroll.saturating_add(3),
-            MouseEventKind::ScrollDown => self.scroll = self.scroll.saturating_sub(3),
-            MouseEventKind::Down(MouseButton::Left) if self.modal.is_none() => {
-                let hits = self.link_hits.borrow();
-                let hit = hits.iter().find(|h| h.y == m.row && m.column >= h.x0 && m.column < h.x1)?;
-                return Some(Action::OpenUrl(hit.url.clone()));
+            MouseEventKind::ScrollUp => {
+                self.selection = None;
+                self.scroll = self.scroll.saturating_add(3);
             }
+            MouseEventKind::ScrollDown => {
+                self.selection = None;
+                self.scroll = self.scroll.saturating_sub(3);
+            }
+            MouseEventKind::Down(MouseButton::Left) if self.modal.is_none() => {
+                let url = self
+                    .link_hits
+                    .borrow()
+                    .iter()
+                    .find(|h| h.y == m.row && m.column >= h.x0 && m.column < h.x1)
+                    .map(|h| h.url.clone());
+                if let Some(url) = url {
+                    self.selection = None;
+                    return Some(Action::OpenUrl(url));
+                }
+                let area = self.sel_areas.borrow().iter().copied().find(|a| a.contains(pos.into()));
+                self.selection = area.map(|area| Selection { area, anchor: pos, head: pos });
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                if let Some(s) = &mut self.selection {
+                    let a = s.area;
+                    s.head = (
+                        pos.0.clamp(a.x, a.right().saturating_sub(1)),
+                        pos.1.clamp(a.y, a.bottom().saturating_sub(1)),
+                    );
+                }
+            }
+            MouseEventKind::Up(MouseButton::Left) => match self.selection {
+                Some(s) if s.anchor != s.head => return Some(Action::CopySelection),
+                _ => self.selection = None,
+            },
             _ => {}
         }
         None
     }
 
+    /// Text under the current selection in `buf` (the frame on screen).
+    pub fn selected_text(&self, buf: &ratatui::buffer::Buffer) -> Option<String> {
+        self.selection.map(|s| s.text(buf))
+    }
+
     pub fn draw(&self, frame: &mut Frame) {
+        self.sel_areas.borrow_mut().clear();
         let [transcript, input, status] =
             Layout::vertical([Constraint::Min(1), Constraint::Length(3), Constraint::Length(1)]).areas(frame.area());
 
@@ -515,11 +602,13 @@ impl App {
             let pane_w = (transcript.width * 2 / 5).clamp(36, 90);
             let [left, right] = Layout::horizontal([Constraint::Min(40), Constraint::Length(pane_w)]).areas(transcript);
             self.draw_files(frame, right);
+            self.sel_areas.borrow_mut().push(right);
             left
         } else {
             transcript
         };
         self.draw_transcript(frame, transcript);
+        self.sel_areas.borrow_mut().push(transcript);
 
         let title = if self.busy {
             self.busy_title()
@@ -528,6 +617,7 @@ impl App {
         };
         let block = Block::default().borders(Borders::ALL).title(title);
         let inner = block.inner(input);
+        self.sel_areas.borrow_mut().push(inner);
         let shown = if self.asking == Some(true) { "•".repeat(self.input.chars().count()) } else { self.input.clone() };
         frame.render_widget(Paragraph::new(shown).block(block), input);
         if self.modal.is_none() {
@@ -535,7 +625,7 @@ impl App {
             frame.set_cursor_position((inner.x + col.min(inner.width.saturating_sub(1)), inner.y));
         }
 
-        let help = "  Enter send · ↑↓ history · PgUp/PgDn scroll · click links · Ctrl-F files · Ctrl-C quit";
+        let help = "  Enter send · ↑↓ history · PgUp/PgDn scroll · click links · drag to copy · Ctrl-F files · Ctrl-C quit";
         let mut bar = vec![Span::raw(self.status.clone())];
         if let Some(s) = &self.speed {
             bar.push(Span::styled(format!("⏱ {s} "), Style::default().fg(Color::Green)));
@@ -543,6 +633,15 @@ impl App {
         bar.push(Span::styled(help, Style::default().fg(Color::DarkGray)));
         let bar = Line::from(bar);
         frame.render_widget(Paragraph::new(bar).style(Style::default().add_modifier(Modifier::REVERSED)), status);
+
+        if let Some(sel) = &self.selection {
+            let buf = frame.buffer_mut();
+            for (y, x0, x1) in sel.rows() {
+                for x in x0..=x1 {
+                    buf[(x, y)].modifier.toggle(Modifier::REVERSED);
+                }
+            }
+        }
 
         if let Some(req) = &self.modal {
             self.draw_modal(frame, req);
@@ -797,7 +896,8 @@ pub fn run(
                     Err(mpsc::error::TryRecvError::Disconnected) => return Ok(()),
                 }
             }
-            terminal.draw(|f| app.draw(f))?;
+            // Kept so a finished drag can copy exactly what was on screen.
+            let shown = terminal.draw(|f| app.draw(f))?.buffer.clone();
             if event::poll(Duration::from_millis(50))? {
                 let action = match event::read()? {
                     Event::Key(key) => app.handle_key(key),
@@ -809,6 +909,13 @@ pub fn run(
                     Some(Action::Submit(line)) => {
                         if tx.send(Input::Submit(line)).is_err() {
                             return Ok(());
+                        }
+                    }
+                    Some(Action::CopySelection) => {
+                        if let Some(text) = app.selected_text(&shown) {
+                            if let Err(e) = copy_to_clipboard(&text) {
+                                app.apply(UiMsg::Error(format!("could not copy: {e}")));
+                            }
                         }
                     }
                     Some(Action::OpenUrl(url)) => match open_url(&url) {
@@ -898,6 +1005,37 @@ fn open_url(url: &str) -> std::io::Result<()> {
         c
     };
     cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().map(drop)
+}
+
+/// Put `text` on the system clipboard: pbcopy / clip, else an OSC 52 escape
+/// (honored by most terminals, including over SSH).
+fn copy_to_clipboard(text: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        let prog = if cfg!(target_os = "macos") { "pbcopy" } else { "clip" };
+        let mut child = std::process::Command::new(prog)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()?;
+        child.stdin.take().expect("piped stdin").write_all(text.as_bytes())?;
+        child.wait().map(drop)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        const A: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut b64 = String::new();
+        for c in text.as_bytes().chunks(3) {
+            let n = (u32::from(c[0]) << 16) | (u32::from(*c.get(1).unwrap_or(&0)) << 8) | u32::from(*c.get(2).unwrap_or(&0));
+            for i in 0..4 {
+                b64.push(if i <= c.len() { A[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
+            }
+        }
+        let mut out = std::io::stdout();
+        write!(out, "\x1b]52;c;{b64}\x07")?;
+        out.flush()
+    }
 }
 
 #[cfg(test)]
@@ -1023,6 +1161,36 @@ mod tests {
         let wheel = MouseEvent { kind: MouseEventKind::ScrollUp, column: 0, row: 0, modifiers: KeyModifiers::NONE };
         assert!(app.handle_mouse(wheel).is_none());
         assert_eq!(app.scroll, 3);
+    }
+
+    #[test]
+    fn dragging_selects_transcript_text_for_copy() {
+        let mut app = App::new("s");
+        app.apply(UiMsg::Line("alpha beta".into()));
+        app.apply(UiMsg::Line("gamma".into()));
+        let backend = TestBackend::new(40, 10);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| app.draw(f)).unwrap();
+        let s = screen(&app, 40, 10);
+        let row = |needle: &str| s.lines().position(|l| l.contains(needle)).unwrap() as u16;
+        let (r0, r1) = (row("alpha"), row("gamma"));
+        let line = s.lines().nth(r0 as usize).unwrap();
+        let col = line[..line.find("beta").unwrap()].chars().count() as u16;
+        let ev = |kind, column, row| MouseEvent { kind, column, row, modifiers: KeyModifiers::NONE };
+        assert!(app.handle_mouse(ev(MouseEventKind::Down(MouseButton::Left), col, r0)).is_none());
+        assert!(app.handle_mouse(ev(MouseEventKind::Drag(MouseButton::Left), 4, r1)).is_none());
+        assert!(matches!(app.handle_mouse(ev(MouseEventKind::Up(MouseButton::Left), 4, r1)), Some(Action::CopySelection)));
+        let buf = term.draw(|f| app.draw(f)).unwrap().buffer.clone();
+        let text = app.selected_text(&buf).unwrap();
+        assert!(text.starts_with("beta\n"), "{text:?}");
+        assert!(text.ends_with("· gam"), "{text:?}");
+        // Highlighted on screen; a plain click (no drag) or a key clears it.
+        assert!(buf[(col, r0)].modifier.contains(Modifier::REVERSED));
+        app.handle_key(key(KeyCode::Left));
+        assert!(app.selected_text(&buf).is_none());
+        assert!(app.handle_mouse(ev(MouseEventKind::Down(MouseButton::Left), 1, r0)).is_none());
+        assert!(app.handle_mouse(ev(MouseEventKind::Up(MouseButton::Left), 1, r0)).is_none());
+        assert!(app.selected_text(&buf).is_none());
     }
 
     #[test]
