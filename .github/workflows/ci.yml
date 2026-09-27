@@ -1,0 +1,33 @@
+# Runs the test suite on macOS, Linux and Windows for every push and pull request,
+# plus a Windows smoke test of the setup wizard / --reset against HKCU\Environment
+# (the only Windows-specific code path, otherwise never executed on developer Macs).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace
+      - name: Windows smoke test (wizard + --reset)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo build -p agentiloop
+          pwsh scripts/windows-smoke.ps1 -Binary .\target\debug\agentiloop.exe
