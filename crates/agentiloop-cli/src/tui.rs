@@ -49,6 +49,7 @@ pub enum UiMsg {
 /// What the UI sends to the agent task.
 pub enum Input {
     Submit(String),
+    Cancel,
 }
 
 pub struct PermissionRequest {
@@ -118,7 +119,7 @@ impl SetupPrompter<'_> {
         let _ = self.tx.send(UiMsg::Ask { secret });
         match self.rx.recv().await {
             Some(Input::Submit(line)) => Ok(line),
-            None => anyhow::bail!("setup cancelled; nothing was saved"),
+            Some(Input::Cancel) | None => anyhow::bail!("setup cancelled; nothing was saved"),
         }
     }
 }
@@ -255,6 +256,7 @@ struct LinkHit {
 /// Result of a key press or mouse event that the event loop must act on.
 pub enum Action {
     Submit(String),
+    Cancel,
     Quit,
     /// A link was clicked; open it in the system browser.
     OpenUrl(String),
@@ -321,7 +323,12 @@ impl App {
                 self.modal = Some(req)
             }
             UiMsg::Status(s) => self.status = s,
-            UiMsg::Idle => self.busy = false,
+            UiMsg::Idle => {
+                self.busy = false;
+                self.modal = None;
+                self.streaming = false;
+                self.pending_paths.clear();
+            }
             UiMsg::User(s) => self.push(Kind::User, s),
             UiMsg::Clear => {
                 self.entries.clear();
@@ -425,6 +432,11 @@ impl App {
             return None;
         }
         self.selection = None;
+        if key.code == KeyCode::Esc && (self.busy || self.modal.is_some()) {
+            self.modal = None;
+            self.activity = "Cancelling".into();
+            return Some(Action::Cancel);
+        }
         if let Some(req) = self.modal.take() {
             let answer = match key.code {
                 KeyCode::Char('y') | KeyCode::Char('Y') => Answer::Allow,
@@ -625,7 +637,7 @@ impl App {
             frame.set_cursor_position((inner.x + col.min(inner.width.saturating_sub(1)), inner.y));
         }
 
-        let help = "  Enter send · ↑↓ history · PgUp/PgDn scroll · click links · drag to copy · Ctrl-F files · Ctrl-C quit";
+        let help = "  Enter send · Esc cancel · ↑↓ history · PgUp/PgDn scroll · click links · drag to copy · Ctrl-F files · Ctrl-C quit";
         let mut bar = vec![Span::raw(self.status.clone())];
         if let Some(s) = &self.speed {
             bar.push(Span::styled(format!("⏱ {s} "), Style::default().fg(Color::Green)));
@@ -797,7 +809,7 @@ impl App {
         let mut lines: Vec<Line> = body.iter().map(|l| Line::from(*l)).collect();
         lines.push(Line::default());
         lines.push(Line::from(Span::styled(
-            format!("[y]es  [n]o  [a]lways for `{}`  [esc] skip", req.tool),
+            format!("[y]es  [n]o  [a]lways for `{}`  [esc] cancel request", req.tool),
             Style::default().add_modifier(Modifier::BOLD),
         )));
         let block = Block::default()
@@ -906,6 +918,11 @@ pub fn run(
                 };
                 match action {
                     Some(Action::Quit) => return Ok(()),
+                    Some(Action::Cancel) => {
+                        if tx.send(Input::Cancel).is_err() {
+                            return Ok(());
+                        }
+                    }
                     Some(Action::Submit(line)) => {
                         if tx.send(Input::Submit(line)).is_err() {
                             return Ok(());
@@ -1219,15 +1236,31 @@ mod tests {
     }
 
     #[test]
-    fn esc_in_permission_modal_cancels_just_that_call() {
+    fn esc_in_permission_modal_cancels_request() {
         let mut app = App::new("s");
         let (reply, rx) = oneshot::channel();
         app.apply(UiMsg::Permission(PermissionRequest { tool: "bash".into(), input: "{}".into(), reply }));
-        assert!(screen(&app, 70, 12).contains("[esc] skip"));
-        assert!(app.handle_key(key(KeyCode::Esc)).is_none());
+        assert!(screen(&app, 90, 12).contains("[esc] cancel request"));
+        assert!(matches!(app.handle_key(key(KeyCode::Esc)), Some(Action::Cancel)));
         assert!(app.modal.is_none());
         assert!(!app.quit());
-        assert_eq!(rx.blocking_recv().unwrap(), Answer::Cancel);
+        assert!(rx.blocking_recv().is_err());
+    }
+
+    #[test]
+    fn esc_preserves_transcript_and_draft_and_allows_next_prompt() {
+        let mut app = App::new("session original");
+        type_str(&mut app, "first request");
+        app.handle_key(key(KeyCode::Enter));
+        app.apply(UiMsg::Event(AgentEvent::AssistantTextDelta("partial answer".into())));
+        type_str(&mut app, "next request");
+        assert!(matches!(app.handle_key(key(KeyCode::Esc)), Some(Action::Cancel)));
+        assert!(app.busy && !app.quit());
+        app.apply(UiMsg::Idle);
+        assert_eq!(app.entries[1].text, "partial answer");
+        assert_eq!(app.status, "session original");
+        assert!(app.handle_key(key(KeyCode::Esc)).is_none());
+        assert!(matches!(app.handle_key(key(KeyCode::Enter)), Some(Action::Submit(s)) if s == "next request"));
     }
 
     #[test]

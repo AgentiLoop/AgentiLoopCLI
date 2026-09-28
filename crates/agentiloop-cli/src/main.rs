@@ -263,7 +263,9 @@ async fn main() -> Result<()> {
         let _ = ui_tx.send(tui::UiMsg::Idle);
         let mut tracker = diff::Tracker::new(cwd.clone());
         // Agent side: one prompt or slash command at a time, until the UI hangs up.
-        while let Some(tui::Input::Submit(line)) = in_rx.recv().await {
+        while let Some(input) = in_rx.recv().await {
+            // A late Esc that arrives after the run already finished is a no-op.
+            let tui::Input::Submit(line) = input else { continue };
             if line.starts_with('/') {
                 // Collect the command's output into one transcript entry so
                 // multi-line output (the /model list) isn't double-spaced.
@@ -291,8 +293,8 @@ async fn main() -> Result<()> {
             } else {
                 let tx = ui_tx.clone();
                 let tracker = &mut tracker;
-                if let Err(e) = agent
-                    .run(&line, move |ev| {
+                let res = {
+                    let run = agent.run(&line, move |ev| {
                         // Snapshot/diff before the event crosses to the UI thread:
                         // the tool runs right after ToolCall returns.
                         let change = tracker.observe(&ev);
@@ -300,10 +302,28 @@ async fn main() -> Result<()> {
                         if let Some(c) = change {
                             let _ = tx.send(tui::UiMsg::Diff(c));
                         }
-                    })
-                    .await
-                {
-                    let _ = ui_tx.send(tui::UiMsg::Error(format!("{e:#}")));
+                    });
+                    tokio::pin!(run);
+                    // Esc drops the run future (killing any running tool); the session stays.
+                    loop {
+                        tokio::select! {
+                            res = &mut run => break Some(res),
+                            input = in_rx.recv() => match input {
+                                Some(tui::Input::Submit(_)) => {}
+                                Some(tui::Input::Cancel) | None => break None,
+                            },
+                        }
+                    }
+                };
+                match res {
+                    Some(Ok(())) => {}
+                    Some(Err(e)) => {
+                        let _ = ui_tx.send(tui::UiMsg::Error(format!("{e:#}")));
+                    }
+                    None => {
+                        agent.interrupt();
+                        let _ = ui_tx.send(tui::UiMsg::Line("Cancelled. Session kept; send your next prompt.".into()));
+                    }
                 }
                 persist(&mut session, &agent, sessions_dir.as_deref());
             }
@@ -355,8 +375,18 @@ async fn main() -> Result<()> {
             }
             continue;
         }
-        if let Err(e) = agent.run(line, |ev| render_tracked(&mut tracker, ev)).await {
-            eprintln!("error: {e:#}");
+        // Line mode has no raw keyboard during a run, so Ctrl-C is its cancel key.
+        let res = tokio::select! {
+            res = agent.run(line, |ev| render_tracked(&mut tracker, ev)) => Some(res),
+            _ = tokio::signal::ctrl_c() => None,
+        };
+        match res {
+            Some(Ok(())) => {}
+            Some(Err(e)) => eprintln!("error: {e:#}"),
+            None => {
+                agent.interrupt();
+                eprintln!("\ncancelled; session kept");
+            }
         }
         persist(&mut session, &agent, sessions_dir.as_deref());
     }

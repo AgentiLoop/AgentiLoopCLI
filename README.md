@@ -235,7 +235,9 @@ You'll see the agent's replies, each tool it uses (🔧) and each result (✓ or
 - **y**: yes, this time
 - **n**: no
 - **a**: always allow this tool for the rest of the session
-- **Esc**: skip this step, but keep going
+- **Esc**: cancel the whole request; the conversation is kept
+
+Press **Esc** any time the agent is working to stop it. What it already did and said stays in the session, so you can type a correction or a new prompt right away. (Without `--tui`, **Ctrl-C** stops a running request instead.)
 
 **Ctrl-C** quits. Next time, a plain `agentiloop` starts the same way and picks up your last conversation. Using **Ollama**? To switch to another model you've pulled, type `/model` inside the session.
 
@@ -263,7 +265,7 @@ Still stuck? [Open an issue](https://github.com/AgentiLoop/AgentiLoopCLI/issues)
 | **Chat** (line by line) | `agentiloop` | Simple terminals, or if you prefer plain text |
 | **One-shot** | `agentiloop "explain this project"` | One question: it answers, then exits. Handy in scripts |
 
-Keys in the TUI: **Enter** sends · **↑ / ↓** go through earlier prompts · **PgUp / PgDn** or the mouse wheel scrolls · **Ctrl-U** clears the line · **Ctrl-C** quits.
+Keys in the TUI: **Enter** sends · **↑ / ↓** go through earlier prompts · **PgUp / PgDn** or the mouse wheel scrolls · **Esc** stops the running request (the session is kept) · **Ctrl-U** clears the line · **Ctrl-C** quits.
 
 ---
 

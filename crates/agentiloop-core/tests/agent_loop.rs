@@ -241,6 +241,32 @@ fn clear_drops_history() {
     assert_eq!(a.history.len(), 2);
 }
 
+#[test]
+fn interrupt_mid_tool_keeps_session_and_pairs_the_call() {
+    /// Never answers, like a permission prompt the user escapes from.
+    struct Hang;
+    #[async_trait]
+    impl PermissionPolicy for Hang {
+        async fn check(&self, _tool: &str, _is_mutating: bool, _input: &Value) -> Permission {
+            std::future::pending().await
+        }
+    }
+    let p = ScriptedProvider::new(vec![tool_call("t1", "echo", json!({"msg": "hi"})), text("next answer")]);
+    let mut a = agent(p.clone(), Arc::new(Hang), 5);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let cancelled = rt.block_on(async {
+        tokio::time::timeout(std::time::Duration::from_millis(50), a.run("first", |_| {})).await
+    });
+    assert!(cancelled.is_err(), "run should still be waiting on the permission prompt");
+    a.interrupt();
+    assert_eq!(a.history.len(), 3);
+    assert!(matches!(&a.history[2].content[..], [ContentBlock::ToolResult { tool_use_id, is_error: true, content }]
+        if tool_use_id == "t1" && content.starts_with("Interrupted by user")));
+    collect(&mut a, "second").0.unwrap();
+    assert_eq!(a.history.len(), 5);
+    assert_eq!(p.requests.lock().unwrap()[1].messages.len(), 4);
+}
+
 // ---- compaction -------------------------------------------------------------
 
 fn agent_with(provider: Arc<ScriptedProvider>, config: AgentConfig) -> Agent {

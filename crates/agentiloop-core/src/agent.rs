@@ -97,6 +97,8 @@ pub struct Agent {
     pub history: Vec<Message>,
     /// `input_tokens` reported by the most recent provider response.
     last_input_tokens: u64,
+    /// Text received from the current stream but not yet committed to history.
+    pending_text: String,
     /// Limits resolved from the provider catalog for `config.model`; cleared on `set_model`.
     limits: Option<ModelLimits>,
 }
@@ -109,7 +111,7 @@ impl Agent {
         config: AgentConfig,
         ctx: ToolContext,
     ) -> Self {
-        Self { provider, tools, policy, config, ctx, history: Vec::new(), last_input_tokens: 0, limits: None }
+        Self { provider, tools, policy, config, ctx, history: Vec::new(), last_input_tokens: 0, pending_text: String::new(), limits: None }
     }
 
     pub fn model(&self) -> &str {
@@ -161,7 +163,38 @@ impl Agent {
     /// Drop all conversation context and tool history.
     pub fn clear(&mut self) {
         self.history.clear();
+        self.pending_text.clear();
         self.last_input_tokens = 0;
+    }
+
+    /// Finish an interrupted run after its future has been dropped. Keep completed
+    /// work and pair every outstanding tool call so the next request is valid.
+    pub fn interrupt(&mut self) {
+        if !self.pending_text.is_empty() {
+            self.history.push(Message {
+                role: Role::Assistant,
+                content: vec![ContentBlock::Text { text: std::mem::take(&mut self.pending_text) }],
+            });
+        }
+        if let Some(i) = self.history.iter().rposition(|m| m.role == Role::Assistant) {
+            let missing: Vec<_> = self.history[i].tool_uses().filter_map(|(id, _, _)| {
+                let answered = self.history[i + 1..].iter().flat_map(|m| &m.content).any(|b| {
+                    matches!(b, ContentBlock::ToolResult { tool_use_id, .. } if tool_use_id == id)
+                });
+                (!answered).then(|| ContentBlock::ToolResult {
+                    tool_use_id: id.to_string(),
+                    content: "Interrupted by user; execution may be incomplete. Do not assume changes were undone.".into(),
+                    is_error: true,
+                })
+            }).collect();
+            if !missing.is_empty() {
+                if self.history.len() == i + 1 {
+                    self.history.push(Message::tool_results(missing));
+                } else {
+                    self.history[i + 1].content.extend(missing);
+                }
+            }
+        }
     }
 
     fn should_compact(&self) -> bool {
@@ -234,6 +267,7 @@ impl Agent {
     where
         F: FnMut(AgentEvent) + Send,
     {
+        self.pending_text.clear();
         let limits = self.resolve_limits().await;
         if self.should_compact() {
             if let Some(ev) = self.compact().await? {
@@ -258,10 +292,12 @@ impl Agent {
             let resp = self
                 .provider
                 .complete_stream(req, &mut |delta| {
+                    self.pending_text.push_str(delta);
                     first_token.get_or_insert_with(|| started.elapsed());
                     on_event(AgentEvent::AssistantTextDelta(delta.to_string()))
                 })
                 .await?;
+            self.pending_text.clear();
             let elapsed = started.elapsed();
             self.last_input_tokens = resp.input_tokens;
             on_event(AgentEvent::TurnComplete {
@@ -289,7 +325,7 @@ impl Agent {
                 return Ok(());
             }
 
-            let mut results = Vec::with_capacity(calls.len());
+            self.history.push(Message::tool_results(Vec::with_capacity(calls.len())));
             for (id, name, input) in calls {
                 on_event(AgentEvent::ToolCall { id: id.clone(), name: name.clone(), input: input.clone() });
                 let (output, is_error) = match self.execute(&name, input).await {
@@ -302,9 +338,8 @@ impl Agent {
                     output: output.clone(),
                     is_error,
                 });
-                results.push(ContentBlock::ToolResult { tool_use_id: id, content: output, is_error });
+                self.history.last_mut().unwrap().content.push(ContentBlock::ToolResult { tool_use_id: id, content: output, is_error });
             }
-            self.history.push(Message::tool_results(results));
 
             if self.should_compact() {
                 if let Some(ev) = self.compact().await? {
