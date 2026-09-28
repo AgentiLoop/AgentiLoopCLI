@@ -153,3 +153,38 @@ fn default_registry_has_all_builtins() {
         assert!(r.get(name).unwrap().is_mutating(), "{name} should be mutating");
     }
 }
+
+#[cfg(unix)]
+fn alive(pid: &str) -> bool {
+    std::process::Command::new("kill").args(["-0", pid]).stderr(std::process::Stdio::null()).status().unwrap().success()
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn bash_cancel_kills_the_whole_process_tree() {
+    let s = Scratch::new("bash-cancel");
+    let pidfile = s.0.join("pid");
+    let cmd = format!("sleep 30 & echo $! > {}; wait", pidfile.display());
+    // Dropping the call is what Esc does to a running tool.
+    let r = tokio::time::timeout(std::time::Duration::from_millis(500), Bash.call(&s.ctx(), json!({"command": cmd}))).await;
+    assert!(r.is_err(), "the command should still have been running");
+    let pid = std::fs::read_to_string(&pidfile).unwrap();
+    let pid = pid.trim();
+    for _ in 0..50 {
+        if !alive(pid) {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    panic!("grandchild {pid} outlived the cancelled command");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn bash_does_not_wait_for_background_children_holding_the_pipes() {
+    let s = Scratch::new("bash-background");
+    let started = std::time::Instant::now();
+    let out = Bash.call(&s.ctx(), json!({"command": "sleep 30 & echo started"})).await.unwrap();
+    assert!(out.contains("started"), "{out}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(5), "waited {:?}", started.elapsed());
+}
