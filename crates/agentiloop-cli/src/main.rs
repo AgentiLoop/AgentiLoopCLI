@@ -118,6 +118,7 @@ async fn main() -> Result<()> {
     // startup messages go through it; without it they go to the terminal.
     let (ui_tx, ui_rx) = tokio::sync::mpsc::unbounded_channel::<tui::UiMsg>();
     let (in_tx, mut in_rx) = tokio::sync::mpsc::unbounded_channel::<tui::Input>();
+    let repl_io = std::sync::Arc::new(permission::ReplIo::default());
     let ui = if use_tui {
         let app = tui::App::new(format!(" AgentiLoop  {} ", cwd.display())).with_history_file(settings::history_path());
         Some(tokio::task::spawn_blocking(move || tui::run(app, ui_rx, in_tx)))
@@ -170,7 +171,7 @@ async fn main() -> Result<()> {
         let policy: agentiloop_core::permission::SharedPolicy = if use_tui && !cli.yes {
             std::sync::Arc::new(tui::ChannelPolicy::new(ui_tx.clone()))
         } else {
-            permission::policy(cli.yes)
+            permission::policy(cli.yes, repl_io.clone())
         };
         let sessions_dir = settings::sessions_dir();
 
@@ -345,22 +346,32 @@ async fn main() -> Result<()> {
     replay_repl(&agent.history);
     let mut tracker = diff::Tracker::new(cwd.clone());
     // rustyline gives us line editing plus up/down arrow recall of earlier prompts.
+    // Permission prompts read through the same editor (see permission::ReplIo).
     let mut rl = rustyline::DefaultEditor::new()?;
     let history = settings::history_path();
     if let Some(p) = &history {
         let _ = rl.load_history(p); // missing on first run
     }
+    *repl_io.editor.lock().unwrap() = Some(rl);
     loop {
-        let line = match rl.readline("\n> ") {
-            Ok(l) => l,
-            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break,
-            Err(e) => return Err(e.into()),
+        let line = {
+            let mut editor = repl_io.editor.lock().unwrap();
+            let rl = editor.as_mut().expect("REPL editor");
+            let line = match rl.readline("\n> ") {
+                Ok(l) => l,
+                Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break,
+                Err(e) => return Err(e.into()),
+            };
+            let line = line.trim().to_string();
+            if !line.is_empty() {
+                let _ = rl.add_history_entry(&line);
+            }
+            line
         };
-        let line = line.trim();
+        let line = line.as_str();
         if line.is_empty() {
             continue;
         }
-        let _ = rl.add_history_entry(line);
         if line == "/exit" || line == "/quit" {
             break;
         }
@@ -375,10 +386,12 @@ async fn main() -> Result<()> {
             }
             continue;
         }
-        // Line mode has no raw keyboard during a run, so Ctrl-C is its cancel key.
+        // Line mode has no raw keyboard during a run, so Ctrl-C is its cancel key:
+        // a signal while the agent works, or Ctrl-C at a permission prompt.
         let res = tokio::select! {
             res = agent.run(line, |ev| render_tracked(&mut tracker, ev)) => Some(res),
             _ = tokio::signal::ctrl_c() => None,
+            _ = repl_io.cancel.notified() => None,
         };
         match res {
             Some(Ok(())) => {}
@@ -394,7 +407,8 @@ async fn main() -> Result<()> {
         if let Some(dir) = p.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        if let Err(e) = rl.save_history(p) {
+        let res = repl_io.editor.lock().unwrap().as_mut().map(|rl| rl.save_history(p));
+        if let Some(Err(e)) = res {
             eprintln!("warning: could not save history: {e}");
         }
     }
