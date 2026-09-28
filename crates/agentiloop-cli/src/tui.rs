@@ -660,7 +660,7 @@ impl App {
         }
     }
 
-    /// Animated prompt-box title while the agent works, e.g. ` ✻ Thinking...  12s `.
+    /// Animated prompt-box title while the agent works, e.g. ` ✻ Thinking...  12s · esc to cancel `.
     /// The UI loop redraws every 50 ms, so the frame is derived from elapsed time.
     fn busy_title(&self) -> Line<'static> {
         const SPINNER: [&str; 10] = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
@@ -671,11 +671,16 @@ impl App {
         let secs = ms / 1000;
         let elapsed = if secs >= 60 { format!("{}m {:02}s", secs / 60, secs % 60) } else { format!("{secs}s") };
         let accent = Style::default().fg(Color::Rgb(0xE0, 0x8A, 0x5B)).add_modifier(Modifier::BOLD);
-        Line::from(vec![
+        let mut title = vec![
             Span::styled(format!(" {spin} "), accent),
             Span::styled(format!("{}{dots} ", self.activity), accent),
             Span::styled(format!("{elapsed} "), Style::default().fg(Color::DarkGray)),
-        ])
+        ];
+        // Always visible while working, unlike the help line that long status text can push off screen.
+        if self.activity != "Cancelling" {
+            title.push(Span::styled("· esc to cancel ", Style::default().fg(Color::DarkGray)));
+        }
+        Line::from(title)
     }
 
     fn draw_transcript(&self, frame: &mut Frame, area: Rect) {
@@ -1254,6 +1259,7 @@ mod tests {
         app.handle_key(key(KeyCode::Enter));
         app.apply(UiMsg::Event(AgentEvent::AssistantTextDelta("partial answer".into())));
         type_str(&mut app, "next request");
+        assert!(screen(&app, 80, 12).contains("esc to cancel"));
         assert!(matches!(app.handle_key(key(KeyCode::Esc)), Some(Action::Cancel)));
         assert!(app.busy && !app.quit());
         app.apply(UiMsg::Idle);
