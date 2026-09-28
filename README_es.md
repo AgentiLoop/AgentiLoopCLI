@@ -588,3 +588,9 @@ Mantenemos pocas dependencias: 18 crates externos, y cada crate enumera solo los
 ---
 
 <a href="https://fluxionai.world/register?source=github&campaign=aiagent&promo=AIAGENT"><img src="docs/sponsors/fluxion-ai-silver-ad_es.svg" width="900" alt="Fluxion AI, patrocinador Silver: una API unificada para GPT, Claude y otros modelos de IA líderes. Ahorra hasta un 70 % frente a los precios oficiales de la API y consigue $3 en créditos API." /></a>
+
+---
+
+**AgentiLoop:** [agentiloop.ai](https://agentiloop.ai/)
+
+Copyright © 2026 AgentiLoop.ai, a Logos InkPen LLC company. All rights reserved.
