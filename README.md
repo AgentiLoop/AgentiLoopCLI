@@ -506,6 +506,15 @@ We keep dependencies small: 18 external crates, and each crate lists only the on
 - [x] MCP client
 - [ ] What's NeXT?
 
+## The AgentiLoop Agent! family
+
+AgentiLoopCLI is the terminal sibling of **[AgentiLoop Agent!](https://github.com/AgentiLoop/Agent)**, the native AI agent for Mac (macOS 14.6+, Apple Silicon and Intel). Its twin, [AgentiLoopGo](https://github.com/AgentiLoop/AgentiLoopGo), has the exact same capabilities, written in Go.
+
+- 🖥 **Mac app:** [AgentiLoop/Agent](https://github.com/AgentiLoop/Agent) · `brew install --cask agentiloop-agent`
+- 🦀 **Rust CLI:** [AgentiLoopCLI](https://github.com/AgentiLoop/AgentiLoopCLI) · 🐹 **Go CLI:** [AgentiLoopGo](https://github.com/AgentiLoop/AgentiLoopGo)
+- 🧩 **Swift packages behind the Mac app:** [AgentTools](https://github.com/AgentiLoop/AgentTools) · [AgentLLM](https://github.com/AgentiLoop/AgentLLM) · [AgentMCP](https://github.com/AgentiLoop/AgentMCP) · [AgentAccess](https://github.com/AgentiLoop/AgentAccess) · [AgentEventBridges](https://github.com/AgentiLoop/AgentEventBridges) · [AgentScripts](https://github.com/AgentiLoop/AgentScripts) · [AgentD1F](https://github.com/AgentiLoop/AgentD1F) · [AgentSwift](https://github.com/AgentiLoop/AgentSwift) · [AgentColorSyntax](https://github.com/AgentiLoop/AgentColorSyntax) · [AgentTerminalNeo](https://github.com/AgentiLoop/AgentTerminalNeo) · [AgentAudit](https://github.com/AgentiLoop/AgentAudit)
+- 🌐 **Website:** [agentiloop.ai](https://agentiloop.ai/)
+
 ## License
 
 [PolyForm Noncommercial 1.0.0](LICENSE). You may use, change and share this software for personal and noncommercial purposes. Commercial use, including building or selling commercial versions, is reserved to AgentiLoop. Contact AgentiLoop for a commercial license.
