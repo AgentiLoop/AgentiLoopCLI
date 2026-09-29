@@ -10,7 +10,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "agentiloop"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "agentiloop-core",
  "agentiloop-mcp",
@@ -37,7 +37,7 @@ dependencies = [
 
 [[package]]
 name = "agentiloop-core"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -50,7 +50,7 @@ dependencies = [
 
 [[package]]
 name = "agentiloop-mcp"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "agentiloop-core",
  "anyhow",
@@ -66,7 +66,7 @@ dependencies = [
 
 [[package]]
 name = "agentiloop-provider"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "agentiloop-core",
  "anyhow",
@@ -81,7 +81,7 @@ dependencies = [
 
 [[package]]
 name = "agentiloop-tools"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "agentiloop-core",
  "async-trait",
