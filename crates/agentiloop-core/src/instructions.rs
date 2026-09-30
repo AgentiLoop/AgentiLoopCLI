@@ -71,6 +71,49 @@ pub fn append_to_prompt(base: &str, found: &[Instructions]) -> String {
     out
 }
 
+/// Starter `AGENTS.md` text for the project in `dir`, with build/test commands guessed from the files present.
+pub fn init_template(dir: &Path) -> String {
+    let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "this project".into());
+    let has = |f: &str| dir.join(f).exists();
+    let mut cmds: Vec<&str> = Vec::new();
+    if has("Cargo.toml") {
+        cmds.extend(["cargo build", "cargo test", "cargo clippy"]);
+    }
+    if has("go.mod") {
+        cmds.extend(["go build ./...", "go test ./...", "go vet ./..."]);
+    }
+    if has("package.json") {
+        cmds.extend(["npm install", "npm test"]);
+    }
+    if has("pyproject.toml") || has("requirements.txt") {
+        cmds.push("python -m pytest");
+    }
+    if has("Makefile") {
+        cmds.push("make");
+    }
+    let commands = if cmds.is_empty() {
+        "- (add the commands to build, test and lint this project)".to_string()
+    } else {
+        cmds.iter().map(|c| format!("- `{c}`")).collect::<Vec<_>>().join("\n")
+    };
+    format!(
+        "# {name}\n\nInstructions for AgentiLoop and other coding agents working in this repository.\n\n\
+## Commands\n\n{commands}\n\n\
+## Conventions\n\n- (code style, naming, where new code goes)\n\n\
+## Do not\n\n- (things to avoid: generated files, secrets, risky commands)\n"
+    )
+}
+
+/// Creates `AGENTS.md` in `dir` from [`init_template`]. Refuses to overwrite an existing file.
+pub fn init(dir: &Path) -> Result<PathBuf, String> {
+    let path = dir.join(FILE_NAMES[0]);
+    if path.exists() {
+        return Err(format!("{} already exists", path.display()));
+    }
+    std::fs::write(&path, init_template(dir)).map_err(|e| format!("could not write {}: {e}", path.display()))?;
+    Ok(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,5 +169,26 @@ mod tests {
         assert_eq!(append_to_prompt("BASE", &[]), "BASE");
         let _ = std::fs::remove_dir_all(&proj);
         let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn init_writes_a_template_with_detected_commands_and_never_overwrites() {
+        let d = scratch("init");
+        std::fs::write(d.join("Cargo.toml"), "").unwrap();
+        std::fs::write(d.join("Makefile"), "").unwrap();
+        let path = init(&d).unwrap();
+        assert_eq!(path, d.join("AGENTS.md"));
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("`cargo test`") && text.contains("- `make`") && !text.contains("go vet"), "{text}");
+        assert!(text.starts_with("# agentiloop-instr-init-"), "{text}");
+        let err = init(&d).unwrap_err();
+        assert!(err.contains("already exists"), "{err}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
+        // The generated file is picked up as project instructions.
+        assert_eq!(load(&d, None)[0].text, text);
+        let empty = scratch("init-empty");
+        assert!(init_template(&empty).contains("(add the commands"));
+        let _ = std::fs::remove_dir_all(&d);
+        let _ = std::fs::remove_dir_all(&empty);
     }
 }

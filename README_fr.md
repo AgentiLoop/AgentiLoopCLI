@@ -460,6 +460,7 @@ Tapez-les à l'invite, dans la TUI ou dans le chat :
 | `/resume <n or id>` | Rouvre l'une d'elles |
 | `/clear` | Efface la conversation et en démarre une nouvelle |
 | `/undo` | Annule les modifications de fichiers faites par l'agent pour votre dernier message (celles faites par `bash` ne sont pas annulées) |
+| `/init` | Crée un `AGENTS.md` de départ pour le projet courant (n'écrase jamais) |
 | `/compact` | Résume la conversation maintenant pour libérer de la place |
 | `/mcp` | Affiche les serveurs MCP connectés et leurs outils |
 | `/help` | Liste ces commandes |

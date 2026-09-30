@@ -554,6 +554,10 @@ async fn slash_command(
             *session = Session::new(session.cwd.clone(), provider.name(), agent.model());
             say(format!("context and tool history cleared; new session {}", session.id));
         }
+        "/init" => match agentiloop_core::instructions::init(&session.cwd) {
+            Ok(path) => say(format!("created {}; edit it, then restart agentiloop to load it", path.display())),
+            Err(e) => say(e),
+        },
         "/undo" => match agentiloop_tools::undo::undo_last() {
             Some(lines) => {
                 for l in lines {
@@ -677,6 +681,7 @@ async fn slash_command(
 
 const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
 /mcp            list MCP servers and their tools\n\
+/init           create a starter AGENTS.md for this project\n\
 /undo           revert the file changes from the last prompt\n\
 /compact        summarize the conversation to free context\n\
 /sessions       list saved sessions (newest first)\n\
