@@ -554,6 +554,18 @@ async fn slash_command(
             *session = Session::new(session.cwd.clone(), provider.name(), agent.model());
             say(format!("context and tool history cleared; new session {}", session.id));
         }
+        "/export" => {
+            session.history = agent.history.clone();
+            if session.history.is_empty() {
+                say("nothing to export yet".into());
+            } else {
+                let path = if arg.is_empty() { session.cwd.join(format!("agentiloop-{}.md", session.id)) } else { session.cwd.join(arg) };
+                match std::fs::write(&path, session.to_markdown()) {
+                    Ok(()) => say(format!("exported the conversation to {}", path.display())),
+                    Err(e) => say(format!("could not write {}: {e}", path.display())),
+                }
+            }
+        }
         "/init" => match agentiloop_core::instructions::init(&session.cwd) {
             Ok(path) => say(format!("created {}; edit it, then restart agentiloop to load it", path.display())),
             Err(e) => say(e),
@@ -681,6 +693,7 @@ async fn slash_command(
 
 const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
 /mcp            list MCP servers and their tools\n\
+/export [file]  save the conversation as Markdown\n\
 /init           create a starter AGENTS.md for this project\n\
 /undo           revert the file changes from the last prompt\n\
 /compact        summarize the conversation to free context\n\
