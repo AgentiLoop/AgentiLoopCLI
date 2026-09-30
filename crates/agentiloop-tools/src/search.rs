@@ -13,6 +13,7 @@ const SKIP_DIRS: &[&str] = &[".git", ".hg", ".svn", "node_modules", "target", "_
 const MAX_GLOB_RESULTS: usize = 500;
 const DEFAULT_GREP_RESULTS: usize = 200;
 const MAX_GREP_RESULTS: usize = 2000;
+const MAX_CONTEXT: usize = 5;
 const MAX_LINE_CHARS: usize = 300;
 const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 
@@ -303,6 +304,8 @@ struct GrepArgs {
     #[serde(default)]
     case_insensitive: bool,
     max_results: Option<usize>,
+    #[serde(default)]
+    context: usize,
 }
 
 fn truncate_line(line: &str) -> String {
@@ -320,7 +323,7 @@ impl Tool for Grep {
     fn name(&self) -> &str { "grep" }
     fn description(&self) -> &str {
         "Search file contents with a regular expression (RE2-style syntax). Searches recursively, skipping .git, \
-         node_modules, target, anything listed in .gitignore, binary and very large files. Returns `path:line:text` for each matching line. \
+         node_modules, target, anything listed in .gitignore, binary and very large files. Returns `path:line:text` for each matching line (set `context` to also see surrounding lines). \
          Use `glob` to restrict which files are searched (same syntax as the glob tool)."
     }
     fn input_schema(&self) -> Value {
@@ -329,7 +332,8 @@ impl Tool for Grep {
             "path":{"type":"string","description":"File or directory to search (default: cwd)","default":"."},
             "glob":{"type":"string","description":"Only search files matching this glob, e.g. `*.rs`"},
             "case_insensitive":{"type":"boolean","default":false},
-            "max_results":{"type":"integer","description":"Maximum matching lines to return","default":200}
+            "max_results":{"type":"integer","description":"Maximum matching lines to return","default":200},
+            "context":{"type":"integer","description":"Lines of context to show before and after each match (0-5). Context lines print as `path-line-text`, groups are separated by `--`","default":0}
         },"required":["pattern"]})
     }
     async fn call(&self, ctx: &ToolContext, input: Value) -> ToolResult {
@@ -343,10 +347,12 @@ impl Tool for Grep {
             return Err(ToolError::Failed(format!("{} does not exist", root.display())));
         }
         let limit = a.max_results.unwrap_or(DEFAULT_GREP_RESULTS).clamp(1, MAX_GREP_RESULTS);
+        let context = a.context.min(MAX_CONTEXT);
         let filter = a.glob.as_deref().map(Glob::new);
         let ctx = ctx.clone();
         tokio::task::spawn_blocking(move || {
             let mut hits: Vec<String> = Vec::new();
+            let mut count = 0usize;
             let mut more = false;
             let mut search = |abs: &Path, rel: &str| -> bool {
                 if filter.as_ref().is_some_and(|g| !g.matches(rel)) {
@@ -361,16 +367,44 @@ impl Tool for Grep {
                 }
                 let text = String::from_utf8_lossy(&bytes);
                 let shown = display(&ctx, abs);
-                for (i, line) in text.lines().enumerate() {
+                let lines: Vec<&str> = text.lines().collect();
+                let mut matched: Vec<usize> = Vec::new();
+                let mut keep_going = true;
+                for (i, line) in lines.iter().enumerate() {
                     if re.is_match(line) {
-                        if hits.len() == limit {
+                        if count == limit {
                             more = true;
-                            return false;
+                            keep_going = false;
+                            break;
                         }
-                        hits.push(format!("{shown}:{}:{}", i + 1, truncate_line(line)));
+                        count += 1;
+                        matched.push(i);
                     }
                 }
-                true
+                if matched.is_empty() {
+                    return keep_going;
+                }
+                if context == 0 {
+                    hits.extend(matched.iter().map(|&i| format!("{shown}:{}:{}", i + 1, truncate_line(lines[i]))));
+                } else {
+                    if !hits.is_empty() {
+                        hits.push("--".into());
+                    }
+                    let mut next = 0usize; // first line not yet printed
+                    for &m in &matched {
+                        let from = m.saturating_sub(context).max(next);
+                        if next > 0 && from > next {
+                            hits.push("--".into());
+                        }
+                        let to = (m + context).min(lines.len() - 1);
+                        for j in from..=to {
+                            let sep = if matched.binary_search(&j).is_ok() { ':' } else { '-' };
+                            hits.push(format!("{shown}{sep}{}{sep}{}", j + 1, truncate_line(lines[j])));
+                        }
+                        next = to + 1;
+                    }
+                }
+                keep_going
             };
             if root.is_file() {
                 let name = root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();

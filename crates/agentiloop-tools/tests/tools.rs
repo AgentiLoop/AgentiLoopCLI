@@ -299,3 +299,17 @@ async fn glob_and_grep_honor_nested_gitignore() {
     let out = GlobFiles.call(&s.ctx(), json!({"pattern": "*.rs", "path": "dist"})).await.unwrap();
     assert_eq!(out, "dist/out.rs");
 }
+
+#[tokio::test]
+async fn grep_context_lines_merge_and_separate_groups() {
+    let s = Scratch::new("grep-context");
+    std::fs::write(s.0.join("a.txt"), "1\n2\nHIT\n4\nHIT\n6\n7\n8\n9\nHIT\n").unwrap();
+    std::fs::write(s.0.join("b.txt"), "HIT\nz\n").unwrap();
+    let out = Grep.call(&s.ctx(), json!({"pattern": "HIT", "context": 1})).await.unwrap();
+    assert_eq!(
+        out,
+        "a.txt-2-2\na.txt:3:HIT\na.txt-4-4\na.txt:5:HIT\na.txt-6-6\n--\na.txt-9-9\na.txt:10:HIT\n--\nb.txt:1:HIT\nb.txt-2-z"
+    );
+    let out = Grep.call(&s.ctx(), json!({"pattern": "HIT", "context": 0, "path": "b.txt"})).await.unwrap();
+    assert_eq!(out, "b.txt:1:HIT");
+}
