@@ -471,6 +471,12 @@ Modelle können nur eine begrenzte Menge auf einmal lesen. Wenn eine Unterhaltun
 
 ---
 
+## Projektanweisungen
+
+Lege eine Datei `AGENTS.md` (oder `CLAUDE.md`) in dein Projekt, und AgentiLoop liest sie beim Start und befolgt sie: Build-Befehle, Code-Stil, Dinge, die zu vermeiden sind. Gesucht wird im aktuellen Ordner und dann in den übergeordneten Ordnern bis zum Projektstamm (dem Ordner mit `.git`). Eine persönliche `~/.agentiloop/AGENTS.md` gilt für jedes Projekt; die Datei des Projekts kommt danach und hat Vorrang. Dateien werden bei 32 KB abgeschnitten. Eine Zeile `instructions: <Pfad>` zeigt, welche Dateien geladen wurden.
+
+---
+
 ## Tools mit MCP hinzufügen (optional)
 
 [MCP](https://modelcontextprotocol.io)-Server geben dem Agenten zusätzliche Tools, etwa Datenbankzugriff, Websuche oder deine eigenen Skripte. Führ sie in einer JSON-Datei auf:

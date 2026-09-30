@@ -384,6 +384,12 @@ Models can only read so much at once. When a conversation gets big (by default, 
 
 ---
 
+## Project instructions
+
+Put an `AGENTS.md` file (or `CLAUDE.md`) in your project and AgentiLoop reads it at startup and follows it: build commands, code style, things to avoid. It looks in the current folder and then in the parent folders, up to the project root (the folder with `.git`). A personal `~/.agentiloop/AGENTS.md` applies to every project; the project's file comes after it and wins. Files are cut at 32 KB. A line `instructions: <path>` shows which files were loaded.
+
+---
+
 ## Adding tools with MCP (optional)
 
 [MCP](https://modelcontextprotocol.io) servers give the agent extra tools, like database access, web search or your own scripts. List them in a JSON file:

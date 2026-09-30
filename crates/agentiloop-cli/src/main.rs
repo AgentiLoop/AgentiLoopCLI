@@ -206,7 +206,12 @@ async fn main() -> Result<()> {
                 .with_context(|| format!("{} serves no models; load one or pass --model", provider.name()))?,
             None => provider.default_model().to_string(),
         };
-        let config = AgentConfig { model, max_turns, compact_at_tokens: compact_at, ..Default::default() };
+        let mut config = AgentConfig { model, max_turns, compact_at_tokens: compact_at, ..Default::default() };
+        let instructions = agentiloop_core::instructions::load(&cwd, settings::home().as_deref());
+        for i in &instructions {
+            note(format!("instructions: {}", i.path.display()));
+        }
+        config.system_prompt = agentiloop_core::instructions::append_to_prompt(&config.system_prompt, &instructions);
 
         // Remember this launch (model per provider always; UI options only for interactive runs).
         saved.set_model(provider.name(), &config.model);

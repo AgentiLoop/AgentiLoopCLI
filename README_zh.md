@@ -471,6 +471,12 @@ agentiloop --yes "run the tests and fix any failures"        # 无人值守，�
 
 ---
 
+## 项目说明
+
+在项目里放一个 `AGENTS.md`（或 `CLAUDE.md`）文件，AgentiLoop 启动时会读取并遵循它：构建命令、代码风格、需要避免的事项。它会先在当前文件夹查找，再向上查找父文件夹，直到项目根目录（含 `.git` 的文件夹）。个人的 `~/.agentiloop/AGENTS.md` 适用于所有项目；项目自己的文件排在其后并优先生效。文件超过 32 KB 会被截断。`instructions: <路径>` 这一行会显示加载了哪些文件。
+
+---
+
 ## 通过 MCP 添加工具（可选）
 
 [MCP](https://modelcontextprotocol.io) 服务器可以为智能体提供额外的工具，例如数据库访问、网页搜索或你自己的脚本。在 JSON 文件中列出它们：

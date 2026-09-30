@@ -471,6 +471,12 @@ Les modèles ne peuvent lire qu'une quantité limitée à la fois. Quand une con
 
 ---
 
+## Instructions du projet
+
+Placez un fichier `AGENTS.md` (ou `CLAUDE.md`) dans votre projet : AgentiLoop le lit au démarrage et le suit (commandes de build, style de code, choses à éviter). Il le cherche dans le dossier courant puis dans les dossiers parents, jusqu'à la racine du projet (le dossier contenant `.git`). Un `~/.agentiloop/AGENTS.md` personnel s'applique à tous les projets ; le fichier du projet vient après et l'emporte. Les fichiers sont coupés à 32 Ko. Une ligne `instructions: <chemin>` indique les fichiers chargés.
+
+---
+
 ## Ajouter des outils avec MCP (facultatif)
 
 Les serveurs [MCP](https://modelcontextprotocol.io) donnent à l'agent des outils supplémentaires, comme l'accès à des bases de données, la recherche web ou vos propres scripts. Listez-les dans un fichier JSON :

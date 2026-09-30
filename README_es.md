@@ -471,6 +471,12 @@ Los modelos solo pueden leer una cantidad limitada de una vez. Cuando una conver
 
 ---
 
+## Instrucciones del proyecto
+
+Pon un archivo `AGENTS.md` (o `CLAUDE.md`) en tu proyecto y AgentiLoop lo lee al arrancar y lo sigue: comandos de compilación, estilo de código, cosas que evitar. Lo busca en la carpeta actual y luego en las carpetas superiores, hasta la raíz del proyecto (la carpeta con `.git`). Un `~/.agentiloop/AGENTS.md` personal se aplica a todos los proyectos; el archivo del proyecto va después y tiene prioridad. Los archivos se recortan a 32 KB. Una línea `instructions: <ruta>` muestra qué archivos se cargaron.
+
+---
+
 ## Añadir herramientas con MCP (opcional)
 
 Los servidores [MCP](https://modelcontextprotocol.io) le dan al agente herramientas extra, como acceso a bases de datos, búsqueda web o tus propios scripts. Enuméralos en un archivo JSON:
