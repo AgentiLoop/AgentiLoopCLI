@@ -1,10 +1,11 @@
-//! Built-in tools: read_file, write_file, edit_file, list_dir, glob, grep, bash, and
+//! Built-in tools: read_file, write_file, edit_file, list_dir, glob, grep, web_fetch, bash, and
 //! apply_patch (registered for the Codex provider, whose models are trained on it).
 
 mod fs;
 mod patch;
 mod search;
 mod shell;
+mod web;
 
 use agentiloop_core::ToolRegistry;
 
@@ -12,6 +13,7 @@ pub use fs::{EditFile, ListDir, ReadFile, WriteFile};
 pub use patch::ApplyPatch;
 pub use search::{GlobFiles, Grep};
 pub use shell::Bash;
+pub use web::WebFetch;
 
 /// Registry pre-populated with every built-in tool.
 pub fn default_registry() -> ToolRegistry {
@@ -22,6 +24,7 @@ pub fn default_registry() -> ToolRegistry {
         .register(ListDir)
         .register(GlobFiles)
         .register(Grep)
+        .register(WebFetch)
         .register(Bash);
     r
 }

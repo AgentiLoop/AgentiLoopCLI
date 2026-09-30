@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use agentiloop_core::{Tool, ToolContext, ToolError};
-use agentiloop_tools::{default_registry, Bash, EditFile, GlobFiles, Grep, ListDir, ReadFile, WriteFile};
+use agentiloop_tools::{default_registry, Bash, EditFile, GlobFiles, Grep, ListDir, ReadFile, WebFetch, WriteFile};
 use serde_json::json;
 
 /// Fresh temp dir per test; removed on drop.
@@ -143,15 +143,15 @@ async fn bash_times_out() {
 #[test]
 fn default_registry_has_all_builtins() {
     let r = default_registry();
-    assert_eq!(r.len(), 7);
-    for name in ["read_file", "write_file", "edit_file", "list_dir", "glob", "grep", "bash"] {
+    assert_eq!(r.len(), 8);
+    for name in ["read_file", "write_file", "edit_file", "list_dir", "glob", "grep", "web_fetch", "bash"] {
         assert!(r.get(name).is_some(), "missing {name}");
     }
     assert!(!r.get("read_file").unwrap().is_mutating());
     for name in ["list_dir", "glob", "grep"] {
         assert!(!r.get(name).unwrap().is_mutating(), "{name} should be read-only");
     }
-    for name in ["write_file", "edit_file", "bash"] {
+    for name in ["write_file", "edit_file", "web_fetch", "bash"] {
         assert!(r.get(name).unwrap().is_mutating(), "{name} should be mutating");
     }
 }
@@ -312,4 +312,70 @@ async fn grep_context_lines_merge_and_separate_groups() {
     );
     let out = Grep.call(&s.ctx(), json!({"pattern": "HIT", "context": 0, "path": "b.txt"})).await.unwrap();
     assert_eq!(out, "b.txt:1:HIT");
+}
+
+/// Tiny HTTP server: `/page` HTML, `/data` JSON, `/img` PNG, `/big` 5000 x's, `/go` redirect to /page, anything else 404.
+async fn serve() -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        loop {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            tokio::spawn(async move {
+                let mut buf = vec![0u8; 4096];
+                let n = sock.read(&mut buf).await.unwrap_or(0);
+                let req = String::from_utf8_lossy(&buf[..n]).into_owned();
+                let path = req.split_whitespace().nth(1).unwrap_or("/").to_string();
+                let big = "x".repeat(5000);
+                let (status, extra, ctype, body): (&str, &str, &str, &str) = match path.as_str() {
+                    "/page" => ("200 OK", "", "text/html; charset=utf-8", "<html><body><h1>Hi</h1><script>bad()</script><p>there &amp; back</p></body></html>"),
+                    "/data" => ("200 OK", "", "application/json", "{\"a\": 1}"),
+                    "/img" => ("200 OK", "", "image/png", "PNG"),
+                    "/big" => ("200 OK", "", "text/plain", big.as_str()),
+                    "/go" => ("302 Found", "Location: /page\r\n", "text/plain", ""),
+                    _ => ("404 Not Found", "", "text/plain", "nope"),
+                };
+                let resp = format!(
+                    "HTTP/1.1 {status}\r\n{extra}Content-Type: {ctype}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = sock.write_all(resp.as_bytes()).await;
+                let _ = sock.shutdown().await;
+            });
+        }
+    });
+    format!("http://{addr}")
+}
+
+#[tokio::test]
+async fn web_fetch_reads_html_json_and_follows_redirects() {
+    let s = Scratch::new("web");
+    let base = serve().await;
+    let out = WebFetch.call(&s.ctx(), json!({"url": format!("{base}/page")})).await.unwrap();
+    assert!(out.ends_with("(200 OK)\n\nHi\n\nthere & back"), "{out}");
+    let out = WebFetch.call(&s.ctx(), json!({"url": format!("{base}/go")})).await.unwrap();
+    assert!(out.ends_with("Hi\n\nthere & back"), "{out}");
+    let out = WebFetch.call(&s.ctx(), json!({"url": format!("{base}/data")})).await.unwrap();
+    assert!(out.ends_with("\n\n{\"a\": 1}"), "{out}");
+}
+
+#[tokio::test]
+async fn web_fetch_refuses_bad_input_errors_and_binary_and_truncates() {
+    let s = Scratch::new("web-err");
+    let base = serve().await;
+    for url in ["ftp://example.com/x", "not a url", "file:///etc/passwd"] {
+        let err = WebFetch.call(&s.ctx(), json!({"url": url})).await.unwrap_err();
+        assert!(matches!(err, ToolError::InvalidInput(_)), "{url}: {err:?}");
+    }
+    let err = WebFetch.call(&s.ctx(), json!({})).await.unwrap_err();
+    assert!(matches!(err, ToolError::InvalidInput(_)), "{err:?}");
+    let err = WebFetch.call(&s.ctx(), json!({"url": format!("{base}/missing")})).await.unwrap_err();
+    assert!(err.to_string().contains("HTTP 404"), "{err}");
+    let err = WebFetch.call(&s.ctx(), json!({"url": format!("{base}/img")})).await.unwrap_err();
+    assert!(err.to_string().contains("image/png"), "{err}");
+    let out = WebFetch.call(&s.ctx(), json!({"url": format!("{base}/big"), "max_chars": 100})).await.unwrap();
+    assert!(out.ends_with(&format!("{}\n…[truncated at 100 characters]", "x".repeat(100))), "{out}");
+    let err = WebFetch.call(&s.ctx(), json!({"url": "http://127.0.0.1:1/"})).await.unwrap_err();
+    assert!(matches!(err, ToolError::Failed(_)), "{err:?}");
 }

@@ -232,6 +232,7 @@ Der Agent arbeitet mit fünf eingebauten Tools. Du rufst sie nicht selbst auf. D
 | `list_dir` | Listet die Dateien in einem Ordner auf | Nein |
 | `glob` | Findet Dateien nach Namensmuster (`*.rs`, `src/**/*.go`) | Nein |
 | `grep` | Durchsucht Dateien mit einem regulären Ausdruck | Nein |
+| `web_fetch` | Lädt eine Webseite oder API-Antwort als reinen Text | **Ja** |
 | `write_file` | Erstellt eine neue Datei oder überschreibt eine | **Ja** |
 | `edit_file` | Ändert eine exakte Textstelle in einer Datei | **Ja** |
 | `bash` | Führt einen Shell-Befehl aus, z. B. Tests, Builds oder `git` (`sh -c` auf Mac/Linux, `cmd /C` unter Windows) | **Ja** |
@@ -556,7 +557,7 @@ Das Projekt ist in fünf Crates aufgeteilt, und jedes baut auf den vorherigen au
 |---|---|
 | `agentiloop-core` | Das Herzstück: die Agent-Schleife, Nachrichten, die Tool- und Anbieter-Schnittstellen, Berechtigungen, Sitzungen, Zusammenfassungen |
 | `agentiloop-provider` | Spricht mit den Modellen: Anthropic, OpenAI-kompatible Server, oMLX |
-| `agentiloop-tools` | Eingebaute Tools: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `bash` |
+| `agentiloop-tools` | Eingebaute Tools: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `web_fetch`, `bash` |
 | `agentiloop-mcp` | Der MCP-Client, portiert von AgentMCP aus dem Swift-Code von Agent! |
 | `agentiloop-cli` | Das Programm `agentiloop`: Optionen, Chat, TUI, Einstellungen |
 
