@@ -112,12 +112,17 @@ struct Glob(Vec<Vec<Vec<char>>>);
 
 impl Glob {
     fn new(pattern: &str) -> Glob {
+        Self::build(pattern, true)
+    }
+
+    /// `bare_any_depth`: a pattern without `/` matches at any depth (otherwise it is anchored).
+    fn build(pattern: &str, bare_any_depth: bool) -> Glob {
         let pattern = pattern.replace('\\', "/");
         let pattern = pattern.trim_start_matches("./");
         let alts = expand_braces(pattern)
             .into_iter()
             .map(|p| {
-                let p = if p.contains('/') { p } else { format!("**/{p}") };
+                let p = if bare_any_depth && !p.contains('/') { format!("**/{p}") } else { p };
                 p.split('/').filter(|s| !s.is_empty()).map(|s| s.chars().collect()).collect()
             })
             .collect();
@@ -130,28 +135,93 @@ impl Glob {
     }
 }
 
+/// One `.gitignore` line. Supports comments, `!` negation, a trailing `/` (directories only),
+/// anchoring (a leading or inner `/`), `*`, `?`, `**`; not character classes.
+struct IgnoreRule {
+    /// Directory holding the `.gitignore`, relative to the walk root ("" for the root itself).
+    base: String,
+    glob: Glob,
+    negate: bool,
+    dir_only: bool,
+}
+
+impl IgnoreRule {
+    fn parse(base: &str, line: &str) -> Option<IgnoreRule> {
+        let mut line = line.trim_end();
+        if line.is_empty() || line.starts_with('#') {
+            return None;
+        }
+        let negate = line.starts_with('!');
+        if negate {
+            line = &line[1..];
+        }
+        if line.starts_with("\\#") || line.starts_with("\\!") {
+            line = &line[1..];
+        }
+        let dir_only = line.ends_with('/');
+        let line = line.trim_end_matches('/');
+        if line.is_empty() {
+            return None;
+        }
+        let anchored = line.contains('/');
+        let glob = Glob::build(line.trim_start_matches('/'), !anchored);
+        Some(IgnoreRule { base: base.to_string(), glob, negate, dir_only })
+    }
+
+    fn matches(&self, rel: &str, is_dir: bool) -> bool {
+        if self.dir_only && !is_dir {
+            return false;
+        }
+        let below = if self.base.is_empty() {
+            rel
+        } else {
+            match rel.strip_prefix(self.base.as_str()).and_then(|r| r.strip_prefix('/')) {
+                Some(r) => r,
+                None => return false,
+            }
+        };
+        self.glob.matches(below)
+    }
+}
+
+/// The last matching rule wins, as in git.
+fn is_ignored(rules: &[IgnoreRule], rel: &str, is_dir: bool) -> bool {
+    rules.iter().filter(|r| r.matches(rel, is_dir)).last().is_some_and(|r| !r.negate)
+}
+
 /// Depth-first, name-sorted walk of `root`; `visit(abs, rel)` returns false to stop.
-/// Symlinked directories are not followed.
+/// Honors `.gitignore` files found at or below `root`. Symlinked directories are not followed.
 fn walk(root: &Path, visit: &mut dyn FnMut(&Path, &str) -> bool) {
-    fn go(dir: &Path, rel: &str, visit: &mut dyn FnMut(&Path, &str) -> bool) -> bool {
+    fn go(dir: &Path, rel: &str, rules: &mut Vec<IgnoreRule>, visit: &mut dyn FnMut(&Path, &str) -> bool) -> bool {
         let Ok(rd) = std::fs::read_dir(dir) else { return true };
+        let mark = rules.len();
+        if let Ok(text) = std::fs::read_to_string(dir.join(".gitignore")) {
+            rules.extend(text.lines().filter_map(|l| IgnoreRule::parse(rel, l)));
+        }
         let mut entries: Vec<_> = rd.filter_map(|e| e.ok()).collect();
         entries.sort_by_key(|e| e.file_name());
+        let mut keep_going = true;
         for e in entries {
             let name = e.file_name().to_string_lossy().into_owned();
             let child_rel = if rel.is_empty() { name.clone() } else { format!("{rel}/{name}") };
             let Ok(ft) = e.file_type() else { continue };
             if ft.is_dir() {
-                if !SKIP_DIRS.contains(&name.as_str()) && !go(&e.path(), &child_rel, visit) {
-                    return false;
+                if SKIP_DIRS.contains(&name.as_str()) || is_ignored(rules, &child_rel, true) {
+                    continue;
                 }
-            } else if ft.is_file() && !visit(&e.path(), &child_rel) {
-                return false;
+                if !go(&e.path(), &child_rel, rules, visit) {
+                    keep_going = false;
+                    break;
+                }
+            } else if ft.is_file() && !is_ignored(rules, &child_rel, false) && !visit(&e.path(), &child_rel) {
+                keep_going = false;
+                break;
             }
         }
-        true
+        rules.truncate(mark);
+        keep_going
     }
-    go(root, "", visit);
+    go(root, "", &mut Vec::new(), visit);
 }
 
 // ----------------------------------------------------------------------- glob
@@ -173,7 +243,7 @@ fn default_dot() -> String {
 impl Tool for GlobFiles {
     fn name(&self) -> &str { "glob" }
     fn description(&self) -> &str {
-        "Find files by name pattern, searching recursively and skipping .git, node_modules, target and similar. \
+        "Find files by name pattern, searching recursively and skipping .git, node_modules, target, anything listed in .gitignore and similar. \
          `*` and `?` match within one path segment, `**` matches any number of directories, `{a,b}` offers alternatives. \
          A pattern without `/` (like `*.rs`) matches file names at any depth; one with `/` (like `src/**/*.go`) \
          matches the path relative to `path`. Returns paths sorted by name."
@@ -250,7 +320,7 @@ impl Tool for Grep {
     fn name(&self) -> &str { "grep" }
     fn description(&self) -> &str {
         "Search file contents with a regular expression (RE2-style syntax). Searches recursively, skipping .git, \
-         node_modules, target, binary and very large files. Returns `path:line:text` for each matching line. \
+         node_modules, target, anything listed in .gitignore, binary and very large files. Returns `path:line:text` for each matching line. \
          Use `glob` to restrict which files are searched (same syntax as the glob tool)."
     }
     fn input_schema(&self) -> Value {
@@ -356,5 +426,26 @@ mod tests {
         assert!(m("{src,lib}/**/x.rs", "lib/a/x.rs"));
         assert_eq!(expand_braces("a{b,c{d,e}}f"), vec!["abf", "acdf", "acef"]);
         assert_eq!(expand_braces("no{braces"), vec!["no{braces"]);
+    }
+
+    fn ignored(lines: &[&str], rel: &str, is_dir: bool) -> bool {
+        let rules: Vec<_> = lines.iter().filter_map(|l| IgnoreRule::parse("", l)).collect();
+        is_ignored(&rules, rel, is_dir)
+    }
+
+    #[test]
+    fn gitignore_rules() {
+        let g = ["# comment", "", "*.log", "!keep.log", "dist/", "/root.txt", "docs/gen", "**/cache"];
+        assert!(ignored(&g, "a/b/x.log", false));
+        assert!(!ignored(&g, "keep.log", false));
+        assert!(ignored(&g, "dist", true));
+        assert!(!ignored(&g, "dist", false), "dir-only rule must not hit a file");
+        assert!(ignored(&g, "src/dist", true));
+        assert!(ignored(&g, "root.txt", false));
+        assert!(!ignored(&g, "sub/root.txt", false), "leading slash anchors to the root");
+        assert!(ignored(&g, "docs/gen", false));
+        assert!(!ignored(&g, "a/docs/gen", false), "inner slash anchors");
+        assert!(ignored(&g, "x/y/cache", true));
+        assert!(!ignored(&g, "src/main.rs", false));
     }
 }

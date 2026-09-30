@@ -269,3 +269,33 @@ async fn grep_truncates_long_lines() {
     let out = Grep.call(&s.ctx(), json!({"pattern": "y"})).await.unwrap();
     assert_eq!(out, format!("a.txt:1:{}…", "y".repeat(300)));
 }
+
+#[tokio::test]
+async fn glob_and_grep_honor_nested_gitignore() {
+    let s = Scratch::new("gitignore");
+    for (rel, body) in [
+        (".gitignore", "dist/\n*.log\n!keep.log\n/top.txt\n"),
+        ("a.rs", "needle\n"),
+        ("dist/out.rs", "needle\n"),
+        ("debug.log", "needle\n"),
+        ("keep.log", "needle\n"),
+        ("top.txt", "needle\n"),
+        ("sub/top.txt", "needle\n"),
+        ("sub/.gitignore", "local.rs\n"),
+        ("sub/local.rs", "needle\n"),
+        ("sub/deep/local.rs", "needle\n"),
+        ("sub/other.rs", "needle\n"),
+        ("other/local.rs", "needle\n"),
+    ] {
+        let p = s.0.join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, body).unwrap();
+    }
+    let out = GlobFiles.call(&s.ctx(), json!({"pattern": "*"})).await.unwrap();
+    assert_eq!(out, ".gitignore\na.rs\nkeep.log\nother/local.rs\nsub/.gitignore\nsub/other.rs\nsub/top.txt");
+    let out = Grep.call(&s.ctx(), json!({"pattern": "needle"})).await.unwrap();
+    assert_eq!(out, "a.rs:1:needle\nkeep.log:1:needle\nother/local.rs:1:needle\nsub/other.rs:1:needle\nsub/top.txt:1:needle");
+    // Searching inside an ignored folder on purpose still works: only rules at or below it apply.
+    let out = GlobFiles.call(&s.ctx(), json!({"pattern": "*.rs", "path": "dist"})).await.unwrap();
+    assert_eq!(out, "dist/out.rs");
+}
