@@ -66,6 +66,7 @@ impl Tool for WriteFile {
         if let Some(parent) = path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
+        crate::undo::record(&path);
         tokio::fs::write(&path, &a.content).await?;
         Ok(format!("wrote {} bytes to {}", a.content.len(), path.display()))
     }
@@ -115,6 +116,7 @@ impl Tool for EditFile {
         } else {
             text.replacen(&a.old_string, &a.new_string, 1)
         };
+        crate::undo::record(&path);
         tokio::fs::write(&path, out).await?;
         Ok(format!("replaced {n} occurrence(s) in {}", path.display()))
     }

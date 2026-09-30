@@ -121,6 +121,17 @@ pub fn apply(patch: &str, cwd: &Path) -> Result<String, String> {
         return Err("patch contains no file changes".into());
     }
 
+    for c in &changes {
+        match c {
+            Change::Write { path, from, .. } => {
+                crate::undo::record(path);
+                if let Some(from) = from {
+                    crate::undo::record(from);
+                }
+            }
+            Change::Delete(path) => crate::undo::record(path),
+        }
+    }
     for c in changes {
         match c {
             Change::Write { path, text, from } => {

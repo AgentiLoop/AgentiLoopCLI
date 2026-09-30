@@ -459,6 +459,7 @@ Tipp diese an der Eingabeaufforderung ein, in der TUI oder im Chat:
 | `/sessions` | Listet deine gespeicherten Unterhaltungen auf, die neueste zuerst |
 | `/resume <n or id>` | Öffnet eine davon erneut |
 | `/clear` | Leert die Unterhaltung und beginnt eine neue |
+| `/undo` | Macht die Dateiänderungen des Agenten für deinen letzten Prompt rückgängig (Änderungen durch `bash`-Befehle nicht) |
 | `/compact` | Fasst die Unterhaltung jetzt zusammen, um Platz zu schaffen |
 | `/mcp` | Zeigt die verbundenen MCP-Server und ihre Tools |
 | `/help` | Listet diese Befehle auf |

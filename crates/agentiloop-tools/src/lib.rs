@@ -5,6 +5,7 @@ mod fs;
 mod patch;
 mod search;
 mod shell;
+pub mod undo;
 mod web;
 
 use agentiloop_core::ToolRegistry;

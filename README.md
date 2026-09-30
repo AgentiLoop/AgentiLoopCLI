@@ -371,6 +371,7 @@ Type these at the prompt, in the TUI or the chat:
 | `/sessions` | List your saved conversations, newest first |
 | `/resume <n or id>` | Reopen one of them |
 | `/clear` | Clear the conversation and start a new one |
+| `/undo` | Revert the file changes the agent made for your last prompt (files changed by `bash` commands are not undone) |
 | `/compact` | Summarize the conversation now to free up space |
 | `/mcp` | Show connected MCP servers and their tools |
 | `/setup` | Run the setup wizard again (works in the TUI too). A new key or provider takes effect after a restart |

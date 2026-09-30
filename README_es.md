@@ -459,6 +459,7 @@ Escríbelos en el prompt, en la TUI o en el chat:
 | `/sessions` | Lista tus conversaciones guardadas, de la más reciente a la más antigua |
 | `/resume <n or id>` | Vuelve a abrir una de ellas |
 | `/clear` | Borra la conversación y empieza una nueva |
+| `/undo` | Revierte los cambios en archivos que hizo el agente para tu último mensaje (los cambios hechos con `bash` no se deshacen) |
 | `/compact` | Resume la conversación ahora para liberar espacio |
 | `/mcp` | Muestra los servidores MCP conectados y sus herramientas |
 | `/help` | Lista estos comandos |

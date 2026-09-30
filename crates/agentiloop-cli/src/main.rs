@@ -252,6 +252,7 @@ async fn main() -> Result<()> {
 
     if !cli.prompt.is_empty() {
         let mut tracker = diff::Tracker::new(cwd.clone());
+        agentiloop_tools::undo::begin_turn();
         let res = agent.run(&cli.prompt.join(" "), |ev| render_tracked(&mut tracker, ev)).await;
         persist(&mut session, &agent, sessions_dir.as_deref());
         mcp.shutdown().await;
@@ -299,6 +300,7 @@ async fn main() -> Result<()> {
             } else {
                 let tx = ui_tx.clone();
                 let tracker = &mut tracker;
+                agentiloop_tools::undo::begin_turn();
                 let res = {
                     let run = agent.run(&line, move |ev| {
                         // Snapshot/diff before the event crosses to the UI thread:
@@ -393,6 +395,7 @@ async fn main() -> Result<()> {
         }
         // Line mode has no raw keyboard during a run, so Ctrl-C is its cancel key:
         // a signal while the agent works, or Ctrl-C at a permission prompt.
+        agentiloop_tools::undo::begin_turn();
         let res = tokio::select! {
             res = agent.run(line, |ev| render_tracked(&mut tracker, ev)) => Some(res),
             _ = tokio::signal::ctrl_c() => None,
@@ -547,9 +550,19 @@ async fn slash_command(
     match cmd {
         "/clear" => {
             agent.clear();
+            agentiloop_tools::undo::clear();
             *session = Session::new(session.cwd.clone(), provider.name(), agent.model());
             say(format!("context and tool history cleared; new session {}", session.id));
         }
+        "/undo" => match agentiloop_tools::undo::undo_last() {
+            Some(lines) => {
+                for l in lines {
+                    say(l);
+                }
+                say("undid the file changes from the last prompt (shell commands are not undone)".into());
+            }
+            None => say("nothing to undo".into()),
+        },
         "/model" => {
             let models = fetch_models(provider).await;
             // `/model 2` picks entry #2 directly; `/model <id>` sets an id.
@@ -664,6 +677,7 @@ async fn slash_command(
 
 const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
 /mcp            list MCP servers and their tools\n\
+/undo           revert the file changes from the last prompt\n\
 /compact        summarize the conversation to free context\n\
 /sessions       list saved sessions (newest first)\n\
 /resume <id|n>  load a saved session into this REPL\n\

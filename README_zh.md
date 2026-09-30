@@ -459,6 +459,7 @@ agentiloop --yes "run the tests and fix any failures"        # 无人值守，�
 | `/sessions` | 列出你保存的对话，最新的在前 |
 | `/resume <n or id>` | 重新打开其中一个对话 |
 | `/clear` | 清除当前对话并开始新对话 |
+| `/undo` | 撤销智能体为你上一条提示所做的文件更改（`bash` 命令造成的更改不会撤销） |
 | `/compact` | 立即总结对话以释放空间 |
 | `/mcp` | 显示已连接的 MCP 服务器及其工具 |
 | `/help` | 列出这些命令 |
