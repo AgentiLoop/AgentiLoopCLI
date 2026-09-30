@@ -485,3 +485,22 @@ fn oversized_input_fails_locally_without_sending_request() {
     assert!(err.to_string().contains("context budget"), "{err}");
     assert!(p.requests.lock().unwrap().is_empty());
 }
+#[test]
+fn usage_accumulates_across_requests_and_survives_clear() {
+    let p = ScriptedProvider::new(vec![tool_call("t1", "echo", json!({"msg": "x"})), text("done"), text("SUMMARY")]);
+    let mut a = agent(p, Arc::new(agentiloop_core::permission::AllowAll), 5);
+    assert_eq!(a.usage(), agentiloop_core::Usage::default());
+    collect(&mut a, "go").0.unwrap();
+    let u = a.usage();
+    assert_eq!(u.requests, 2, "{u:?}");
+    assert_eq!((u.input_tokens, u.output_tokens), (20, 10));
+    let before = u;
+    // A compaction request is spent tokens too.
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(a.compact()).unwrap();
+    assert_eq!(a.usage().requests, 3);
+    assert_eq!((a.usage().input_tokens, a.usage().output_tokens), (30, 15));
+    assert_ne!(a.usage(), before);
+    a.clear();
+    assert_eq!(a.usage().requests, 3, "/clear keeps the running total");
+}

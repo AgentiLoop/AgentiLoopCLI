@@ -8,7 +8,7 @@ pub mod permission;
 pub mod session;
 pub mod instructions;
 
-pub use agent::{Agent, AgentConfig, AgentEvent, ModelLimits};
+pub use agent::{Agent, AgentConfig, AgentEvent, ModelLimits, Usage};
 pub use message::{ContentBlock, Message, Role, StopReason};
 pub use permission::{Permission, PermissionPolicy};
 pub use provider::{ModelInfo, Provider, ProviderRequest, ProviderResponse, ToolSpec};

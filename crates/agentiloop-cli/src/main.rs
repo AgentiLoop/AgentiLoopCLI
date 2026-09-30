@@ -554,6 +554,19 @@ async fn slash_command(
             *session = Session::new(session.cwd.clone(), provider.name(), agent.model());
             say(format!("context and tool history cleared; new session {}", session.id));
         }
+        "/usage" => {
+            let u = agent.usage();
+            say(usage_line(u.requests, u.input_tokens, u.output_tokens));
+            let last = agent.last_input_tokens();
+            if last > 0 {
+                match agent.limits() {
+                    Some(l) if l.context_window.is_some() => {
+                        say(format!("context: {last} of {} tokens ({}%)", l.context_window.unwrap(), last * 100 / l.context_window.unwrap().max(1)))
+                    }
+                    _ => say(format!("context: {last} tokens")),
+                }
+            }
+        }
         "/export" => {
             session.history = agent.history.clone();
             if session.history.is_empty() {
@@ -693,6 +706,7 @@ async fn slash_command(
 
 const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
 /mcp            list MCP servers and their tools\n\
+/usage          tokens used since start and how full the context is\n\
 /export [file]  save the conversation as Markdown\n\
 /init           create a starter AGENTS.md for this project\n\
 /undo           revert the file changes from the last prompt\n\
@@ -702,6 +716,11 @@ const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
 /clear          clear context and start a new session\n\
 /setup          run the setup wizard again (provider, key, model)\n\
 /exit           quit";
+
+/// `/usage` first line: tokens spent since agentiloop started.
+pub(crate) fn usage_line(requests: u64, input: u64, output: u64) -> String {
+    format!("{requests} request(s) since start: {input} input + {output} output = {} tokens", input + output)
+}
 
 pub(crate) fn compacted_line(before_tokens: u64, messages_dropped: usize) -> String {
     format!("\u{1f4e6} context compacted ({before_tokens} tokens, {messages_dropped} messages → summary)")
@@ -790,4 +809,12 @@ mod speed_tests {
 pub(crate) fn compact(v: &serde_json::Value) -> String {
     let s = v.to_string();
     if s.len() > 120 { format!("{}…", &s[..s.floor_char_boundary(120)]) } else { s }
+}
+
+#[cfg(test)]
+mod usage_tests {
+    #[test]
+    fn usage_line_totals_tokens() {
+        assert_eq!(super::usage_line(3, 1200, 340), "3 request(s) since start: 1200 input + 340 output = 1540 tokens");
+    }
 }

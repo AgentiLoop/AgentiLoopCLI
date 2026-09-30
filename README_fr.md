@@ -463,6 +463,7 @@ Tapez-les à l'invite, dans la TUI ou dans le chat :
 | `/init` | Crée un `AGENTS.md` de départ pour le projet courant (n'écrase jamais) |
 | `/export [file]` | Enregistre la conversation en fichier Markdown (`/export notes.md`, ou un nom par défaut dans le dossier du projet) |
 | `/compact` | Résume la conversation maintenant pour libérer de la place |
+| `/usage` | Affiche les tokens utilisés depuis le démarrage et le remplissage du contexte |
 | `/mcp` | Affiche les serveurs MCP connectés et leurs outils |
 | `/help` | Liste ces commandes |
 | `/exit` | Quitter |

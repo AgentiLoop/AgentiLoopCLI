@@ -6,6 +6,14 @@ use crate::permission::{Permission, SharedPolicy};
 use crate::provider::{Provider, ProviderRequest, ToolSpec};
 use crate::tool::{ToolContext, ToolError, ToolRegistry};
 
+/// Tokens spent by an agent since it was created (summaries for compaction included).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Usage {
+    pub requests: u64,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+}
+
 #[derive(Debug, Clone)]
 pub struct AgentConfig {
     pub model: String,
@@ -97,6 +105,7 @@ pub struct Agent {
     pub history: Vec<Message>,
     /// `input_tokens` reported by the most recent provider response.
     last_input_tokens: u64,
+    usage: Usage,
     /// Text received from the current stream but not yet committed to history.
     pending_text: String,
     /// Limits resolved from the provider catalog for `config.model`; cleared on `set_model`.
@@ -111,7 +120,7 @@ impl Agent {
         config: AgentConfig,
         ctx: ToolContext,
     ) -> Self {
-        Self { provider, tools, policy, config, ctx, history: Vec::new(), last_input_tokens: 0, pending_text: String::new(), limits: None }
+        Self { provider, tools, policy, config, ctx, history: Vec::new(), last_input_tokens: 0, usage: Usage::default(), pending_text: String::new(), limits: None }
     }
 
     pub fn model(&self) -> &str {
@@ -125,6 +134,17 @@ impl Agent {
 
     pub fn last_input_tokens(&self) -> u64 {
         self.last_input_tokens
+    }
+
+    /// Tokens spent since this agent was created; `/clear` does not reset it.
+    pub fn usage(&self) -> Usage {
+        self.usage
+    }
+
+    fn add_usage(&mut self, input: u64, output: u64) {
+        self.usage.requests += 1;
+        self.usage.input_tokens += input;
+        self.usage.output_tokens += output;
     }
 
     /// Limits in effect for the current model, once a run has resolved them.
@@ -221,6 +241,7 @@ impl Agent {
         };
         Self::budget_request(&mut req, limits)?;
         let resp = self.provider.complete(req).await?;
+        self.add_usage(resp.input_tokens, resp.output_tokens);
         let summary = resp.message.text();
         anyhow::ensure!(!summary.trim().is_empty(), "compaction produced an empty summary");
 
@@ -300,6 +321,7 @@ impl Agent {
             self.pending_text.clear();
             let elapsed = started.elapsed();
             self.last_input_tokens = resp.input_tokens;
+            self.add_usage(resp.input_tokens, resp.output_tokens);
             on_event(AgentEvent::TurnComplete {
                 input_tokens: resp.input_tokens,
                 output_tokens: resp.output_tokens,
