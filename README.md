@@ -271,12 +271,14 @@ Keys in the TUI: **Enter** sends · **↑ / ↓** go through earlier prompts · 
 
 ## What can it do? (tools)
 
-The agent works with five built-in tools. You don't call them yourself. You describe the goal, and the agent picks the tool:
+The agent works with seven built-in tools. You don't call them yourself. You describe the goal, and the agent picks the tool:
 
 | Tool | What it does | Asks first? |
 |---|---|---|
 | `read_file` | Reads a file (with line numbers) | No |
 | `list_dir` | Lists the files in a folder | No |
+| `glob` | Finds files by name pattern (`*.rs`, `src/**/*.go`) | No |
+| `grep` | Searches inside files with a regular expression | No |
 | `write_file` | Creates a new file or overwrites one | **Yes** |
 | `edit_file` | Changes an exact piece of text in a file | **Yes** |
 | `bash` | Runs a shell command, like tests, builds or `git` (`sh -c` on Mac/Linux, `cmd /C` on Windows) | **Yes** |
@@ -475,7 +477,7 @@ The project is split into five crates, and each one builds on the ones before it
 |---|---|
 | `agentiloop-core` | The heart: the agent loop, messages, the tool and provider interfaces, permissions, sessions, summarizing |
 | `agentiloop-provider` | Talks to the models: Anthropic, OpenAI-compatible servers, oMLX |
-| `agentiloop-tools` | Built-in tools: `read_file`, `write_file`, `edit_file`, `list_dir`, `bash` |
+| `agentiloop-tools` | Built-in tools: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `bash` |
 | `agentiloop-mcp` | The MCP client, ported from Agent!'s Swift AgentMCP |
 | `agentiloop-cli` | The `agentiloop` program: options, chat, TUI, settings |
 

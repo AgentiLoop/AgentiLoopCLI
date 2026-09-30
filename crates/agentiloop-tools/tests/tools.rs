@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use agentiloop_core::{Tool, ToolContext, ToolError};
-use agentiloop_tools::{default_registry, Bash, EditFile, ListDir, ReadFile, WriteFile};
+use agentiloop_tools::{default_registry, Bash, EditFile, GlobFiles, Grep, ListDir, ReadFile, WriteFile};
 use serde_json::json;
 
 /// Fresh temp dir per test; removed on drop.
@@ -143,12 +143,14 @@ async fn bash_times_out() {
 #[test]
 fn default_registry_has_all_builtins() {
     let r = default_registry();
-    assert_eq!(r.len(), 5);
-    for name in ["read_file", "write_file", "edit_file", "list_dir", "bash"] {
+    assert_eq!(r.len(), 7);
+    for name in ["read_file", "write_file", "edit_file", "list_dir", "glob", "grep", "bash"] {
         assert!(r.get(name).is_some(), "missing {name}");
     }
     assert!(!r.get("read_file").unwrap().is_mutating());
-    assert!(!r.get("list_dir").unwrap().is_mutating());
+    for name in ["list_dir", "glob", "grep"] {
+        assert!(!r.get(name).unwrap().is_mutating(), "{name} should be read-only");
+    }
     for name in ["write_file", "edit_file", "bash"] {
         assert!(r.get(name).unwrap().is_mutating(), "{name} should be mutating");
     }
@@ -187,4 +189,83 @@ async fn bash_does_not_wait_for_background_children_holding_the_pipes() {
     let out = Bash.call(&s.ctx(), json!({"command": "sleep 30 & echo started"})).await.unwrap();
     assert!(out.contains("started"), "{out}");
     assert!(started.elapsed() < std::time::Duration::from_secs(5), "waited {:?}", started.elapsed());
+}
+
+fn seed_tree(s: &Scratch) {
+    for (rel, body) in [
+        ("src/main.rs", "fn main() {\n    println!(\"Hello\");\n}\n"),
+        ("src/lib/util.rs", "pub fn hello() {}\n// TODO: later\n"),
+        ("README.md", "hello world\n"),
+        ("target/debug/junk.rs", "fn hello() {}\n"),
+        ("node_modules/x/index.js", "hello\n"),
+        (".git/config", "hello\n"),
+    ] {
+        let p = s.0.join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, body).unwrap();
+    }
+    std::fs::write(s.0.join("blob.bin"), b"hello\0\x01\x02").unwrap();
+}
+
+#[tokio::test]
+async fn glob_finds_files_and_skips_vendor_dirs() {
+    let s = Scratch::new("glob");
+    seed_tree(&s);
+    let out = GlobFiles.call(&s.ctx(), json!({"pattern": "*.rs"})).await.unwrap();
+    assert_eq!(out, "src/lib/util.rs\nsrc/main.rs");
+    let out = GlobFiles.call(&s.ctx(), json!({"pattern": "src/**/*.{rs,md}"})).await.unwrap();
+    assert_eq!(out, "src/lib/util.rs\nsrc/main.rs");
+    let out = GlobFiles.call(&s.ctx(), json!({"pattern": "*.rs", "path": "src/lib"})).await.unwrap();
+    assert_eq!(out, "src/lib/util.rs");
+    let out = GlobFiles.call(&s.ctx(), json!({"pattern": "*.zzz"})).await.unwrap();
+    assert_eq!(out, "no matches");
+    let err = GlobFiles.call(&s.ctx(), json!({"pattern": "*", "path": "nope"})).await.unwrap_err();
+    assert!(matches!(err, ToolError::Failed(_)), "{err:?}");
+}
+
+#[tokio::test]
+async fn glob_caps_results() {
+    let s = Scratch::new("glob-cap");
+    for i in 0..510 {
+        std::fs::write(s.0.join(format!("f{i:03}.txt")), "").unwrap();
+    }
+    let out = GlobFiles.call(&s.ctx(), json!({"pattern": "*.txt"})).await.unwrap();
+    assert_eq!(out.lines().count(), 501, "{out}");
+    assert!(out.contains("truncated"), "{out}");
+}
+
+#[tokio::test]
+async fn grep_reports_path_line_text_and_skips_binary_and_vendor() {
+    let s = Scratch::new("grep");
+    seed_tree(&s);
+    let out = Grep.call(&s.ctx(), json!({"pattern": "hello"})).await.unwrap();
+    assert_eq!(out, "README.md:1:hello world\nsrc/lib/util.rs:1:pub fn hello() {}");
+    let out = Grep.call(&s.ctx(), json!({"pattern": "hello", "case_insensitive": true, "glob": "*.rs"})).await.unwrap();
+    assert_eq!(out, "src/lib/util.rs:1:pub fn hello() {}\nsrc/main.rs:2:    println!(\"Hello\");");
+    let out = Grep.call(&s.ctx(), json!({"pattern": "TODO", "path": "src/lib/util.rs"})).await.unwrap();
+    assert_eq!(out, "src/lib/util.rs:2:// TODO: later");
+    let out = Grep.call(&s.ctx(), json!({"pattern": "nothing-like-this"})).await.unwrap();
+    assert_eq!(out, "no matches");
+}
+
+#[tokio::test]
+async fn grep_limits_and_validates_input() {
+    let s = Scratch::new("grep-limit");
+    std::fs::write(s.0.join("a.txt"), "x\nx\nx\n").unwrap();
+    let out = Grep.call(&s.ctx(), json!({"pattern": "x", "max_results": 2})).await.unwrap();
+    assert!(out.starts_with("a.txt:1:x\na.txt:2:x\n…[truncated at 2"), "{out}");
+    let err = Grep.call(&s.ctx(), json!({"pattern": "("})).await.unwrap_err();
+    assert!(matches!(err, ToolError::InvalidInput(_)), "{err:?}");
+    let err = Grep.call(&s.ctx(), json!({"pattern": "x", "path": "missing"})).await.unwrap_err();
+    assert!(matches!(err, ToolError::Failed(_)), "{err:?}");
+    let err = Grep.call(&s.ctx(), json!({})).await.unwrap_err();
+    assert!(matches!(err, ToolError::InvalidInput(_)), "{err:?}");
+}
+
+#[tokio::test]
+async fn grep_truncates_long_lines() {
+    let s = Scratch::new("grep-long");
+    std::fs::write(s.0.join("a.txt"), format!("{}\n", "y".repeat(1000))).unwrap();
+    let out = Grep.call(&s.ctx(), json!({"pattern": "y"})).await.unwrap();
+    assert_eq!(out, format!("a.txt:1:{}…", "y".repeat(300)));
 }

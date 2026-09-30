@@ -86,6 +86,7 @@ dependencies = [
  "agentiloop-core",
  "async-trait",
  "libc",
+ "regex",
  "serde",
  "serde_json",
  "tokio",

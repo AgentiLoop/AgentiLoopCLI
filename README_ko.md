@@ -230,6 +230,8 @@ agentiloop "explain what this project does"
 |---|---|---|
 | `read_file` | 파일을 읽어요 (줄 번호 포함) | 아니요 |
 | `list_dir` | 폴더 안의 파일을 나열해요 | 아니요 |
+| `glob` | 이름 패턴으로 파일을 찾아요 (`*.rs`, `src/**/*.go`) | 아니요 |
+| `grep` | 정규식으로 파일 내용을 검색해요 | 아니요 |
 | `write_file` | 새 파일을 만들거나 기존 파일을 덮어써요 | **예** |
 | `edit_file` | 파일 안의 특정 텍스트를 정확히 바꿔요 | **예** |
 | `bash` | 테스트, 빌드, `git` 같은 셸 명령어를 실행해요 (Mac/Linux에서는 `sh -c`, Windows에서는 `cmd /C`) | **예** |
@@ -548,7 +550,7 @@ cargo run -p agentiloop-mcp --example mcp-example-server -- --http 8791   # 또�
 |---|---|
 | `agentiloop-core` | 핵심: 에이전트 루프, 메시지, 도구와 프로바이더 인터페이스, 권한, 세션, 요약 |
 | `agentiloop-provider` | 모델과 통신: Anthropic, OpenAI 호환 서버, oMLX |
-| `agentiloop-tools` | 내장 도구: `read_file`, `write_file`, `edit_file`, `list_dir`, `bash` |
+| `agentiloop-tools` | 내장 도구: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `bash` |
 | `agentiloop-mcp` | MCP 클라이언트, Agent!의 Swift AgentMCP에서 이식했어요 |
 | `agentiloop-cli` | `agentiloop` 프로그램: 옵션, 채팅, TUI, 설정 |
 
