@@ -465,6 +465,7 @@ Escríbelos en el prompt, en la TUI o en el chat:
 | `/undo` | Revierte los cambios en archivos que hizo el agente para tu último mensaje (los cambios hechos con `bash` no se deshacen) |
 | `/todos` | Muestra la lista de tareas actual del modelo |
 | `/diff` | Muestra qué cambió en el árbol de trabajo de git (estado más diff, cortado a 200 líneas) |
+| `/commands` | Tus propios comandos: cada `.agentiloop/commands/<name>.md` (proyecto) o `~/.agentiloop/commands/<name>.md` pasa a ser `/<name>` y envía el archivo como prompt (`$ARGUMENTS` se sustituye por lo que escribas después). Los lista |
 | `/init` | Crea un `AGENTS.md` inicial para el proyecto actual (nunca sobrescribe) |
 | `/export [file]` | Guarda la conversación como archivo Markdown (`/export notes.md`, o un nombre por defecto en la carpeta del proyecto) |
 | `/compact` | Resume la conversación ahora para liberar espacio |

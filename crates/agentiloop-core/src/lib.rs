@@ -7,6 +7,7 @@ pub mod agent;
 pub mod permission;
 pub mod session;
 pub mod instructions;
+pub mod commands;
 
 pub use agent::{Agent, AgentConfig, AgentEvent, ModelLimits, Usage};
 pub use message::{ContentBlock, Message, Role, StopReason};

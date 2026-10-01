@@ -280,6 +280,8 @@ async fn main() -> Result<()> {
         while let Some(input) = in_rx.recv().await {
             // A late Esc that arrives after the run already finished is a no-op.
             let tui::Input::Submit(line) = input else { continue };
+            // A custom command (`.agentiloop/commands/<name>.md`) turns into its prompt.
+            let line = agentiloop_core::commands::resolve(&line, &session.cwd, settings::home().as_deref()).unwrap_or(line);
             if line.starts_with('/') {
                 // Collect the command's output into one transcript entry so
                 // multi-line output (the /model list) isn't double-spaced.
@@ -389,6 +391,8 @@ async fn main() -> Result<()> {
         if line == "/exit" || line == "/quit" {
             break;
         }
+        let expanded = agentiloop_core::commands::resolve(line, &session.cwd, settings::home().as_deref());
+        let line = expanded.as_deref().unwrap_or(line);
         if line.starts_with('/') {
             let before = session.id.clone();
             slash_command(line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), &mcp, true, &mut wizard::Terminal, &mut |s| {
@@ -595,6 +599,7 @@ async fn slash_command(
             Ok(text) => say(text),
             Err(e) => say(e),
         },
+        "/commands" => say(agentiloop_core::commands::listing(&agentiloop_core::commands::load(&session.cwd, settings::home().as_deref()))),
         "/todos" => match agentiloop_tools::todo::current() {
             Some(t) => say(t),
             None => say("no todo list yet (the model creates one for multi-step work)".into()),
@@ -725,6 +730,7 @@ const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
 /usage          tokens used since start and how full the context is\n\
 /export [file]  save the conversation as Markdown\n\
 /init           create a starter AGENTS.md for this project\n\
+/commands       list your custom commands (.agentiloop/commands/*.md)\n\
 /diff           show what changed in the git working tree\n\
 /todos          show the model's current task checklist\n\
 /undo           revert the file changes from the last prompt\n\
