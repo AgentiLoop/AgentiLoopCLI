@@ -85,6 +85,11 @@ struct Cli {
     #[arg(long, conflicts_with = "prompt")]
     reset: bool,
 
+    /// One-shot only: print the answer as one JSON object on stdout (result, is_error, session_id,
+    /// provider, model, usage) instead of streaming text. Tool activity still goes to stderr.
+    #[arg(long, requires = "prompt")]
+    json: bool,
+
     /// One-shot prompt. If omitted, starts an interactive REPL. A lone `-` in it is replaced by
     /// what is piped on stdin: `git diff | agentiloop "review this" -`.
     prompt: Vec<String>,
@@ -254,14 +259,37 @@ async fn main() -> Result<()> {
     if !cli.prompt.is_empty() {
         let mut tracker = diff::Tracker::new(cwd.clone());
         agentiloop_tools::undo::begin_turn();
+        let json = cli.json;
+        let mut last_text = String::new();
         let res = match expand_stdin(&cli.prompt, || {
             let mut text = String::new();
             io::stdin().read_to_string(&mut text).map(|_| text)
         }) {
-            Ok(prompt) => agent.run(&prompt, |ev| render_tracked(&mut tracker, ev)).await,
+            Ok(prompt) => {
+                agent
+                    .run(&prompt, |ev| {
+                        if json {
+                            match &ev {
+                                AgentEvent::TurnComplete { .. } => last_text.clear(),
+                                AgentEvent::AssistantText(t) => last_text = t.clone(),
+                                _ => {}
+                            }
+                            if matches!(ev, AgentEvent::AssistantTextDelta(_) | AgentEvent::AssistantText(_)) {
+                                return;
+                            }
+                        }
+                        render_tracked(&mut tracker, ev)
+                    })
+                    .await
+            }
             Err(e) => Err(e),
         };
         persist(&mut session, &agent, sessions_dir.as_deref());
+        if json {
+            let err = res.as_ref().err().map(|e| format!("{e:#}"));
+            let u = agent.usage();
+            println!("{}", json_result(&last_text, err.as_deref(), &session.id, provider.name(), agent.model(), u.requests, u.input_tokens, u.output_tokens));
+        }
         mcp.shutdown().await;
         return res;
     }
@@ -865,6 +893,32 @@ pub(crate) fn git_changes(cwd: &Path) -> std::result::Result<String, String> {
     Ok(lines.join("\n"))
 }
 
+/// The `--json` result object for a one-shot run.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn json_result(
+    result: &str,
+    error: Option<&str>,
+    session_id: &str,
+    provider: &str,
+    model: &str,
+    requests: u64,
+    input_tokens: u64,
+    output_tokens: u64,
+) -> String {
+    let mut v = serde_json::json!({
+        "result": result,
+        "is_error": error.is_some(),
+        "session_id": session_id,
+        "provider": provider,
+        "model": model,
+        "usage": {"requests": requests, "input_tokens": input_tokens, "output_tokens": output_tokens},
+    });
+    if let Some(e) = error {
+        v["error"] = e.into();
+    }
+    v.to_string()
+}
+
 /// Joins the prompt words; each lone `-` word becomes the stdin text (read once, on first use).
 pub(crate) fn expand_stdin(words: &[String], read: impl FnOnce() -> io::Result<String>) -> Result<String> {
     if !words.iter().any(|w| w == "-") {
@@ -957,5 +1011,22 @@ mod git_tests {
         let out = git_changes(&d).unwrap();
         assert!(out.contains("more lines"), "{out}");
         let _ = std::fs::remove_dir_all(&d);
+    }
+}
+
+#[cfg(test)]
+mod json_tests {
+    use super::json_result;
+
+    #[test]
+    fn json_result_has_stable_keys_and_error_only_on_failure() {
+        let ok: serde_json::Value = serde_json::from_str(&json_result("hi \"x\"\n", None, "s1", "omlx", "m", 2, 10, 5)).unwrap();
+        assert_eq!(ok["result"], "hi \"x\"\n");
+        assert_eq!(ok["is_error"], false);
+        assert_eq!(ok["usage"]["input_tokens"], 10);
+        assert!(ok.get("error").is_none());
+        let bad: serde_json::Value = serde_json::from_str(&json_result("", Some("boom"), "s1", "omlx", "m", 0, 0, 0)).unwrap();
+        assert_eq!((bad["is_error"].as_bool(), bad["error"].as_str()), (Some(true), Some("boom")));
+        assert_eq!(json_result("a", None, "s", "p", "m", 1, 2, 3), r#"{"is_error":false,"model":"m","provider":"p","result":"a","session_id":"s","usage":{"input_tokens":2,"output_tokens":3,"requests":1}}"#);
     }
 }

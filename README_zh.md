@@ -429,6 +429,7 @@ agentiloop --new          # 开始一段新对话（旧对话仍会保存）
 | `-C, --cwd <folder>` | | 在与当前所在位置不同的文件夹中工作 |
 | `--yes` | `AGENTILOOP_YES` | 运行工具前不询问。⚠️ 仅用于可信的自动化场景 |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | 不启动 MCP 服务器（见下文） |
+| `--json` | | 配合单次提示：把回答作为一个 JSON 对象（`result`、`is_error`、`session_id`、`provider`、`model`、`usage`）输出到 stdout。工具活动仍在 stderr |
 | `--setup` | | 重新运行首次设置向导（提供方、密钥、模型）。加上 `--tui` 可在全屏界面中运行 |
 | `--reset` | | 恢复初始状态：删除 `~/.agentiloop`、shell 配置文件中的 agentiloop 块，以及向导创建的钥匙串项（Windows 上：向导设置的用户环境变量）。手写的 `export` 行只会被注释掉，而且仅在你同意时。加上 `--yes` 可跳过询问 |
 | `--max-turns <n>` | | 智能体每个请求最多可执行的步数（默认 50） |
