@@ -4,7 +4,7 @@
 
 🌐 [English](README.md) · [Español](README_es.md) · [Français](README_fr.md) · [Deutsch](README_de.md) · [中文 (简体)](README_zh.md) · [Русский](README_ru.md) · [한국어](README_ko.md) · [日本語](README_ja.md)
 
-### 🎉 Mac、Windows、Linux 向けのリリース版 v0.0.4 を公開しました！
+### 🎉 Mac、Windows、Linux 向けのリリース版 v0.0.5 を公開しました！
 
 ---
 
@@ -65,7 +65,7 @@ Rust も Go もコンパイルも不要です。ファイルを 1 つダウン�
 **macOS と Linux。** ターミナルを開いて、次の行を貼り付けます。この例は Apple Silicon 用のファイルを使っているので、お使いの環境が違う場合は最初の 3 行の `macos-arm64` を書き換えてください:
 
 ```sh
-curl -LO https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.4/agentiloop-macos-arm64.tar.gz
+curl -LO https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.5/agentiloop-macos-arm64.tar.gz
 tar xzf agentiloop-macos-arm64.tar.gz
 mkdir -p ~/.local/bin && mv agentiloop-macos-arm64/agentiloop ~/.local/bin/
 ```
@@ -75,7 +75,7 @@ mkdir -p ~/.local/bin && mv agentiloop-macos-arm64/agentiloop ~/.local/bin/
 **Windows。** **PowerShell** を開き (スタートメニュー → 「PowerShell」と入力)、次を貼り付けます:
 
 ```powershell
-Invoke-WebRequest https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.4/agentiloop-windows-x86_64.zip -OutFile agentiloop.zip
+Invoke-WebRequest https://github.com/AgentiLoop/AgentiLoopCLI/releases/download/v0.0.5/agentiloop-windows-x86_64.zip -OutFile agentiloop.zip
 Expand-Archive agentiloop.zip -DestinationPath $HOME\agentiloop -Force
 $p = [Environment]::GetEnvironmentVariable("Path", "User")
 [Environment]::SetEnvironmentVariable("Path", "$p;$HOME\agentiloop\agentiloop-windows-x86_64", "User")
@@ -181,7 +181,7 @@ agentiloop --reset          # すべてを忘れて初期状態からやり直�
 agentiloop --version
 ```
 
-`agentiloop 0.0.4` と表示されるはずです。次に、オプションなしで実行します:
+`agentiloop 0.0.5` と表示されるはずです。次に、オプションなしで実行します:
 
 ```sh
 agentiloop
