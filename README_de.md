@@ -268,6 +268,8 @@ Options:
       --no-mcp                       Don't start MCP servers from ~/.agentiloop/mcp.json / ./.mcp.json [env: AGENTILOOP_NO_MCP=]
       --setup                        Run the first-time setup wizard (provider, key, model). Runs by itself on a machine with no credentials and no ~/.agentiloop
       --reset                        Back to brand new: delete ~/.agentiloop (settings, env, history, sessions, mcp.json), the agentiloop block in your shell profile and Keychain items the wizard created. Asks first unless --yes
+      --allow-tool <NAME>            Run this tool without asking (repeatable or comma-separated; `mcp_*` matches a prefix)
+      --deny-tool <NAME>             Never run this tool; the model is told it was denied (same name rules). Beats --allow-tool and --yes
       --append-system-prompt <TEXT>  Extra text added to the end of the system prompt for this run (never saved) [env: AGENTILOOP_APPEND_SYSTEM_PROMPT=]
       --json                         One-shot only: print the answer as one JSON object on stdout (result, is_error, session_id, provider, model, usage) instead of streaming text. Tool activity still goes to stderr
   -h, --help                         Print help
@@ -431,6 +433,8 @@ Jede Option lässt sich auch über eine Umgebungsvariable setzen, die in der zwe
 | `-r, --resume <id>` | | Öffnet eine bestimmte Unterhaltung erneut (IDs findest du mit `/sessions`) |
 | `-C, --cwd <folder>` | | Arbeitet in einem anderen Ordner als dem, in dem du gerade bist |
 | `--yes` | `AGENTILOOP_YES` | Fragt nicht, bevor Tools ausgeführt werden. ⚠️ Nur für vertrauenswürdige, automatisierte Nutzung |
+| `--allow-tool <name>` | | Führt dieses Tool ohne Nachfrage aus; Option wiederholen oder Kommas nutzen. `mcp_*` passt auf ein Präfix. Gut für CI ohne `--yes` |
+| `--deny-tool <name>` | | Führt dieses Tool nie aus: Das Modell erfährt, dass es abgelehnt wurde. Hat Vorrang vor `--allow-tool` und `--yes` |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | Startet keine MCP-Server (siehe unten) |
 | `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | Zusätzlicher Text am Ende des System-Prompts für diesen Lauf (wird nicht gespeichert) |
 | `--json` | | Bei einer einmaligen Anfrage: gibt die Antwort als ein JSON-Objekt (`result`, `is_error`, `session_id`, `provider`, `model`, `usage`) auf stdout aus. Tool-Aktivität bleibt auf stderr |

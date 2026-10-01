@@ -85,6 +85,14 @@ struct Cli {
     #[arg(long, conflicts_with = "prompt")]
     reset: bool,
 
+    /// Run this tool without asking (repeatable or comma-separated; `mcp_*` matches a prefix).
+    #[arg(long = "allow-tool", value_name = "NAME", value_delimiter = ',')]
+    allow_tool: Vec<String>,
+
+    /// Never run this tool; the model is told it was denied (same name rules). Beats --allow-tool and --yes.
+    #[arg(long = "deny-tool", value_name = "NAME", value_delimiter = ',')]
+    deny_tool: Vec<String>,
+
     /// Extra text added to the end of the system prompt for this run (never saved).
     #[arg(long, value_name = "TEXT", env = "AGENTILOOP_APPEND_SYSTEM_PROMPT")]
     append_system_prompt: Option<String>,
@@ -182,6 +190,11 @@ async fn main() -> Result<()> {
             std::sync::Arc::new(tui::ChannelPolicy::new(ui_tx.clone()))
         } else {
             permission::policy(cli.yes, repl_io.clone())
+        };
+        let policy: agentiloop_core::permission::SharedPolicy = {
+            use agentiloop_core::permission::{Rules, ToolPatterns};
+            let (allow, deny) = (ToolPatterns::new(&cli.allow_tool), ToolPatterns::new(&cli.deny_tool));
+            if allow.is_empty() && deny.is_empty() { policy } else { std::sync::Arc::new(Rules { allow, deny, inner: policy }) }
         };
         let sessions_dir = settings::sessions_dir();
 

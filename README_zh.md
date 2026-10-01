@@ -268,6 +268,8 @@ Options:
       --no-mcp                       Don't start MCP servers from ~/.agentiloop/mcp.json / ./.mcp.json [env: AGENTILOOP_NO_MCP=]
       --setup                        Run the first-time setup wizard (provider, key, model). Runs by itself on a machine with no credentials and no ~/.agentiloop
       --reset                        Back to brand new: delete ~/.agentiloop (settings, env, history, sessions, mcp.json), the agentiloop block in your shell profile and Keychain items the wizard created. Asks first unless --yes
+      --allow-tool <NAME>            Run this tool without asking (repeatable or comma-separated; `mcp_*` matches a prefix)
+      --deny-tool <NAME>             Never run this tool; the model is told it was denied (same name rules). Beats --allow-tool and --yes
       --append-system-prompt <TEXT>  Extra text added to the end of the system prompt for this run (never saved) [env: AGENTILOOP_APPEND_SYSTEM_PROMPT=]
       --json                         One-shot only: print the answer as one JSON object on stdout (result, is_error, session_id, provider, model, usage) instead of streaming text. Tool activity still goes to stderr
   -h, --help                         Print help
@@ -431,6 +433,8 @@ agentiloop --new          # 开始一段新对话（旧对话仍会保存）
 | `-r, --resume <id>` | | 重新打开某个特定对话（用 `/sessions` 查找 id） |
 | `-C, --cwd <folder>` | | 在与当前所在位置不同的文件夹中工作 |
 | `--yes` | `AGENTILOOP_YES` | 运行工具前不询问。⚠️ 仅用于可信的自动化场景 |
+| `--allow-tool <name>` | | 无需询问直接运行此工具；可重复该选项或用逗号分隔。`mcp_*` 匹配前缀。适合不用 `--yes` 的 CI |
+| `--deny-tool <name>` | | 绝不运行此工具：会告知模型已被拒绝。优先于 `--allow-tool` 和 `--yes` |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | 不启动 MCP 服务器（见下文） |
 | `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | 本次运行追加到系统提示末尾的文本（不会保存） |
 | `--json` | | 配合单次提示：把回答作为一个 JSON 对象（`result`、`is_error`、`session_id`、`provider`、`model`、`usage`）输出到 stdout。工具活动仍在 stderr |

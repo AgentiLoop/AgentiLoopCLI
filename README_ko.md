@@ -268,6 +268,8 @@ Options:
       --no-mcp                       Don't start MCP servers from ~/.agentiloop/mcp.json / ./.mcp.json [env: AGENTILOOP_NO_MCP=]
       --setup                        Run the first-time setup wizard (provider, key, model). Runs by itself on a machine with no credentials and no ~/.agentiloop
       --reset                        Back to brand new: delete ~/.agentiloop (settings, env, history, sessions, mcp.json), the agentiloop block in your shell profile and Keychain items the wizard created. Asks first unless --yes
+      --allow-tool <NAME>            Run this tool without asking (repeatable or comma-separated; `mcp_*` matches a prefix)
+      --deny-tool <NAME>             Never run this tool; the model is told it was denied (same name rules). Beats --allow-tool and --yes
       --append-system-prompt <TEXT>  Extra text added to the end of the system prompt for this run (never saved) [env: AGENTILOOP_APPEND_SYSTEM_PROMPT=]
       --json                         One-shot only: print the answer as one JSON object on stdout (result, is_error, session_id, provider, model, usage) instead of streaming text. Tool activity still goes to stderr
   -h, --help                         Print help
@@ -430,6 +432,8 @@ agentiloop --new          # 새 대화 시작 (이전 대화는 저장된 채로
 | `-r, --resume <id>` | | 특정 대화를 다시 열어요 (id는 `/sessions`로 찾을 수 있어요) |
 | `-C, --cwd <folder>` | | 지금 있는 폴더가 아닌 다른 폴더에서 작업해요 |
 | `--yes` | `AGENTILOOP_YES` | 도구를 실행하기 전에 묻지 않아요. ⚠️ 신뢰할 수 있는 자동화 용도로만 사용하세요 |
+| `--allow-tool <name>` | | 이 도구를 묻지 않고 실행해요. 옵션을 반복하거나 쉼표로 구분해요. `mcp_*`는 접두사와 일치해요. `--yes` 없이 쓰는 CI에 좋아요 |
+| `--deny-tool <name>` | | 이 도구를 절대 실행하지 않아요. 모델에게는 거부됐다고 알려 줘요. `--allow-tool`과 `--yes`보다 우선해요 |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | MCP 서버를 시작하지 않아요 (아래 참고) |
 | `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | 이번 실행에만 시스템 프롬프트 끝에 덧붙이는 텍스트 (저장되지 않아요) |
 | `--json` | | 원샷 프롬프트에서 답변을 JSON 객체 하나(`result`, `is_error`, `session_id`, `provider`, `model`, `usage`)로 stdout에 출력해요. 도구 활동은 stderr에 남아요 |

@@ -339,6 +339,8 @@ To forget everything, delete `~/.agentiloop/settings.json`, or run `agentiloop -
 | `-r, --resume <id>` | | Reopen a specific conversation (find ids with `/sessions`) |
 | `-C, --cwd <folder>` | | Work in a different folder than the one you're in |
 | `--yes` | `AGENTILOOP_YES` | Don't ask before running tools. ⚠️ Only for trusted, automated use |
+| `--allow-tool <name>` | | Run this tool without asking; repeat the option or use commas. `mcp_*` matches a prefix. Good for CI without `--yes` |
+| `--deny-tool <name>` | | Never run this tool: the model is told it was denied. Beats `--allow-tool` and `--yes` |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | Don't start MCP servers (see below) |
 | `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | Extra text added to the end of the system prompt for this run (not saved) |
 | `--json` | | With a one-shot prompt: print the answer as one JSON object (`result`, `is_error`, `session_id`, `provider`, `model`, `usage`) on stdout. Tool activity stays on stderr |
