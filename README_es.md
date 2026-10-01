@@ -483,7 +483,7 @@ Los modelos solo pueden leer una cantidad limitada de una vez. Cuando una conver
 
 ## Instrucciones del proyecto
 
-Pon un archivo `AGENTS.md` (o `CLAUDE.md`) en tu proyecto y AgentiLoop lo lee al arrancar y lo sigue: comandos de compilación, estilo de código, cosas que evitar. Lo busca en la carpeta actual y luego en las carpetas superiores, hasta la raíz del proyecto (la carpeta con `.git`). Un `~/.agentiloop/AGENTS.md` personal se aplica a todos los proyectos; el archivo del proyecto va después y tiene prioridad. Los archivos se recortan a 32 KB. Una línea `instructions: <ruta>` muestra qué archivos se cargaron.
+Pon un archivo `AGENTS.md` (o `CLAUDE.md`) en tu proyecto y AgentiLoop lo lee al arrancar y lo sigue: comandos de compilación, estilo de código, cosas que evitar. Lo busca en la carpeta actual y luego en las carpetas superiores, hasta la raíz del proyecto (la carpeta con `.git`). Un `~/.agentiloop/AGENTS.md` personal se aplica a todos los proyectos; el archivo del proyecto va después y tiene prioridad. Los archivos se recortan a 32 KB. Una línea `instructions: <ruta>` muestra qué archivos se cargaron. Una línea que sea solo `@ruta` (por ejemplo `@docs/style.md`) se sustituye por el texto de ese archivo, relativo al archivo que la menciona. Las importaciones pueden anidarse tres niveles; los archivos que faltan, los ciclos y las líneas dentro de bloques de código se dejan tal cual.
 
 ---
 

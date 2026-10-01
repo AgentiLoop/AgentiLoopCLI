@@ -483,7 +483,7 @@ Modelle können nur eine begrenzte Menge auf einmal lesen. Wenn eine Unterhaltun
 
 ## Projektanweisungen
 
-Lege eine Datei `AGENTS.md` (oder `CLAUDE.md`) in dein Projekt, und AgentiLoop liest sie beim Start und befolgt sie: Build-Befehle, Code-Stil, Dinge, die zu vermeiden sind. Gesucht wird im aktuellen Ordner und dann in den übergeordneten Ordnern bis zum Projektstamm (dem Ordner mit `.git`). Eine persönliche `~/.agentiloop/AGENTS.md` gilt für jedes Projekt; die Datei des Projekts kommt danach und hat Vorrang. Dateien werden bei 32 KB abgeschnitten. Eine Zeile `instructions: <Pfad>` zeigt, welche Dateien geladen wurden.
+Lege eine Datei `AGENTS.md` (oder `CLAUDE.md`) in dein Projekt, und AgentiLoop liest sie beim Start und befolgt sie: Build-Befehle, Code-Stil, Dinge, die zu vermeiden sind. Gesucht wird im aktuellen Ordner und dann in den übergeordneten Ordnern bis zum Projektstamm (dem Ordner mit `.git`). Eine persönliche `~/.agentiloop/AGENTS.md` gilt für jedes Projekt; die Datei des Projekts kommt danach und hat Vorrang. Dateien werden bei 32 KB abgeschnitten. Eine Zeile `instructions: <Pfad>` zeigt, welche Dateien geladen wurden. Eine Zeile, die nur `@pfad` enthält (z. B. `@docs/style.md`), wird durch den Text dieser Datei ersetzt, relativ zur erwähnenden Datei. Importe können drei Ebenen tief verschachtelt sein; fehlende Dateien, Schleifen und Zeilen in Codeblöcken bleiben unverändert.
 
 ---
 
