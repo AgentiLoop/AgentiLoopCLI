@@ -85,6 +85,10 @@ struct Cli {
     #[arg(long, conflicts_with = "prompt")]
     reset: bool,
 
+    /// Extra text added to the end of the system prompt for this run (never saved).
+    #[arg(long, value_name = "TEXT", env = "AGENTILOOP_APPEND_SYSTEM_PROMPT")]
+    append_system_prompt: Option<String>,
+
     /// One-shot only: print the answer as one JSON object on stdout (result, is_error, session_id,
     /// provider, model, usage) instead of streaming text. Tool activity still goes to stderr.
     #[arg(long, requires = "prompt")]
@@ -218,6 +222,7 @@ async fn main() -> Result<()> {
             note(format!("instructions: {}", i.path.display()));
         }
         config.system_prompt = agentiloop_core::instructions::append_to_prompt(&config.system_prompt, &instructions);
+        config.system_prompt = append_extra(&config.system_prompt, cli.append_system_prompt.as_deref());
 
         // Remember this launch (model per provider always; UI options only for interactive runs).
         saved.set_model(provider.name(), &config.model);
@@ -893,6 +898,14 @@ pub(crate) fn git_changes(cwd: &Path) -> std::result::Result<String, String> {
     Ok(lines.join("\n"))
 }
 
+/// `base` plus the `--append-system-prompt` text, if any non-blank text was given.
+pub(crate) fn append_extra(base: &str, extra: Option<&str>) -> String {
+    match extra.map(str::trim).filter(|e| !e.is_empty()) {
+        Some(e) => format!("{base}\n\n{e}"),
+        None => base.to_string(),
+    }
+}
+
 /// The `--json` result object for a one-shot run.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn json_result(
@@ -1028,5 +1041,17 @@ mod json_tests {
         let bad: serde_json::Value = serde_json::from_str(&json_result("", Some("boom"), "s1", "omlx", "m", 0, 0, 0)).unwrap();
         assert_eq!((bad["is_error"].as_bool(), bad["error"].as_str()), (Some(true), Some("boom")));
         assert_eq!(json_result("a", None, "s", "p", "m", 1, 2, 3), r#"{"is_error":false,"model":"m","provider":"p","result":"a","session_id":"s","usage":{"input_tokens":2,"output_tokens":3,"requests":1}}"#);
+    }
+}
+
+#[cfg(test)]
+mod append_tests {
+    use super::append_extra;
+
+    #[test]
+    fn extra_text_is_appended_only_when_not_blank() {
+        assert_eq!(append_extra("base", None), "base");
+        assert_eq!(append_extra("base", Some("  \n")), "base");
+        assert_eq!(append_extra("base", Some(" Answer in French. ")), "base\n\nAnswer in French.");
     }
 }

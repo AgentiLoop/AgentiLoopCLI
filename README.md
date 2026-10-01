@@ -340,6 +340,7 @@ To forget everything, delete `~/.agentiloop/settings.json`, or run `agentiloop -
 | `-C, --cwd <folder>` | | Work in a different folder than the one you're in |
 | `--yes` | `AGENTILOOP_YES` | Don't ask before running tools. ⚠️ Only for trusted, automated use |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | Don't start MCP servers (see below) |
+| `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | Extra text added to the end of the system prompt for this run (not saved) |
 | `--json` | | With a one-shot prompt: print the answer as one JSON object (`result`, `is_error`, `session_id`, `provider`, `model`, `usage`) on stdout. Tool activity stays on stderr |
 | `--setup` | | Run the first-time wizard again (provider, key, model). Combine with `--tui` to run it inside the full-screen interface |
 | `--reset` | | Back to brand new: deletes `~/.agentiloop`, the agentiloop block in your shell profile and Keychain items the wizard created (on Windows: the user environment variables it set). Hand-written `export` lines are only commented out, and only if you say yes. Add `--yes` to skip the questions |
