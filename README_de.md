@@ -224,7 +224,7 @@ agentiloop "explain what this project does"
 
 ### Was kann er? (Tools)
 
-Der Agent arbeitet mit fünf eingebauten Tools. Du rufst sie nicht selbst auf. Du beschreibst das Ziel, und der Agent wählt das Tool:
+Der Agent arbeitet mit neun eingebauten Tools. Du rufst sie nicht selbst auf. Du beschreibst das Ziel, und der Agent wählt das Tool:
 
 | Tool | Was es macht | Fragt vorher? |
 |---|---|---|
