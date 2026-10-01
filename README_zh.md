@@ -224,7 +224,7 @@ agentiloop "explain what this project does"
 
 ### 它能做什么？（工具）
 
-智能体使用八个内置工具。你不需要自己调用它们。你只需描述目标，智能体会自己选择工具：
+智能体使用九个内置工具。你不需要自己调用它们。你只需描述目标，智能体会自己选择工具：
 
 | 工具 | 功能 | 是否先询问？ |
 |---|---|---|
@@ -233,6 +233,7 @@ agentiloop "explain what this project does"
 | `glob` | 按名称模式查找文件（`*.rs`、`src/**/*.go`） | 否 |
 | `grep` | 用正则表达式搜索文件内容 | 否 |
 | `web_fetch` | 以纯文本获取网页或 API 响应 | **是** |
+| `todo_write` | 为多步骤工作维护模型自己的任务清单 | 否 |
 | `write_file` | 创建新文件或覆盖已有文件 | **是** |
 | `edit_file` | 修改文件中一段精确的文本 | **是** |
 | `bash` | 运行 shell 命令，例如测试、构建或 `git`（Mac/Linux 上为 `sh -c`，Windows 上为 `cmd /C`） | **是** |
@@ -460,6 +461,7 @@ agentiloop --yes "run the tests and fix any failures"        # 无人值守，�
 | `/resume <n or id>` | 重新打开其中一个对话 |
 | `/clear` | 清除当前对话并开始新对话 |
 | `/undo` | 撤销智能体为你上一条提示所做的文件更改（`bash` 命令造成的更改不会撤销） |
+| `/todos` | 显示模型当前的任务清单 |
 | `/init` | 为当前项目创建 `AGENTS.md` 模板（从不覆盖已有文件） |
 | `/export [file]` | 将对话保存为 Markdown 文件（`/export notes.md`，省略则在项目文件夹中使用默认名称） |
 | `/compact` | 立即总结对话以释放空间 |
@@ -561,7 +563,7 @@ cargo run -p agentiloop-mcp --example mcp-example-server -- --http 8791   # 或 
 |---|---|
 | `agentiloop-core` | 核心：智能体循环、消息、工具和提供方接口、权限、会话、总结 |
 | `agentiloop-provider` | 与模型通信：Anthropic、兼容 OpenAI 的服务器、oMLX |
-| `agentiloop-tools` | 内置工具：`read_file`、`write_file`、`edit_file`、`list_dir`、`glob`、`grep`、`web_fetch`、`bash` |
+| `agentiloop-tools` | 内置工具：`read_file`、`write_file`、`edit_file`、`list_dir`、`glob`、`grep`、`web_fetch`、`todo_write`、`bash` |
 | `agentiloop-mcp` | MCP 客户端，移植自 Agent! 的 Swift AgentMCP |
 | `agentiloop-cli` | `agentiloop` 程序：选项、聊天、TUI、设置 |
 

@@ -224,7 +224,7 @@ agentiloop "explain what this project does"
 
 ### Que sait-il faire ? (outils)
 
-L'agent travaille avec huit outils intégrés. Vous ne les appelez pas vous-même. Vous décrivez l'objectif, et l'agent choisit l'outil :
+L'agent travaille avec neuf outils intégrés. Vous ne les appelez pas vous-même. Vous décrivez l'objectif, et l'agent choisit l'outil :
 
 | Outil | Ce qu'il fait | Demande avant ? |
 |---|---|---|
@@ -233,6 +233,7 @@ L'agent travaille avec huit outils intégrés. Vous ne les appelez pas vous-mêm
 | `glob` | Trouve des fichiers par motif de nom (`*.rs`, `src/**/*.go`) | Non |
 | `grep` | Cherche dans les fichiers avec une expression régulière | Non |
 | `web_fetch` | Récupère une page web ou une réponse d'API en texte brut | **Oui** |
+| `todo_write` | Tient la liste de tâches du modèle pour les travaux en plusieurs étapes | Non |
 | `write_file` | Crée un nouveau fichier ou en écrase un | **Oui** |
 | `edit_file` | Modifie un passage de texte précis dans un fichier | **Oui** |
 | `bash` | Lance une commande shell, comme des tests, des builds ou `git` (`sh -c` sur Mac/Linux, `cmd /C` sur Windows) | **Oui** |
@@ -460,6 +461,7 @@ Tapez-les à l'invite, dans la TUI ou dans le chat :
 | `/resume <n or id>` | Rouvre l'une d'elles |
 | `/clear` | Efface la conversation et en démarre une nouvelle |
 | `/undo` | Annule les modifications de fichiers faites par l'agent pour votre dernier message (celles faites par `bash` ne sont pas annulées) |
+| `/todos` | Affiche la liste de tâches actuelle du modèle |
 | `/init` | Crée un `AGENTS.md` de départ pour le projet courant (n'écrase jamais) |
 | `/export [file]` | Enregistre la conversation en fichier Markdown (`/export notes.md`, ou un nom par défaut dans le dossier du projet) |
 | `/compact` | Résume la conversation maintenant pour libérer de la place |
@@ -561,7 +563,7 @@ Le projet est découpé en cinq crates, et chacune s'appuie sur les précédente
 |---|---|
 | `agentiloop-core` | Le cœur : la boucle de l'agent, les messages, les interfaces des outils et des fournisseurs, les permissions, les sessions, les résumés |
 | `agentiloop-provider` | Parle aux modèles : Anthropic, serveurs compatibles OpenAI, oMLX |
-| `agentiloop-tools` | Outils intégrés : `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `web_fetch`, `bash` |
+| `agentiloop-tools` | Outils intégrés : `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `web_fetch`, `todo_write`, `bash` |
 | `agentiloop-mcp` | Le client MCP, porté depuis AgentMCP, le code Swift d'Agent! |
 | `agentiloop-cli` | Le programme `agentiloop` : options, chat, TUI, réglages |
 

@@ -233,6 +233,7 @@ Der Agent arbeitet mit fünf eingebauten Tools. Du rufst sie nicht selbst auf. D
 | `glob` | Findet Dateien nach Namensmuster (`*.rs`, `src/**/*.go`) | Nein |
 | `grep` | Durchsucht Dateien mit einem regulären Ausdruck | Nein |
 | `web_fetch` | Lädt eine Webseite oder API-Antwort als reinen Text | **Ja** |
+| `todo_write` | Führt die eigene Checkliste des Modells für mehrstufige Aufgaben | Nein |
 | `write_file` | Erstellt eine neue Datei oder überschreibt eine | **Ja** |
 | `edit_file` | Ändert eine exakte Textstelle in einer Datei | **Ja** |
 | `bash` | Führt einen Shell-Befehl aus, z. B. Tests, Builds oder `git` (`sh -c` auf Mac/Linux, `cmd /C` unter Windows) | **Ja** |
@@ -460,6 +461,7 @@ Tipp diese an der Eingabeaufforderung ein, in der TUI oder im Chat:
 | `/resume <n or id>` | Öffnet eine davon erneut |
 | `/clear` | Leert die Unterhaltung und beginnt eine neue |
 | `/undo` | Macht die Dateiänderungen des Agenten für deinen letzten Prompt rückgängig (Änderungen durch `bash`-Befehle nicht) |
+| `/todos` | Zeigt die aktuelle Aufgaben-Checkliste des Modells |
 | `/init` | Erstellt eine `AGENTS.md`-Vorlage für das aktuelle Projekt (überschreibt nie) |
 | `/export [file]` | Speichert die Unterhaltung als Markdown-Datei (`/export notes.md` oder ein Standardname im Projektordner) |
 | `/compact` | Fasst die Unterhaltung jetzt zusammen, um Platz zu schaffen |
@@ -561,7 +563,7 @@ Das Projekt ist in fünf Crates aufgeteilt, und jedes baut auf den vorherigen au
 |---|---|
 | `agentiloop-core` | Das Herzstück: die Agent-Schleife, Nachrichten, die Tool- und Anbieter-Schnittstellen, Berechtigungen, Sitzungen, Zusammenfassungen |
 | `agentiloop-provider` | Spricht mit den Modellen: Anthropic, OpenAI-kompatible Server, oMLX |
-| `agentiloop-tools` | Eingebaute Tools: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `web_fetch`, `bash` |
+| `agentiloop-tools` | Eingebaute Tools: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `web_fetch`, `todo_write`, `bash` |
 | `agentiloop-mcp` | Der MCP-Client, portiert von AgentMCP aus dem Swift-Code von Agent! |
 | `agentiloop-cli` | Das Programm `agentiloop`: Optionen, Chat, TUI, Einstellungen |
 

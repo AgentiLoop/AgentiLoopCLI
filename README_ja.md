@@ -224,7 +224,7 @@ agentiloop "explain what this project does"
 
 ### 何ができますか？ (ツール)
 
-エージェントは 8 つの組み込みツールを使って作業します。自分でツールを呼び出す必要はありません。目的を伝えれば、エージェントがツールを選びます:
+エージェントは 9 つの組み込みツールを使って作業します。自分でツールを呼び出す必要はありません。目的を伝えれば、エージェントがツールを選びます:
 
 | ツール | 機能 | 事前に確認？ |
 |---|---|---|
@@ -233,6 +233,7 @@ agentiloop "explain what this project does"
 | `glob` | 名前のパターンでファイルを検索します (`*.rs`, `src/**/*.go`) | いいえ |
 | `grep` | 正規表現でファイルの中身を検索します | いいえ |
 | `web_fetch` | Web ページや API の応答をプレーンテキストで取得します | **はい** |
+| `todo_write` | 複数ステップの作業用に、モデル自身のチェックリストを管理します | いいえ |
 | `write_file` | 新しいファイルを作成するか、既存のファイルを上書きします | **はい** |
 | `edit_file` | ファイル内の特定のテキストを正確に書き換えます | **はい** |
 | `bash` | テスト、ビルド、`git` などのシェルコマンドを実行します (Mac/Linux では `sh -c`、Windows では `cmd /C`) | **はい** |
@@ -460,6 +461,7 @@ TUI またはチャットのプロンプトで、次のコマンドを入力し�
 | `/resume <n or id>` | そのうちの 1 つを再開します |
 | `/clear` | 会話をクリアして新しい会話を始めます |
 | `/undo` | 直前のプロンプトでエージェントが行ったファイル変更を元に戻します (`bash` コマンドによる変更は戻りません) |
+| `/todos` | モデルの現在のタスクチェックリストを表示します |
 | `/init` | 現在のプロジェクト用に `AGENTS.md` のひな形を作成します (上書きはしません) |
 | `/export [file]` | 会話を Markdown ファイルとして保存します (`/export notes.md`、省略時はプロジェクトフォルダーに既定名で保存) |
 | `/compact` | 今すぐ会話を要約して容量を空けます |
@@ -561,7 +563,7 @@ cargo run -p agentiloop-mcp --example mcp-example-server -- --http 8791   # ま�
 |---|---|
 | `agentiloop-core` | 中核部分: エージェントループ、メッセージ、ツールとプロバイダーのインターフェース、許可、セッション、要約 |
 | `agentiloop-provider` | モデルとの通信: Anthropic、OpenAI 互換サーバー、oMLX |
-| `agentiloop-tools` | 組み込みツール: `read_file`、`write_file`、`edit_file`、`list_dir`、`glob`、`grep`、`web_fetch`、`bash` |
+| `agentiloop-tools` | 組み込みツール: `read_file`、`write_file`、`edit_file`、`list_dir`、`glob`、`grep`、`web_fetch`、`todo_write`、`bash` |
 | `agentiloop-mcp` | MCP クライアント。Agent! の Swift 製 AgentMCP から移植したものです |
 | `agentiloop-cli` | `agentiloop` プログラム: オプション、チャット、TUI、設定 |
 

@@ -1,10 +1,11 @@
-//! Built-in tools: read_file, write_file, edit_file, list_dir, glob, grep, web_fetch, bash, and
+//! Built-in tools: read_file, write_file, edit_file, list_dir, glob, grep, web_fetch, todo_write, bash, and
 //! apply_patch (registered for the Codex provider, whose models are trained on it).
 
 mod fs;
 mod patch;
 mod search;
 mod shell;
+pub mod todo;
 pub mod undo;
 mod web;
 
@@ -14,6 +15,7 @@ pub use fs::{EditFile, ListDir, ReadFile, WriteFile};
 pub use patch::ApplyPatch;
 pub use search::{GlobFiles, Grep};
 pub use shell::Bash;
+pub use todo::TodoWrite;
 pub use web::WebFetch;
 
 /// Registry pre-populated with every built-in tool.
@@ -26,6 +28,7 @@ pub fn default_registry() -> ToolRegistry {
         .register(GlobFiles)
         .register(Grep)
         .register(WebFetch)
+        .register(TodoWrite)
         .register(Bash);
     r
 }

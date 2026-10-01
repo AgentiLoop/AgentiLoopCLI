@@ -551,6 +551,7 @@ async fn slash_command(
         "/clear" => {
             agent.clear();
             agentiloop_tools::undo::clear();
+            agentiloop_tools::todo::clear();
             *session = Session::new(session.cwd.clone(), provider.name(), agent.model());
             say(format!("context and tool history cleared; new session {}", session.id));
         }
@@ -582,6 +583,10 @@ async fn slash_command(
         "/init" => match agentiloop_core::instructions::init(&session.cwd) {
             Ok(path) => say(format!("created {}; edit it, then restart agentiloop to load it", path.display())),
             Err(e) => say(e),
+        },
+        "/todos" => match agentiloop_tools::todo::current() {
+            Some(t) => say(t),
+            None => say("no todo list yet (the model creates one for multi-step work)".into()),
         },
         "/undo" => match agentiloop_tools::undo::undo_last() {
             Some(lines) => {
@@ -709,6 +714,7 @@ const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
 /usage          tokens used since start and how full the context is\n\
 /export [file]  save the conversation as Markdown\n\
 /init           create a starter AGENTS.md for this project\n\
+/todos          show the model's current task checklist\n\
 /undo           revert the file changes from the last prompt\n\
 /compact        summarize the conversation to free context\n\
 /sessions       list saved sessions (newest first)\n\
