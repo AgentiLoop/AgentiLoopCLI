@@ -251,24 +251,27 @@ AgentiLoop — a cross-platform agentic coding loop for your terminal
 Usage: agentiloop [OPTIONS] [PROMPT]...
 
 Arguments:
-  [PROMPT]...  One-shot prompt. If omitted, starts an interactive REPL. A lone `-` in it is replaced by
-               what is piped on stdin: git diff | agentiloop "review this" -
+  [PROMPT]...  One-shot prompt. If omitted, starts an interactive REPL. A lone `-` in it is replaced by what is piped on stdin: `git diff | agentiloop "review this" -`
 
 Options:
-  -p, --provider <PROVIDER>      Model backend: `anthropic`, `openai` (OpenAI-compatible: OpenAI, Ollama, LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL), or `omlx` (local oMLX server, http://localhost:8000/v1). Defaults to the last one used, then auto-detected from which credentials are set [env: AGENTILOOP_PROVIDER=]
-  -m, --model <MODEL>            Model id to use. Defaults to the last model used with this provider (~/.agentiloop/settings.json), then the provider's default [env: AGENTILOOP_MODEL=]
-      --yes                      Skip all permission prompts (dangerous; intended for CI). Never remembered [env: AGENTILOOP_YES=]
-      --max-turns <MAX_TURNS>    Max provider round-trips per prompt [default: last used, then 50]
-      --compact-at <COMPACT_AT>  Summarize the conversation once a request reaches this many input tokens (0 = never) [default: last used, then 150000] [env: AGENTILOOP_COMPACT_AT=]
-  -C, --cwd <CWD>                Working directory the agent operates in (defaults to cwd)
-  -r, --resume <RESUME>          Resume a saved session by id (see /sessions)
-  -c, --continue                 Resume the most recent session for this working directory (the default for interactive launches; kept for scripts)
-      --new                      Start a new session instead of continuing the last one in this directory
-      --tui                      Full-screen terminal UI (ratatui) instead of the line REPL. Remembered [env: AGENTILOOP_TUI=]
-      --no-tui                   Use the line REPL even if the TUI was used last time
-      --no-mcp                   Don't start MCP servers from ~/.agentiloop/mcp.json / ./.mcp.json [env: AGENTILOOP_NO_MCP=]
-  -h, --help                     Print help
-  -V, --version                  Print version
+  -p, --provider <PROVIDER>          Model backend: `anthropic`, `openai` (OpenAI-compatible: OpenAI, Ollama, LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL), `omlx` (local oMLX server, http://localhost:8000/v1), or `codex` (ChatGPT plan via `codex login`). Defaults to the last one used, then auto-detected from which credentials are set [env: AGENTILOOP_PROVIDER=]
+  -m, --model <MODEL>                Model id to use. Defaults to the last model used with this provider (~/.agentiloop/settings.json), then the provider's default [env: AGENTILOOP_MODEL=]
+      --yes                          Skip all permission prompts (dangerous; intended for CI). Never remembered [env: AGENTILOOP_YES=]
+      --max-turns <MAX_TURNS>        Max provider round-trips per prompt [default: last used, then 50]
+      --compact-at <COMPACT_AT>      Summarize the conversation once a request reaches this many input tokens (0 = never) [default: last used, then 80% of the model's context window] [env: AGENTILOOP_COMPACT_AT=]
+  -C, --cwd <CWD>                    Working directory the agent operates in (defaults to cwd)
+  -r, --resume <RESUME>              Resume a saved session by id (see /sessions)
+  -c, --continue                     Resume the most recent session for this working directory (the default for interactive launches; kept for scripts)
+      --new                          Start a new session instead of continuing the last one in this directory
+      --tui                          Full-screen terminal UI (ratatui) instead of the line REPL. Remembered [env: AGENTILOOP_TUI=]
+      --no-tui                       Use the line REPL even if the TUI was used last time
+      --no-mcp                       Don't start MCP servers from ~/.agentiloop/mcp.json / ./.mcp.json [env: AGENTILOOP_NO_MCP=]
+      --setup                        Run the first-time setup wizard (provider, key, model). Runs by itself on a machine with no credentials and no ~/.agentiloop
+      --reset                        Back to brand new: delete ~/.agentiloop (settings, env, history, sessions, mcp.json), the agentiloop block in your shell profile and Keychain items the wizard created. Asks first unless --yes
+      --append-system-prompt <TEXT>  Extra text added to the end of the system prompt for this run (never saved) [env: AGENTILOOP_APPEND_SYSTEM_PROMPT=]
+      --json                         One-shot only: print the answer as one JSON object on stdout (result, is_error, session_id, provider, model, usage) instead of streaming text. Tool activity still goes to stderr
+  -h, --help                         Print help
+  -V, --version                      Print version
 ```
 
 세션 안에서 `/help`를 입력하면 채팅 명령어 (`/model`, `/sessions`, `/resume`, `/clear`, `/compact`, `/mcp`, `/exit`)를 볼 수 있어요. 전체 설명은 [모든 옵션](#모든-옵션)과 [채팅 안의 명령어](#채팅-안의-명령어)에 있어요.
