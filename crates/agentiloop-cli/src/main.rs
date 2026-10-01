@@ -591,6 +591,10 @@ async fn slash_command(
             Ok(path) => say(format!("created {}; edit it, then restart agentiloop to load it", path.display())),
             Err(e) => say(e),
         },
+        "/diff" => match git_changes(&session.cwd) {
+            Ok(text) => say(text),
+            Err(e) => say(e),
+        },
         "/todos" => match agentiloop_tools::todo::current() {
             Some(t) => say(t),
             None => say("no todo list yet (the model creates one for multi-step work)".into()),
@@ -721,6 +725,7 @@ const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
 /usage          tokens used since start and how full the context is\n\
 /export [file]  save the conversation as Markdown\n\
 /init           create a starter AGENTS.md for this project\n\
+/diff           show what changed in the git working tree\n\
 /todos          show the model's current task checklist\n\
 /undo           revert the file changes from the last prompt\n\
 /compact        summarize the conversation to free context\n\
@@ -819,6 +824,41 @@ mod speed_tests {
     }
 }
 
+/// Lines of `/diff` output shown before the rest is cut.
+const DIFF_MAX_LINES: usize = 200;
+
+/// `git status --short` plus the diff against HEAD (or the working-tree diff in a repo with no commits).
+pub(crate) fn git_changes(cwd: &Path) -> std::result::Result<String, String> {
+    let git = |args: &[&str]| -> std::result::Result<String, String> {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(cwd)
+            .args(args)
+            .output()
+            .map_err(|e| format!("could not run git: {e}"))?;
+        if out.status.success() {
+            Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+        } else {
+            Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+        }
+    };
+    let status = git(&["status", "--short"]).map_err(|e| if e.is_empty() { "not a git repository".to_string() } else { e })?;
+    if status.trim().is_empty() {
+        return Ok("no changes in the git working tree".into());
+    }
+    let diff = git(&["diff", "HEAD", "--no-color"]).or_else(|_| git(&["diff", "--no-color"])).unwrap_or_default();
+    let mut lines: Vec<&str> = status.lines().collect();
+    if !diff.trim().is_empty() {
+        lines.push("");
+        let total = diff.lines().count();
+        lines.extend(diff.lines().take(DIFF_MAX_LINES));
+        if total > DIFF_MAX_LINES {
+            return Ok(format!("{}\n… {} more lines (run git diff for all)", lines.join("\n"), total - DIFF_MAX_LINES));
+        }
+    }
+    Ok(lines.join("\n"))
+}
+
 /// Joins the prompt words; each lone `-` word becomes the stdin text (read once, on first use).
 pub(crate) fn expand_stdin(words: &[String], read: impl FnOnce() -> io::Result<String>) -> Result<String> {
     if !words.iter().any(|w| w == "-") {
@@ -867,5 +907,49 @@ mod stdin_tests {
     fn empty_or_unreadable_stdin_is_an_error() {
         assert!(expand_stdin(&words(&["-"]), || Ok("  \n".into())).is_err());
         assert!(expand_stdin(&words(&["x", "-"]), || Err(std::io::Error::other("closed"))).is_err());
+    }
+}
+
+#[cfg(test)]
+mod git_tests {
+    use super::git_changes;
+
+    fn git(d: &std::path::Path, args: &[&str]) {
+        let ok = std::process::Command::new("git")
+            .arg("-C")
+            .arg(d)
+            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+            .args(args)
+            .output()
+            .unwrap()
+            .status
+            .success();
+        assert!(ok, "git {args:?} failed");
+    }
+
+    #[test]
+    fn diff_reports_non_repo_clean_and_changed_trees() {
+        let d = std::env::temp_dir().join(format!("agentiloop-gitdiff-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        assert!(git_changes(&d).is_err(), "a plain directory is not a repo");
+
+        git(&d, &["init", "-q"]);
+        assert_eq!(git_changes(&d).unwrap(), "no changes in the git working tree");
+        std::fs::write(d.join("a.txt"), "one\n").unwrap();
+        git(&d, &["add", "a.txt"]);
+        git(&d, &["commit", "-q", "-m", "first"]);
+
+        std::fs::write(d.join("a.txt"), "two\n").unwrap();
+        std::fs::write(d.join("new.txt"), "x\n").unwrap();
+        let out = git_changes(&d).unwrap();
+        assert!(out.contains(" M a.txt") && out.contains("?? new.txt"), "{out}");
+        assert!(out.contains("-one") && out.contains("+two"), "{out}");
+
+        let big: String = (0..300).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(d.join("a.txt"), big).unwrap();
+        let out = git_changes(&d).unwrap();
+        assert!(out.contains("more lines"), "{out}");
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

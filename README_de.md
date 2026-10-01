@@ -464,6 +464,7 @@ Tipp diese an der Eingabeaufforderung ein, in der TUI oder im Chat:
 | `/clear` | Leert die Unterhaltung und beginnt eine neue |
 | `/undo` | Macht die Dateiänderungen des Agenten für deinen letzten Prompt rückgängig (Änderungen durch `bash`-Befehle nicht) |
 | `/todos` | Zeigt die aktuelle Aufgaben-Checkliste des Modells |
+| `/diff` | Zeigt, was sich im Git-Arbeitsverzeichnis geändert hat (Status plus Diff, nach 200 Zeilen gekürzt) |
 | `/init` | Erstellt eine `AGENTS.md`-Vorlage für das aktuelle Projekt (überschreibt nie) |
 | `/export [file]` | Speichert die Unterhaltung als Markdown-Datei (`/export notes.md` oder ein Standardname im Projektordner) |
 | `/compact` | Fasst die Unterhaltung jetzt zusammen, um Platz zu schaffen |
