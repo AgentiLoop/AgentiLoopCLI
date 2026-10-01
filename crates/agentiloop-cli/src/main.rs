@@ -7,7 +7,7 @@ mod settings;
 mod tui;
 mod wizard;
 
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, Read, Write};
 use std::path::{Path, PathBuf};
 
 use agentiloop_core::{Agent, AgentConfig, AgentEvent, ContentBlock, Message, ModelInfo, Provider, Role, Session, ToolContext};
@@ -85,7 +85,8 @@ struct Cli {
     #[arg(long, conflicts_with = "prompt")]
     reset: bool,
 
-    /// One-shot prompt. If omitted, starts an interactive REPL.
+    /// One-shot prompt. If omitted, starts an interactive REPL. A lone `-` in it is replaced by
+    /// what is piped on stdin: `git diff | agentiloop "review this" -`.
     prompt: Vec<String>,
 }
 
@@ -253,7 +254,13 @@ async fn main() -> Result<()> {
     if !cli.prompt.is_empty() {
         let mut tracker = diff::Tracker::new(cwd.clone());
         agentiloop_tools::undo::begin_turn();
-        let res = agent.run(&cli.prompt.join(" "), |ev| render_tracked(&mut tracker, ev)).await;
+        let res = match expand_stdin(&cli.prompt, || {
+            let mut text = String::new();
+            io::stdin().read_to_string(&mut text).map(|_| text)
+        }) {
+            Ok(prompt) => agent.run(&prompt, |ev| render_tracked(&mut tracker, ev)).await,
+            Err(e) => Err(e),
+        };
         persist(&mut session, &agent, sessions_dir.as_deref());
         mcp.shutdown().await;
         return res;
@@ -812,6 +819,20 @@ mod speed_tests {
     }
 }
 
+/// Joins the prompt words; each lone `-` word becomes the stdin text (read once, on first use).
+pub(crate) fn expand_stdin(words: &[String], read: impl FnOnce() -> io::Result<String>) -> Result<String> {
+    if !words.iter().any(|w| w == "-") {
+        return Ok(words.join(" "));
+    }
+    let piped = read().context("could not read stdin")?;
+    let piped = piped.trim_end();
+    if piped.is_empty() {
+        anyhow::bail!("`-` asks for the prompt text on stdin, but stdin was empty");
+    }
+    let parts: Vec<&str> = words.iter().map(|w| if w == "-" { piped } else { w.as_str() }).collect();
+    Ok(parts.join("\n\n"))
+}
+
 pub(crate) fn compact(v: &serde_json::Value) -> String {
     let s = v.to_string();
     if s.len() > 120 { format!("{}…", &s[..s.floor_char_boundary(120)]) } else { s }
@@ -822,5 +843,29 @@ mod usage_tests {
     #[test]
     fn usage_line_totals_tokens() {
         assert_eq!(super::usage_line(3, 1200, 340), "3 request(s) since start: 1200 input + 340 output = 1540 tokens");
+    }
+}
+
+#[cfg(test)]
+mod stdin_tests {
+    use super::expand_stdin;
+
+    fn words(s: &[&str]) -> Vec<String> {
+        s.iter().map(|w| w.to_string()).collect()
+    }
+
+    #[test]
+    fn dash_is_replaced_by_stdin_and_stdin_is_not_read_otherwise() {
+        let never = || -> std::io::Result<String> { panic!("stdin must not be read") };
+        assert_eq!(expand_stdin(&words(&["fix", "the", "bug"]), never).unwrap(), "fix the bug");
+        assert_eq!(expand_stdin(&words(&["review", "-"]), || Ok("diff text\n\n".into())).unwrap(), "review\n\ndiff text");
+        assert_eq!(expand_stdin(&words(&["-"]), || Ok("only stdin".into())).unwrap(), "only stdin");
+        assert_eq!(expand_stdin(&words(&["a-b", "--x"]), never).unwrap(), "a-b --x");
+    }
+
+    #[test]
+    fn empty_or_unreadable_stdin_is_an_error() {
+        assert!(expand_stdin(&words(&["-"]), || Ok("  \n".into())).is_err());
+        assert!(expand_stdin(&words(&["x", "-"]), || Err(std::io::Error::other("closed"))).is_err());
     }
 }

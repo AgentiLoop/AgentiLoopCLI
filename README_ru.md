@@ -251,7 +251,8 @@ AgentiLoop — a cross-platform agentic coding loop for your terminal
 Usage: agentiloop [OPTIONS] [PROMPT]...
 
 Arguments:
-  [PROMPT]...  One-shot prompt. If omitted, starts an interactive REPL
+  [PROMPT]...  One-shot prompt. If omitted, starts an interactive REPL. A lone `-` in it is replaced by
+               what is piped on stdin: git diff | agentiloop "review this" -
 
 Options:
   -p, --provider <PROVIDER>      Model backend: `anthropic`, `openai` (OpenAI-compatible: OpenAI, Ollama, LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL), or `omlx` (local oMLX server, http://localhost:8000/v1). Defaults to the last one used, then auto-detected from which credentials are set [env: AGENTILOOP_PROVIDER=]

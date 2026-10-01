@@ -251,7 +251,8 @@ AgentiLoop — a cross-platform agentic coding loop for your terminal
 Usage: agentiloop [OPTIONS] [PROMPT]...
 
 Arguments:
-  [PROMPT]...  One-shot prompt. If omitted, starts an interactive REPL
+  [PROMPT]...  One-shot prompt. If omitted, starts an interactive REPL. A lone `-` in it is replaced by
+               what is piped on stdin: git diff | agentiloop "review this" -
 
 Options:
   -p, --provider <PROVIDER>      Model backend: `anthropic`, `openai` (OpenAI-compatible: OpenAI, Ollama, LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL), or `omlx` (local oMLX server, http://localhost:8000/v1). Defaults to the last one used, then auto-detected from which credentials are set [env: AGENTILOOP_PROVIDER=]
@@ -372,6 +373,7 @@ Verás las respuestas del agente, cada herramienta que usa (🔧) y cada resulta
 | **TUI** (pantalla completa) | `agentiloop --tui` | El día a día: historial con desplazamiento, estado en vivo, enlaces en los que se puede hacer clic |
 | **Chat** (línea a línea) | `agentiloop` | Terminales sencillas, o si prefieres texto plano |
 | **Una sola vez** | `agentiloop "explain this project"` | Una pregunta: responde y termina. Práctico en scripts |
+| **Con pipe** | `git diff \| agentiloop "review this" -` | Envía texto por pipe y pon `-` en el prompt: se sustituye por lo enviado. Práctico para diffs y logs |
 
 Teclas en la TUI: **Enter** envía · **↑ / ↓** recorren las peticiones anteriores · **PgUp / PgDn** o la rueda del ratón desplazan · **Ctrl-U** borra la línea · **Ctrl-C** sale.
 

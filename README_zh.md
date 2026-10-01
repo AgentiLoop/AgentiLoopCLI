@@ -251,7 +251,8 @@ AgentiLoop — a cross-platform agentic coding loop for your terminal
 Usage: agentiloop [OPTIONS] [PROMPT]...
 
 Arguments:
-  [PROMPT]...  One-shot prompt. If omitted, starts an interactive REPL
+  [PROMPT]...  One-shot prompt. If omitted, starts an interactive REPL. A lone `-` in it is replaced by
+               what is piped on stdin: git diff | agentiloop "review this" -
 
 Options:
   -p, --provider <PROVIDER>      Model backend: `anthropic`, `openai` (OpenAI-compatible: OpenAI, Ollama, LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL), or `omlx` (local oMLX server, http://localhost:8000/v1). Defaults to the last one used, then auto-detected from which credentials are set [env: AGENTILOOP_PROVIDER=]
@@ -372,6 +373,7 @@ agentiloop --tui
 | **TUI**（全屏） | `agentiloop --tui` | 日常使用：可滚动的历史记录、实时状态、可点击的链接 |
 | **聊天**（逐行） | `agentiloop` | 简单的终端，或者你更喜欢纯文本 |
 | **单次** | `agentiloop "explain this project"` | 只问一个问题：回答后就退出。在脚本中很方便 |
+| **管道** | `git diff \| agentiloop "review this" -` | 通过管道传入文本，并在提示中写 `-`：它会被管道内容替换。适合 diff 和日志 |
 
 TUI 中的按键：**Enter** 发送 · **↑ / ↓** 浏览之前的提示 · **PgUp / PgDn** 或鼠标滚轮滚动 · **Ctrl-U** 清空当前行 · **Ctrl-C** 退出。
 

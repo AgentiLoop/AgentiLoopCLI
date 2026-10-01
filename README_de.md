@@ -251,7 +251,8 @@ AgentiLoop — a cross-platform agentic coding loop for your terminal
 Usage: agentiloop [OPTIONS] [PROMPT]...
 
 Arguments:
-  [PROMPT]...  One-shot prompt. If omitted, starts an interactive REPL
+  [PROMPT]...  One-shot prompt. If omitted, starts an interactive REPL. A lone `-` in it is replaced by
+               what is piped on stdin: git diff | agentiloop "review this" -
 
 Options:
   -p, --provider <PROVIDER>      Model backend: `anthropic`, `openai` (OpenAI-compatible: OpenAI, Ollama, LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL), or `omlx` (local oMLX server, http://localhost:8000/v1). Defaults to the last one used, then auto-detected from which credentials are set [env: AGENTILOOP_PROVIDER=]
@@ -372,6 +373,7 @@ Du siehst die Antworten des Agenten, jedes Tool, das er benutzt (🔧), und jede
 | **TUI** (Vollbild) | `agentiloop --tui` | Den Alltag: scrollbarer Verlauf, Live-Status, klickbare Links |
 | **Chat** (Zeile für Zeile) | `agentiloop` | Einfache Terminals, oder wenn du reinen Text bevorzugst |
 | **Einmalig** | `agentiloop "explain this project"` | Eine einzelne Frage: Er antwortet und beendet sich dann. Praktisch in Skripten |
+| **Per Pipe** | `git diff \| agentiloop "review this" -` | Text per Pipe übergeben und `-` im Prompt setzen: Es wird durch den Pipe-Inhalt ersetzt. Praktisch für Diffs und Logs |
 
 Tasten in der TUI: **Enter** sendet · **↑ / ↓** blättern durch frühere Anfragen · **PgUp / PgDn** oder das Mausrad scrollen · **Ctrl-U** löscht die Zeile · **Ctrl-C** beendet.
 

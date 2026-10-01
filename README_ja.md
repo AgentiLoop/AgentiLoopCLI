@@ -251,7 +251,8 @@ AgentiLoop — a cross-platform agentic coding loop for your terminal
 Usage: agentiloop [OPTIONS] [PROMPT]...
 
 Arguments:
-  [PROMPT]...  One-shot prompt. If omitted, starts an interactive REPL
+  [PROMPT]...  One-shot prompt. If omitted, starts an interactive REPL. A lone `-` in it is replaced by
+               what is piped on stdin: git diff | agentiloop "review this" -
 
 Options:
   -p, --provider <PROVIDER>      Model backend: `anthropic`, `openai` (OpenAI-compatible: OpenAI, Ollama, LM Studio, Groq, OpenRouter, … via OPENAI_BASE_URL), or `omlx` (local oMLX server, http://localhost:8000/v1). Defaults to the last one used, then auto-detected from which credentials are set [env: AGENTILOOP_PROVIDER=]
@@ -372,6 +373,7 @@ agentiloop --tui
 | **TUI** (フルスクリーン) | `agentiloop --tui` | 普段使い: 履歴のスクロール、リアルタイムのステータス表示、クリックできるリンク |
 | **チャット** (1 行ずつ) | `agentiloop` | シンプルなターミナルや、プレーンテキストが好みの場合 |
 | **ワンショット** | `agentiloop "explain this project"` | 1 つの質問: 回答したら終了します。スクリプトで便利です |
+| **パイプ** | `git diff \| agentiloop "review this" -` | パイプで渡したテキストがプロンプト中の `-` と置き換わります。diff やログに便利です |
 
 TUI のキー操作: **Enter** で送信 · **↑ / ↓** で以前のプロンプトをたどる · **PgUp / PgDn** またはマウスホイールでスクロール · **Ctrl-U** で行をクリア · **Ctrl-C** で終了。
 
