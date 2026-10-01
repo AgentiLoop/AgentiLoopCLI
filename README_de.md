@@ -474,7 +474,7 @@ Tipp diese an der Eingabeaufforderung ein, in der TUI oder im Chat:
 | `/undo` | Macht die Dateiänderungen des Agenten für deinen letzten Prompt rückgängig (Änderungen durch `bash`-Befehle nicht) |
 | `/todos` | Zeigt die aktuelle Aufgaben-Checkliste des Modells |
 | `/diff` | Zeigt, was sich im Git-Arbeitsverzeichnis geändert hat (Status plus Diff, nach 200 Zeilen gekürzt) |
-| `/commands` | Eigene Befehle: Jede `.agentiloop/commands/<name>.md` (Projekt) oder `~/.agentiloop/commands/<name>.md` wird zu `/<name>` und sendet die Datei als Prompt (`$ARGUMENTS` wird durch das Folgende ersetzt). Zeigt die Liste |
+| `/commands` | Eigene Befehle: Jede `.agentiloop/commands/<name>.md` (Projekt) oder `~/.agentiloop/commands/<name>.md` wird zu `/<name>` und sendet die Datei als Prompt (`$ARGUMENTS` wird durch das Folgende ersetzt, `$1`–`$9` durch die einzelnen Wörter). Zeigt die Liste |
 | `/init` | Erstellt eine `AGENTS.md`-Vorlage für das aktuelle Projekt (überschreibt nie) |
 | `/export [file]` | Speichert die Unterhaltung als Markdown-Datei (`/export notes.md` oder ein Standardname im Projektordner) |
 | `/compact` | Fasst die Unterhaltung jetzt zusammen, um Platz zu schaffen |

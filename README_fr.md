@@ -473,7 +473,7 @@ Tapez-les à l'invite, dans la TUI ou dans le chat :
 | `/undo` | Annule les modifications de fichiers faites par l'agent pour votre dernier message (celles faites par `bash` ne sont pas annulées) |
 | `/todos` | Affiche la liste de tâches actuelle du modèle |
 | `/diff` | Affiche ce qui a changé dans l'arbre de travail git (état plus diff, coupé à 200 lignes) |
-| `/commands` | Vos propres commandes : chaque `.agentiloop/commands/<name>.md` (projet) ou `~/.agentiloop/commands/<name>.md` devient `/<name>` et envoie le fichier comme prompt (`$ARGUMENTS` est remplacé par ce qui suit). Les liste |
+| `/commands` | Vos propres commandes : chaque `.agentiloop/commands/<name>.md` (projet) ou `~/.agentiloop/commands/<name>.md` devient `/<name>` et envoie le fichier comme prompt (`$ARGUMENTS` est remplacé par ce qui suit, `$1`–`$9` par chaque mot). Les liste |
 | `/init` | Crée un `AGENTS.md` de départ pour le projet courant (n'écrase jamais) |
 | `/export [file]` | Enregistre la conversation en fichier Markdown (`/export notes.md`, ou un nom par défaut dans le dossier du projet) |
 | `/compact` | Résume la conversation maintenant pour libérer de la place |

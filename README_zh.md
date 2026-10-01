@@ -474,7 +474,7 @@ agentiloop --yes "run the tests and fix any failures"        # 无人值守，�
 | `/undo` | 撤销智能体为你上一条提示所做的文件更改（`bash` 命令造成的更改不会撤销） |
 | `/todos` | 显示模型当前的任务清单 |
 | `/diff` | 显示 git 工作树中的更改（状态加 diff，超过 200 行会截断） |
-| `/commands` | 自定义命令：每个 `.agentiloop/commands/<name>.md`（项目）或 `~/.agentiloop/commands/<name>.md` 都会变成 `/<name>`，并把文件内容作为提示发送（`$ARGUMENTS` 会被命令后输入的内容替换）。此命令列出它们 |
+| `/commands` | 自定义命令：每个 `.agentiloop/commands/<name>.md`（项目）或 `~/.agentiloop/commands/<name>.md` 都会变成 `/<name>`，并把文件内容作为提示发送（`$ARGUMENTS` 会被命令后输入的内容替换，`$1`–`$9` 为其中的各个词）。此命令列出它们 |
 | `/init` | 为当前项目创建 `AGENTS.md` 模板（从不覆盖已有文件） |
 | `/export [file]` | 将对话保存为 Markdown 文件（`/export notes.md`，省略则在项目文件夹中使用默认名称） |
 | `/compact` | 立即总结对话以释放空间 |

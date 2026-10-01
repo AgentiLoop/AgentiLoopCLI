@@ -29,15 +29,19 @@ impl CustomCommand {
         d
     }
 
-    /// The prompt to send for `/name args`.
+    /// The prompt to send for `/name args`. `$ARGUMENTS` is the whole text after the command and
+    /// `$1`..`$9` are its words; without any placeholder the text is appended after a blank line.
     pub fn expand(&self, args: &str) -> String {
-        if self.template.contains("$ARGUMENTS") {
-            self.template.replace("$ARGUMENTS", args).trim().to_string()
-        } else if args.is_empty() {
-            self.template.trim().to_string()
-        } else {
-            format!("{}\n\n{args}", self.template.trim_end())
+        let words: Vec<&str> = args.split_whitespace().collect();
+        let positional = (1..=9).any(|n| self.template.contains(&format!("${n}")));
+        if !self.template.contains("$ARGUMENTS") && !positional {
+            return if args.is_empty() { self.template.trim().to_string() } else { format!("{}\n\n{args}", self.template.trim_end()) };
         }
+        let mut out = self.template.replace("$ARGUMENTS", args);
+        for n in 1..=9 {
+            out = out.replace(&format!("${n}"), words.get(n - 1).copied().unwrap_or(""));
+        }
+        out.trim().to_string()
     }
 }
 
