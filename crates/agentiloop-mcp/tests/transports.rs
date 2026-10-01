@@ -65,6 +65,16 @@ async fn exercise(server: &McpServer, transport: &str) {
     assert_eq!(server.resources.len(), 1);
     assert_eq!(server.resources[0].uri, "example://greeting");
 
+    // The invalid prompt name was dropped; prompts/get flattens the messages.
+    assert_eq!(server.prompts.len(), 1);
+    assert_eq!(server.prompts[0].name, "greet");
+    assert_eq!(server.prompts[0].arguments.len(), 2);
+    let mut args = serde_json::Map::new();
+    args.insert("who".into(), json!("Ada"));
+    args.insert("tone".into(), json!("warm"));
+    assert_eq!(server.get_prompt("greet", args).await.unwrap(), "Greet Ada (warm).\n\nKeep it short.");
+    assert!(server.get_prompt("nope", serde_json::Map::new()).await.is_err());
+
     assert_eq!(server.call_tool("echo", json!({ "message": "hi ✓" })).await.unwrap(), ("hi ✓".to_string(), false));
     assert_eq!(server.call_tool("add", json!({ "a": 2, "b": 3 })).await.unwrap().0, "5");
 
@@ -242,6 +252,13 @@ async fn manager_registers_tools_from_all_transports() {
         let status = mgr.status_lines().join("\n");
         assert!(status.contains("● Local [stdio] example-stdio 1.0.0 — connected (4 tools, 1 resources)"), "{status}");
         assert!(status.contains("[http]") && status.contains("[sse]") && status.contains("✗ Broken"), "{status}");
+
+        assert!(status.contains("/mcp__Local__greet <who> [tone]"), "{status}");
+        assert_eq!(mgr.prompt_command("/mcp__Local__greet Ada warm and kind").await, Some(Ok("Greet Ada (warm and kind).\n\nKeep it short.".to_string())));
+        assert_eq!(mgr.prompt_command("/mcp__Local__greet who=Bob").await, Some(Ok("Greet Bob ().\n\nKeep it short.".to_string())));
+        let missing = mgr.prompt_command("/mcp__Local__greet").await.unwrap().unwrap_err();
+        assert!(missing.contains("missing required argument `who`"), "{missing}");
+        assert!(mgr.prompt_command("/clear").await.is_none() && mgr.prompt_command("hello").await.is_none());
 
         mgr.shutdown().await;
         assert!(mgr.servers.iter().all(|s| !s.is_alive()));

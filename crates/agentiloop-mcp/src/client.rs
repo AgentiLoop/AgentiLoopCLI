@@ -41,6 +41,19 @@ pub struct ResourceInfo {
     pub mime_type: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromptArg {
+    pub name: String,
+    pub required: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct PromptInfo {
+    pub name: String,
+    pub description: String,
+    pub arguments: Vec<PromptArg>,
+}
+
 pub struct McpServer {
     pub name: String,
     /// `serverInfo.name` / `version` reported by the server.
@@ -48,6 +61,7 @@ pub struct McpServer {
     pub transport_kind: &'static str,
     pub tools: Vec<ToolInfo>,
     pub resources: Vec<ResourceInfo>,
+    pub prompts: Vec<PromptInfo>,
     conn: Arc<dyn Transport>,
 }
 
@@ -74,8 +88,8 @@ impl McpServer {
         };
 
         match tokio::time::timeout(INIT_TIMEOUT, handshake(name, conn.clone())).await {
-            Ok(Ok((server_info, tools, resources))) => {
-                Ok(Self { name: name.to_string(), server_info, transport_kind: kind, tools, resources, conn })
+            Ok(Ok((server_info, tools, resources, prompts))) => {
+                Ok(Self { name: name.to_string(), server_info, transport_kind: kind, tools, resources, prompts, conn })
             }
             Ok(Err(e)) => {
                 conn.close().await;
@@ -110,6 +124,17 @@ impl McpServer {
         Ok((format_content(result), is_error))
     }
 
+    /// `prompts/get`: the prompt's messages flattened to text, ready to send as a user prompt.
+    pub async fn get_prompt(&self, name: &str, arguments: serde_json::Map<String, Value>) -> Result<String> {
+        anyhow::ensure!(self.conn.is_alive(), "MCP server `{}` is no longer running", self.name);
+        let resp = self.conn.request("prompts/get", Some(json!({ "name": name, "arguments": arguments }))).await?;
+        if let Some(msg) = resp.pointer("/error/message").and_then(Value::as_str) {
+            anyhow::bail!("{msg}");
+        }
+        let result = resp.get("result").context("invalid prompts/get response")?;
+        Ok(format_prompt(result))
+    }
+
     /// `resources/read` — text of the first content item.
     pub async fn read_resource(&self, uri: &str) -> Result<String> {
         let resp = self.conn.request("resources/read", Some(json!({ "uri": uri }))).await?;
@@ -123,7 +148,7 @@ impl McpServer {
     }
 }
 
-async fn handshake(name: &str, conn: Arc<dyn Transport>) -> Result<(String, Vec<ToolInfo>, Vec<ResourceInfo>)> {
+async fn handshake(name: &str, conn: Arc<dyn Transport>) -> Result<(String, Vec<ToolInfo>, Vec<ResourceInfo>, Vec<PromptInfo>)> {
     let resp = conn
         .request(
             "initialize",
@@ -153,7 +178,8 @@ async fn handshake(name: &str, conn: Arc<dyn Transport>) -> Result<(String, Vec<
     // Discovery failures leave the list empty rather than failing the server (as in AgentMCP).
     let tools = if has("tools") { list_tools(&*conn).await.unwrap_or_default() } else { Vec::new() };
     let resources = if has("resources") { list_resources(&*conn).await.unwrap_or_default() } else { Vec::new() };
-    Ok((server_info, tools, resources))
+    let prompts = if has("prompts") { list_prompts(&*conn).await.unwrap_or_default() } else { Vec::new() };
+    Ok((server_info, tools, resources, prompts))
 }
 
 /// Paged `list` call; `key` is the result array field.
@@ -203,6 +229,51 @@ fn parse_tool(tool: &Value) -> Option<ToolInfo> {
         input_schema,
         read_only: tool.pointer("/annotations/readOnlyHint").and_then(Value::as_bool).unwrap_or(false),
     })
+}
+
+async fn list_prompts(conn: &dyn Transport) -> Result<Vec<PromptInfo>> {
+    let s = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).map(str::to_string);
+    Ok(list_all(conn, "prompts/list", "prompts")
+        .await?
+        .iter()
+        .filter_map(|p| {
+            let name = s(p, "name").filter(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'))?;
+            let arguments = p
+                .get("arguments")
+                .and_then(Value::as_array)
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| {
+                            Some(PromptArg { name: s(x, "name")?, required: x.get("required").and_then(Value::as_bool).unwrap_or(false) })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            Some(PromptInfo { name, description: s(p, "description").unwrap_or_default(), arguments })
+        })
+        .collect())
+}
+
+/// Text of a `prompts/get` result: every message's text content, separated by blank lines.
+pub(crate) fn format_prompt(result: &Value) -> String {
+    let parts: Vec<String> = result
+        .get("messages")
+        .and_then(Value::as_array)
+        .map(|ms| {
+            ms.iter()
+                .filter_map(|m| {
+                    let c = m.get("content")?;
+                    let text = match c {
+                        Value::String(s) => s.clone(),
+                        Value::Array(a) => a.iter().filter_map(|b| b.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("\n"),
+                        _ => c.get("text").and_then(Value::as_str)?.to_string(),
+                    };
+                    (!text.trim().is_empty()).then_some(text)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    parts.join("\n\n")
 }
 
 async fn list_resources(conn: &dyn Transport) -> Result<Vec<ResourceInfo>> {

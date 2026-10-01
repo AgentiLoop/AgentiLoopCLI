@@ -511,6 +511,7 @@ Comment ça marche :
 - **Noms des outils.** Chaque outil d'un serveur apparaît pour l'agent sous la forme `mcp_<server>_<tool>`, par exemple `mcp_Local_search`.
 - **Secrets.** `${VAR}` (ou `${VAR:-default}`) est rempli à partir de votre environnement, les clés n'ont donc pas besoin d'être dans le fichier.
 - **Permissions.** Les outils MCP demandent la permission comme n'importe quel autre outil, sauf si le serveur marque un outil comme en lecture seule.
+- **Prompts.** Les prompts enregistrés d'un serveur deviennent des commandes `/mcp__<serveur>__<prompt>`, p. ex. `/mcp__Local__summarize du texte`. Les mots après la commande remplissent les arguments du prompt dans l'ordre (ou `nom=valeur`) ; le texte renvoyé par le serveur est envoyé comme votre prompt. `/mcp` les liste.
 - **Désactiver des serveurs.** Ajoutez `"disabled": true` pour ignorer un serveur, ou lancez avec `--no-mcp` pour les ignorer tous.
 - **Sécurité.** Le `http://` simple n'est autorisé que pour localhost ; les serveurs distants exigent `https://`.
 

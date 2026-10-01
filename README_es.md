@@ -512,6 +512,7 @@ Cómo funciona:
 - **Nombres de herramientas.** Cada herramienta del servidor le aparece al agente como `mcp_<server>_<tool>`, por ejemplo `mcp_Local_search`.
 - **Secretos.** `${VAR}` (o `${VAR:-default}`) se rellena desde tu entorno, así que las claves no tienen que estar en el archivo.
 - **Permisos.** Las herramientas MCP piden permiso como cualquier otra herramienta, a menos que el servidor marque una herramienta como de solo lectura.
+- **Prompts.** Los prompts guardados de un servidor se convierten en comandos `/mcp__<servidor>__<prompt>`, p. ej. `/mcp__Local__summarize algún texto`. Las palabras tras el comando rellenan los argumentos del prompt en orden (o `nombre=valor`); el texto que devuelve el servidor se envía como tu prompt. `/mcp` los lista.
 - **Desactivar servidores.** Añade `"disabled": true` para saltarte un servidor, o ejecuta con `--no-mcp` para saltártelos todos.
 - **Seguridad.** `http://` sin cifrar solo se permite para localhost; los servidores remotos necesitan `https://`.
 

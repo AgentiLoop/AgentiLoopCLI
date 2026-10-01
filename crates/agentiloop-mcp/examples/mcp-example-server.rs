@@ -45,7 +45,7 @@ async fn handle(msg: &Value, transport: &str) -> Option<Value> {
     let result = match method {
         "initialize" => Ok(json!({
             "protocolVersion": "2024-11-05",
-            "capabilities": { "tools": {}, "resources": {} },
+            "capabilities": { "tools": {}, "resources": {}, "prompts": {} },
             "serverInfo": { "name": format!("example-{transport}"), "version": "1.0.0" }
         })),
         "tools/list" => Ok(match params.get("cursor").and_then(Value::as_str) {
@@ -72,6 +72,21 @@ async fn handle(msg: &Value, transport: &str) -> Option<Value> {
                 { "uri": "example://greeting", "mimeType": "text/plain", "text": format!("Hello from {transport}!") }
             ] })),
             other => Err((-32002, format!("resource not found: {}", other.unwrap_or("")))),
+        },
+        "prompts/list" => Ok(json!({ "prompts": [
+            { "name": "greet", "description": "Ask for a greeting",
+              "arguments": [ { "name": "who", "required": true }, { "name": "tone", "required": false } ] },
+            { "name": "bad name!", "description": "invalid name, must be dropped by the client" }
+        ] })),
+        "prompts/get" => match params.get("name").and_then(Value::as_str) {
+            Some("greet") => {
+                let arg = |k: &str| params.pointer(&format!("/arguments/{k}")).and_then(Value::as_str).unwrap_or("").to_string();
+                Ok(json!({ "description": "greeting", "messages": [
+                    { "role": "user", "content": { "type": "text", "text": format!("Greet {} ({}).", arg("who"), arg("tone")) } },
+                    { "role": "user", "content": { "type": "text", "text": "Keep it short." } }
+                ] }))
+            }
+            other => Err((-32602, format!("unknown prompt: {}", other.unwrap_or("")))),
         },
         "ping" => Ok(json!({})),
         _ => Err((-32601, format!("method not found: {method}"))),

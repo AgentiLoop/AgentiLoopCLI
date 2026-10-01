@@ -313,6 +313,16 @@ async fn main() -> Result<()> {
         while let Some(input) = in_rx.recv().await {
             // A late Esc that arrives after the run already finished is a no-op.
             let tui::Input::Submit(line) = input else { continue };
+            // An MCP prompt (`/mcp__<server>__<name> args`) turns into the text the server returns.
+            let line = match mcp.prompt_command(&line).await {
+                Some(Ok(text)) => text,
+                Some(Err(e)) => {
+                    let _ = ui_tx.send(tui::UiMsg::Error(e));
+                    let _ = ui_tx.send(tui::UiMsg::Idle);
+                    continue;
+                }
+                None => line,
+            };
             // A custom command (`.agentiloop/commands/<name>.md`) turns into its prompt.
             let line = agentiloop_core::commands::resolve(&line, &session.cwd, settings::home().as_deref()).unwrap_or(line);
             if line.starts_with('/') {
@@ -424,6 +434,15 @@ async fn main() -> Result<()> {
         if line == "/exit" || line == "/quit" {
             break;
         }
+        let mcp_prompt = match mcp.prompt_command(line).await {
+            Some(Ok(text)) => Some(text),
+            Some(Err(e)) => {
+                eprintln!("{e}");
+                continue;
+            }
+            None => None,
+        };
+        let line = mcp_prompt.as_deref().unwrap_or(line);
         let expanded = agentiloop_core::commands::resolve(line, &session.cwd, settings::home().as_deref());
         let line = expanded.as_deref().unwrap_or(line);
         if line.starts_with('/') {

@@ -15,7 +15,7 @@ use agentiloop_core::{Tool, ToolContext, ToolError, ToolRegistry, ToolResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
-pub use client::{McpServer, ResourceInfo, ToolInfo};
+pub use client::{McpServer, PromptArg, PromptInfo, ResourceInfo, ToolInfo};
 pub use config::ServerConfig;
 
 /// Tool names must match `^[a-zA-Z0-9_-]{1,64}$` for the model APIs.
@@ -25,6 +25,41 @@ fn tool_name(server: &str, tool: &str) -> String {
         .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
         .take(64)
         .collect()
+}
+
+/// Slash-command name for a server prompt: `mcp__<server>__<prompt>`.
+pub fn prompt_command_name(server: &str, prompt: &str) -> String {
+    format!("mcp__{server}__{prompt}")
+}
+
+/// Maps the words typed after a prompt command onto its declared arguments. `name=value` sets that
+/// argument; other words fill the remaining arguments in order, and the last one takes the rest of the
+/// text. Errors name a missing required argument.
+pub fn parse_prompt_args(info: &PromptInfo, text: &str) -> Result<serde_json::Map<String, Value>, String> {
+    let mut out = serde_json::Map::new();
+    let mut positional: Vec<&str> = Vec::new();
+    for word in text.split_whitespace() {
+        match word.split_once('=') {
+            Some((k, v)) if info.arguments.iter().any(|a| a.name == k) => {
+                out.insert(k.to_string(), Value::String(v.to_string()));
+            }
+            _ => positional.push(word),
+        }
+    }
+    let free: Vec<&PromptArg> = info.arguments.iter().filter(|a| !out.contains_key(&a.name)).collect();
+    for (i, arg) in free.iter().enumerate() {
+        if i >= positional.len() {
+            break;
+        }
+        let value = if i + 1 == free.len() { positional[i..].join(" ") } else { positional[i].to_string() };
+        out.insert(arg.name.clone(), Value::String(value));
+    }
+    if let Some(missing) = info.arguments.iter().find(|a| a.required && !out.contains_key(&a.name)) {
+        let usage: Vec<String> =
+            info.arguments.iter().map(|a| if a.required { format!("<{}>", a.name) } else { format!("[{}]", a.name) }).collect();
+        return Err(format!("missing required argument `{}`. Usage: {}", missing.name, usage.join(" ")));
+    }
+    Ok(out)
 }
 
 /// One MCP server tool exposed through the agent's tool registry.
@@ -171,6 +206,27 @@ impl McpManager {
         }
     }
 
+    /// For a typed line like `/mcp__docs__summarize some text`: the prompt text fetched from that server.
+    /// `None` when the line is not an MCP prompt command; `Some(Err(..))` when it is but cannot be run.
+    pub async fn prompt_command(&self, line: &str) -> Option<Result<String, String>> {
+        let rest = line.trim().strip_prefix('/')?;
+        let (cmd, args) = rest.split_once(char::is_whitespace).map_or((rest, ""), |(c, a)| (c, a.trim()));
+        for s in &self.servers {
+            for p in &s.prompts {
+                if prompt_command_name(&s.name, &p.name) == cmd {
+                    let result = match parse_prompt_args(p, args) {
+                        Ok(a) => s.get_prompt(&p.name, a).await.map_err(|e| format!("MCP prompt failed: {e:#}")),
+                        Err(e) => Err(e),
+                    };
+                    return Some(result.and_then(|t| {
+                        if t.trim().is_empty() { Err("the MCP prompt returned no text".to_string()) } else { Ok(t) }
+                    }));
+                }
+            }
+        }
+        None
+    }
+
     /// Human-readable status for `/mcp`.
     pub fn status_lines(&self) -> Vec<String> {
         let mut out = Vec::new();
@@ -188,6 +244,11 @@ impl McpManager {
             for t in &s.tools {
                 let first = t.description.lines().next().unwrap_or("");
                 out.push(format!("    {}  {}", tool_name(&s.name, &t.name), first.chars().take(80).collect::<String>()));
+            }
+            for p in &s.prompts {
+                let first = p.description.lines().next().unwrap_or("");
+                let args: String = p.arguments.iter().map(|a| if a.required { format!(" <{}>", a.name) } else { format!(" [{}]", a.name) }).collect();
+                out.push(format!("    /{}{}  {}", prompt_command_name(&s.name, &p.name), args, first.chars().take(60).collect::<String>()));
             }
         }
         for (name, err) in &self.errors {
@@ -209,5 +270,30 @@ mod tests {
     fn tool_names_are_api_safe() {
         assert_eq!(tool_name("Hello World", "say.hi"), "mcp_Hello_World_say_hi");
         assert_eq!(tool_name(&"x".repeat(80), "t").len(), 64);
+    }
+
+    fn prompt(args: &[(&str, bool)]) -> PromptInfo {
+        PromptInfo {
+            name: "p".into(),
+            description: String::new(),
+            arguments: args.iter().map(|(n, r)| PromptArg { name: n.to_string(), required: *r }).collect(),
+        }
+    }
+
+    #[test]
+    fn prompt_arguments_map_by_name_position_and_remainder() {
+        let p = prompt(&[("name", true), ("tone", false)]);
+        let get = |text: &str| parse_prompt_args(&p, text).map(|m| (m.get("name").cloned(), m.get("tone").cloned()));
+        let s = |v: &str| Some(Value::String(v.into()));
+        assert_eq!(get("Ada"), Ok((s("Ada"), None)));
+        assert_eq!(get("Ada very formal"), Ok((s("Ada"), s("very formal"))));
+        assert_eq!(get("tone=casual Ada"), Ok((s("Ada"), s("casual"))));
+        assert_eq!(get("name=Ada"), Ok((s("Ada"), None)));
+        assert!(get("").unwrap_err().contains("missing required argument `name`"));
+        // A single argument takes the whole text; `=` in text that is not an argument name stays text.
+        let one = prompt(&[("text", true)]);
+        assert_eq!(parse_prompt_args(&one, "a=b and more").unwrap()["text"], "a=b and more");
+        assert!(parse_prompt_args(&prompt(&[]), "ignored").unwrap().is_empty());
+        assert_eq!(prompt_command_name("docs", "sum"), "mcp__docs__sum");
     }
 }

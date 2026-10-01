@@ -424,6 +424,7 @@ How it works:
 - **Tool names.** Each server tool shows up for the agent as `mcp_<server>_<tool>`, e.g. `mcp_Local_search`.
 - **Secrets.** `${VAR}` (or `${VAR:-default}`) is filled in from your environment, so keys don't need to be in the file.
 - **Permissions.** MCP tools ask permission like any other tool, unless the server marks a tool as read-only.
+- **Prompts.** A server's saved prompts become slash commands named `/mcp__<server>__<prompt>`, e.g. `/mcp__Local__summarize some text`. Words after the command fill the prompt's arguments in order (or `name=value`); the text the server returns is sent as your prompt. `/mcp` lists them.
 - **Turning servers off.** Add `"disabled": true` to skip one server, or run with `--no-mcp` to skip them all.
 - **Safety.** Plain `http://` is only allowed for localhost; remote servers need `https://`.
 
