@@ -236,6 +236,14 @@ async fn main() -> Result<()> {
         }
         config.system_prompt = agentiloop_core::instructions::append_to_prompt(&config.system_prompt, &instructions);
         config.system_prompt = append_extra(&config.system_prompt, cli.append_system_prompt.as_deref());
+        let (hooks, hook_errors) = agentiloop_core::Hooks::load(&agentiloop_core::hooks::default_paths(&cwd, settings::home().as_deref()));
+        for e in hook_errors {
+            note(format!("hooks: {e}"));
+        }
+        if !hooks.is_empty() {
+            note(format!("hooks: {} loaded (/hooks lists them)", hooks.len()));
+        }
+        config.hooks = hooks;
 
         // Remember this launch (model per provider always; UI options only for interactive runs).
         saved.set_model(provider.name(), &config.model);
@@ -665,6 +673,7 @@ async fn slash_command(
             Err(e) => say(e),
         },
         "/commands" => say(agentiloop_core::commands::listing(&agentiloop_core::commands::load(&session.cwd, settings::home().as_deref()))),
+        "/hooks" => say(agent.hooks().listing()),
         "/todos" => match agentiloop_tools::todo::current() {
             Some(t) => say(t),
             None => say("no todo list yet (the model creates one for multi-step work)".into()),
@@ -796,6 +805,7 @@ const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
 /export [file]  save the conversation as Markdown\n\
 /init           create a starter AGENTS.md for this project\n\
 /commands       list your custom commands (.agentiloop/commands/*.md)\n\
+/hooks          list the hooks loaded from .agentiloop/hooks.json\n\
 /diff           show what changed in the git working tree\n\
 /todos          show the model's current task checklist\n\
 /undo           revert the file changes from the last prompt\n\

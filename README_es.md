@@ -475,6 +475,7 @@ Escríbelos en el prompt, en la TUI o en el chat:
 | `/todos` | Muestra la lista de tareas actual del modelo |
 | `/diff` | Muestra qué cambió en el árbol de trabajo de git (estado más diff, cortado a 200 líneas) |
 | `/commands` | Tus propios comandos: cada `.agentiloop/commands/<name>.md` (proyecto) o `~/.agentiloop/commands/<name>.md` pasa a ser `/<name>` y envía el archivo como prompt (`$ARGUMENTS` se sustituye por lo que escribas después, `$1`–`$9` por sus palabras). Los lista |
+| `/hooks` | Muestra los hooks cargados desde `.agentiloop/hooks.json` (ver [Hooks](#hooks-ejecuta-tus-propios-comandos-alrededor-de-las-herramientas)) |
 | `/init` | Crea un `AGENTS.md` inicial para el proyecto actual (nunca sobrescribe) |
 | `/export [file]` | Guarda la conversación como archivo Markdown (`/export notes.md`, o un nombre por defecto en la carpeta del proyecto) |
 | `/compact` | Resume la conversación ahora para liberar espacio |
@@ -494,6 +495,35 @@ Los modelos solo pueden leer una cantidad limitada de una vez. Cuando una conver
 ## Instrucciones del proyecto
 
 Pon un archivo `AGENTS.md` (o `CLAUDE.md`) en tu proyecto y AgentiLoop lo lee al arrancar y lo sigue: comandos de compilación, estilo de código, cosas que evitar. Lo busca en la carpeta actual y luego en las carpetas superiores, hasta la raíz del proyecto (la carpeta con `.git`). Un `~/.agentiloop/AGENTS.md` personal se aplica a todos los proyectos; el archivo del proyecto va después y tiene prioridad. Los archivos se recortan a 32 KB. Una línea `instructions: <ruta>` muestra qué archivos se cargaron. Una línea que sea solo `@ruta` (por ejemplo `@docs/style.md`) se sustituye por el texto de ese archivo, relativo al archivo que la menciona. Las importaciones pueden anidarse tres niveles; los archivos que faltan, los ciclos y las líneas dentro de bloques de código se dejan tal cual.
+
+---
+
+## Hooks: ejecuta tus propios comandos alrededor de las herramientas
+
+Un hook es un comando de shell que AgentiLoop ejecuta por ti en un punto fijo: antes de que se ejecute una herramienta (`PreToolUse`), después de ejecutarse (`PostToolUse`) o cuando el agente termina una petición (`Stop`). Ponlos en `.agentiloop/hooks.json` dentro de tu proyecto, o en `~/.agentiloop/hooks.json` para todos los proyectos (se cargan ambos):
+
+```json
+{
+  "hooks": {
+    "PreToolUse":  [{ "matcher": "bash", "command": "sh .agentiloop/check-command.sh" }],
+    "PostToolUse": [{ "matcher": "write_file,edit_file", "command": "cargo fmt" }],
+    "Stop":        [{ "command": "osascript -e 'display notification \"done\" with title \"AgentiLoop\"'" }]
+  }
+}
+```
+
+- `matcher` indica a qué herramientas se aplica el hook, con las mismas reglas que `--allow-tool` (nombres, prefijos `mcp_*`, `*`). Omítelo para aplicarlo a todas. Los hooks `Stop` lo ignoran.
+- El comando se ejecuta con `sh -c` (`cmd /C` en Windows) en la carpeta del proyecto. Recibe un objeto JSON por stdin: `event`, `cwd`, `tool` e `input`; `PostToolUse` añade `output` e `is_error`, `Stop` añade `stop_reason`. `AGENTILOOP_HOOK_EVENT` y `AGENTILOOP_TOOL` se definen como variables de entorno.
+- **El código de salida 2 habla con el modelo.** Un hook `PreToolUse` que sale con 2 bloquea la llamada, y lo que imprimió en stderr se envía al modelo como error. A un hook `PostToolUse` que sale con 2 se le añade su stderr al resultado de la herramienta. Cualquier otro código se ignora (uno distinto de cero se registra). Un hook se mata a los 60 segundos.
+- `/hooks` lista lo que se cargó. Un archivo roto se informa al arrancar y se omite.
+
+Por ejemplo, este hook `PreToolUse` impide que `bash` ejecute `git push`:
+
+```sh
+#!/bin/sh
+# .agentiloop/check-command.sh — stdin es el JSON de la llamada
+if grep -q 'git push' ; then echo "git push no está permitido desde el agente" >&2; exit 2; fi
+```
 
 ---
 
@@ -537,6 +567,7 @@ Todo vive en `~/.agentiloop/`. Define `AGENTILOOP_HOME` para usar otra carpeta, 
 | `env` | Tu clave, escrita por el asistente (`KEY=value`, modo de archivo 600). Se carga al arrancar; un `export` en tu shell tiene prioridad |
 | `sessions/` | Tus conversaciones, un archivo por cada una |
 | `mcp.json` | Tus servidores MCP |
+| `hooks.json` | Hooks para todos los proyectos (el `.agentiloop/hooks.json` de un proyecto se suma) |
 | `history.txt` | Las peticiones que has escrito (para ↑ / ↓) |
 
 ---
@@ -608,6 +639,7 @@ Mantenemos pocas dependencias: 18 crates externos, y cada crate enumera solo los
 - [x] Conversaciones guardadas
 - [x] TUI a pantalla completa
 - [x] Cliente MCP
+- [x] Hooks
 - [ ] ¿Qué viene después (What's NeXT)?
 
 ## Licencia

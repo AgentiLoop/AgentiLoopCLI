@@ -381,6 +381,7 @@ Type these at the prompt, in the TUI or the chat:
 | `/todos` | Show the model's current task checklist |
 | `/diff` | Show what changed in the git working tree (status plus diff, cut at 200 lines) |
 | `/commands` | Your own commands: every `.agentiloop/commands/<name>.md` (project) or `~/.agentiloop/commands/<name>.md` becomes `/<name>`, which sends the file as the prompt (`$ARGUMENTS` is replaced by what you type after it; `$1`–`$9` by its individual words). This lists them |
+| `/hooks` | Show the hooks loaded from `.agentiloop/hooks.json` (see [Hooks](#hooks-run-your-own-commands-around-tool-calls)) |
 | `/init` | Create a starter `AGENTS.md` for the current project (never overwrites) |
 | `/export [file]` | Save the conversation as a Markdown file (`/export notes.md`, or a default name in the project folder) |
 | `/compact` | Summarize the conversation now to free up space |
@@ -401,6 +402,35 @@ Models can only read so much at once. When a conversation gets big (by default, 
 ## Project instructions
 
 Put an `AGENTS.md` file (or `CLAUDE.md`) in your project and AgentiLoop reads it at startup and follows it: build commands, code style, things to avoid. It looks in the current folder and then in the parent folders, up to the project root (the folder with `.git`). A personal `~/.agentiloop/AGENTS.md` applies to every project; the project's file comes after it and wins. Files are cut at 32 KB. A line `instructions: <path>` shows which files were loaded. A line that is just `@path` (for example `@docs/style.md`) is replaced by that file's text, relative to the file that mentions it. Imports can nest three levels deep; missing files, loops and lines inside code blocks are left alone.
+
+---
+
+## Hooks: run your own commands around tool calls
+
+A hook is a shell command AgentiLoop runs for you at a fixed point: before a tool runs (`PreToolUse`), after it ran (`PostToolUse`), or when the agent finishes a request (`Stop`). Put them in `.agentiloop/hooks.json` in your project, or in `~/.agentiloop/hooks.json` for every project (both are loaded):
+
+```json
+{
+  "hooks": {
+    "PreToolUse":  [{ "matcher": "bash", "command": "sh .agentiloop/check-command.sh" }],
+    "PostToolUse": [{ "matcher": "write_file,edit_file", "command": "cargo fmt" }],
+    "Stop":        [{ "command": "osascript -e 'display notification \"done\" with title \"AgentiLoop\"'" }]
+  }
+}
+```
+
+- `matcher` says which tools the hook applies to, with the same rules as `--allow-tool` (names, `mcp_*` prefixes, `*`). Leave it out for every tool. `Stop` hooks ignore it.
+- The command runs with `sh -c` (`cmd /C` on Windows) in the project folder. It gets one JSON object on stdin: `event`, `cwd`, `tool` and `input`; `PostToolUse` adds `output` and `is_error`, `Stop` adds `stop_reason`. `AGENTILOOP_HOOK_EVENT` and `AGENTILOOP_TOOL` are set as environment variables.
+- **Exit code 2 talks to the model.** A `PreToolUse` hook that exits 2 blocks the call, and what it printed on stderr is sent to the model as the error. A `PostToolUse` hook that exits 2 gets its stderr appended to the tool result. Any other exit code is ignored (a non-zero one is logged). A hook is killed after 60 seconds.
+- `/hooks` lists what was loaded. A broken file is reported at startup and skipped.
+
+For example, this `PreToolUse` hook stops `bash` from running `git push`:
+
+```sh
+#!/bin/sh
+# .agentiloop/check-command.sh — stdin is the JSON for the call
+if grep -q 'git push' ; then echo "git push is not allowed from the agent" >&2; exit 2; fi
+```
 
 ---
 
@@ -444,6 +474,7 @@ Everything lives in `~/.agentiloop/`. Set `AGENTILOOP_HOME` to use a different f
 | `env` | Your key, written by the wizard (`KEY=value`, file mode 600). Loaded at startup; an `export` in your shell wins over it |
 | `sessions/` | Your conversations, one file each |
 | `mcp.json` | Your MCP servers |
+| `hooks.json` | Hooks for every project (a project's own `.agentiloop/hooks.json` is added to it) |
 | `history.txt` | Prompts you've typed (for ↑ / ↓) |
 
 ---
@@ -529,6 +560,7 @@ We keep dependencies small: 18 external crates, and each crate lists only the on
 - [x] Saved conversations
 - [x] Full-screen TUI
 - [x] MCP client
+- [x] Hooks
 - [ ] What's NeXT?
 
 ## The AgentiLoop Agent! family

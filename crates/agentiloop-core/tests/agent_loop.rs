@@ -504,3 +504,49 @@ fn usage_accumulates_across_requests_and_survives_clear() {
     a.clear();
     assert_eq!(a.usage().requests, 3, "/clear keeps the running total");
 }
+
+#[cfg(unix)]
+#[test]
+fn hooks_block_calls_add_feedback_and_run_on_stop() {
+    use agentiloop_core::hooks::{default_paths, Hooks};
+    let dir = std::env::temp_dir().join(format!("agentiloop-agent-hooks-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join(".agentiloop")).unwrap();
+    std::fs::write(
+        dir.join(".agentiloop/hooks.json"),
+        r#"{"hooks":{
+            "PreToolUse":[{"matcher":"echo","command":"grep -q forbidden && { echo 'not that' >&2; exit 2; }; exit 0"}],
+            "PostToolUse":[{"matcher":"echo","command":"echo looks good; exit 2"}],
+            "Stop":[{"command":"cat > stop.json"}]
+        }}"#,
+    )
+    .unwrap();
+    let (hooks, errors) = Hooks::load(&default_paths(&dir, None));
+    assert!(errors.is_empty(), "{errors:?}");
+
+    let p = ScriptedProvider::new(vec![
+        tool_call("t1", "echo", json!({"msg": "forbidden"})),
+        tool_call("t2", "echo", json!({"msg": "fine"})),
+        text("done"),
+    ]);
+    let mut tools = ToolRegistry::new();
+    tools.register(Echo);
+    let config = AgentConfig { model: "mock".into(), max_turns: 5, hooks, ..Default::default() };
+    let mut a = Agent::new(p, tools, Arc::new(agentiloop_core::permission::AllowAll), config, ToolContext { cwd: dir.clone() });
+    let (res, events) = collect(&mut a, "go");
+    res.unwrap();
+
+    let results: Vec<(&str, &str, bool)> = events
+        .iter()
+        .filter_map(|e| match e {
+            AgentEvent::ToolResult { id, output, is_error, .. } => Some((id.as_str(), output.as_str(), *is_error)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(results.len(), 2);
+    assert!(results[0].2 && results[0].1.contains("blocked by a PreToolUse hook") && results[0].1.contains("not that"), "{:?}", results[0]);
+    assert!(!results[1].2 && results[1].1.starts_with("echo:fine") && results[1].1.contains("[PostToolUse hook `echo looks good; exit 2`]: looks good"), "{:?}", results[1]);
+    let stop: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("stop.json")).unwrap()).unwrap();
+    assert_eq!(stop["stop_reason"], "end_turn");
+    let _ = std::fs::remove_dir_all(&dir);
+}

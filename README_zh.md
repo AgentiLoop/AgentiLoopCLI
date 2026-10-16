@@ -475,6 +475,7 @@ agentiloop --yes "run the tests and fix any failures"        # 无人值守，�
 | `/todos` | 显示模型当前的任务清单 |
 | `/diff` | 显示 git 工作树中的更改（状态加 diff，超过 200 行会截断） |
 | `/commands` | 自定义命令：每个 `.agentiloop/commands/<name>.md`（项目）或 `~/.agentiloop/commands/<name>.md` 都会变成 `/<name>`，并把文件内容作为提示发送（`$ARGUMENTS` 会被命令后输入的内容替换，`$1`–`$9` 为其中的各个词）。此命令列出它们 |
+| `/hooks` | 显示从 `.agentiloop/hooks.json` 加载的钩子（见 [钩子](#钩子在工具调用前后运行你自己的命令)） |
 | `/init` | 为当前项目创建 `AGENTS.md` 模板（从不覆盖已有文件） |
 | `/export [file]` | 将对话保存为 Markdown 文件（`/export notes.md`，省略则在项目文件夹中使用默认名称） |
 | `/compact` | 立即总结对话以释放空间 |
@@ -494,6 +495,35 @@ agentiloop --yes "run the tests and fix any failures"        # 无人值守，�
 ## 项目说明
 
 在项目里放一个 `AGENTS.md`（或 `CLAUDE.md`）文件，AgentiLoop 启动时会读取并遵循它：构建命令、代码风格、需要避免的事项。它会先在当前文件夹查找，再向上查找父文件夹，直到项目根目录（含 `.git` 的文件夹）。个人的 `~/.agentiloop/AGENTS.md` 适用于所有项目；项目自己的文件排在其后并优先生效。文件超过 32 KB 会被截断。`instructions: <路径>` 这一行会显示加载了哪些文件。 只含 `@路径` 的一行（例如 `@docs/style.md`）会被替换为该文件的内容，路径相对于引用它的文件。导入最多可嵌套三层；缺失的文件、循环引用以及代码块中的行会保持原样。
+
+---
+
+## 钩子：在工具调用前后运行你自己的命令
+
+钩子是 AgentiLoop 在固定时机替你运行的 shell 命令：工具运行前（`PreToolUse`）、运行后（`PostToolUse`），或代理完成一次请求时（`Stop`）。把它们放在项目的 `.agentiloop/hooks.json` 里，或放在对所有项目生效的 `~/.agentiloop/hooks.json` 里（两者都会加载）：
+
+```json
+{
+  "hooks": {
+    "PreToolUse":  [{ "matcher": "bash", "command": "sh .agentiloop/check-command.sh" }],
+    "PostToolUse": [{ "matcher": "write_file,edit_file", "command": "cargo fmt" }],
+    "Stop":        [{ "command": "osascript -e 'display notification \"done\" with title \"AgentiLoop\"'" }]
+  }
+}
+```
+
+- `matcher` 指定钩子适用于哪些工具，规则与 `--allow-tool` 相同（名称、`mcp_*` 前缀、`*`）。省略则适用于所有工具。`Stop` 钩子忽略它。
+- 命令在项目文件夹中用 `sh -c`（Windows 上为 `cmd /C`）运行。它从 stdin 收到一个 JSON 对象：`event`、`cwd`、`tool` 和 `input`；`PostToolUse` 额外有 `output` 和 `is_error`，`Stop` 额外有 `stop_reason`。环境变量 `AGENTILOOP_HOOK_EVENT` 和 `AGENTILOOP_TOOL` 也会设置。
+- **退出码 2 表示要对模型说话。** 以 2 退出的 `PreToolUse` 钩子会阻止这次调用，它打印到 stderr 的内容会作为错误发给模型。以 2 退出的 `PostToolUse` 钩子，其 stderr 会附加到工具结果后面。其他退出码会被忽略（非零会记录日志）。钩子运行 60 秒后会被终止。
+- `/hooks` 列出已加载的钩子。损坏的文件会在启动时报告并跳过。
+
+例如，这个 `PreToolUse` 钩子阻止 `bash` 运行 `git push`：
+
+```sh
+#!/bin/sh
+# .agentiloop/check-command.sh — stdin 是这次调用的 JSON
+if grep -q 'git push' ; then echo "不允许从代理执行 git push" >&2; exit 2; fi
+```
 
 ---
 
@@ -537,6 +567,7 @@ agentiloop --yes "run the tests and fix any failures"        # 无人值守，�
 | `env` | 向导写入的密钥（`KEY=value`，文件模式 600）。启动时加载；shell 中的 `export` 优先 |
 | `sessions/` | 你的对话，每个对话一个文件 |
 | `mcp.json` | 你的 MCP 服务器 |
+| `hooks.json` | 对所有项目生效的钩子（项目自己的 `.agentiloop/hooks.json` 会加进来） |
 | `history.txt` | 你输入过的提示（用于 ↑ / ↓） |
 
 ---
@@ -608,6 +639,7 @@ cargo run -p agentiloop-mcp --example mcp-example-server -- --http 8791   # 或 
 - [x] 保存对话
 - [x] 全屏 TUI
 - [x] MCP 客户端
+- [x] 钩子
 - [ ] 下一步是什么？
 
 ## 许可证

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::hooks::Hooks;
 use crate::message::{ContentBlock, Message, Role, StopReason};
 use crate::permission::{Permission, SharedPolicy};
 use crate::provider::{Provider, ProviderRequest, ToolSpec};
@@ -27,6 +28,8 @@ pub struct AgentConfig {
     /// summarized before the next request. None = `COMPACT_FRACTION` of the
     /// model's context window (or `FALLBACK_COMPACT_AT` if unknown). Some(0) disables.
     pub compact_at_tokens: Option<u64>,
+    /// User hooks (`.agentiloop/hooks.json`) run around tool calls and at the end of a run.
+    pub hooks: Hooks,
 }
 
 impl Default for AgentConfig {
@@ -37,6 +40,7 @@ impl Default for AgentConfig {
             max_tokens: None,
             max_turns: 50,
             compact_at_tokens: None,
+            hooks: Hooks::default(),
         }
     }
 }
@@ -130,6 +134,10 @@ impl Agent {
     pub fn set_model(&mut self, model: impl Into<String>) {
         self.config.model = model.into();
         self.limits = None;
+    }
+
+    pub fn hooks(&self) -> &Hooks {
+        &self.config.hooks
     }
 
     pub fn last_input_tokens(&self) -> u64 {
@@ -344,6 +352,8 @@ impl Agent {
 
             if resp.stop_reason != StopReason::ToolUse || calls.is_empty() {
                 on_event(AgentEvent::Done { stop_reason: resp.stop_reason });
+                let reason = serde_json::to_value(resp.stop_reason).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default();
+                self.config.hooks.run_stop(&self.ctx.cwd, &reason).await;
                 return Ok(());
             }
 
@@ -386,7 +396,23 @@ impl Agent {
             Permission::Cancel => return Err(ToolError::Cancelled(name.to_string())),
         }
 
-        tool.call(&self.ctx, input).await
+        let hooks = &self.config.hooks;
+        if let Err(fb) = hooks.run_pre(&self.ctx.cwd, name, &input).await {
+            return Err(ToolError::Denied(format!("blocked by a PreToolUse hook (`{}`): {}", fb.command, fb.message)));
+        }
+        let result = tool.call(&self.ctx, input.clone()).await;
+        let (mut text, is_error) = match &result {
+            Ok(out) => (out.clone(), false),
+            Err(e) => (e.to_string(), true),
+        };
+        let feedback = hooks.run_post(&self.ctx.cwd, name, &input, &text, is_error).await;
+        if feedback.is_empty() {
+            return result;
+        }
+        for fb in feedback {
+            text.push_str(&format!("\n\n[PostToolUse hook `{}`]: {}", fb.command, fb.message));
+        }
+        if is_error { Err(ToolError::Failed(text)) } else { Ok(text) }
     }
 }
 

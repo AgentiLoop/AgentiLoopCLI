@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 /// Commands built into the program; a file with one of these names is ignored.
 pub const BUILTIN: &[&str] = &[
     "clear", "usage", "export", "init", "diff", "todos", "undo", "model", "compact", "sessions", "resume", "mcp", "commands",
-    "help", "setup", "exit", "quit",
+    "hooks", "help", "setup", "exit", "quit",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]

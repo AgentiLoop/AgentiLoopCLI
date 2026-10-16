@@ -49,6 +49,12 @@ impl ToolPatterns {
     }
 }
 
+impl std::fmt::Display for ToolPatterns {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0.join(","))
+    }
+}
+
 /// Applies `--deny-tool` (always refused) and `--allow-tool` (never asked) before the wrapped policy.
 /// Deny wins when a tool matches both.
 pub struct Rules {

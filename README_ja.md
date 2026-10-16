@@ -475,6 +475,7 @@ TUI またはチャットのプロンプトで、次のコマンドを入力し�
 | `/todos` | モデルの現在のタスクチェックリストを表示します |
 | `/diff` | git 作業ツリーの変更を表示します (ステータスと diff、200 行で省略) |
 | `/commands` | 独自コマンド: `.agentiloop/commands/<name>.md` (プロジェクト) または `~/.agentiloop/commands/<name>.md` が `/<name>` になり、ファイルの内容がプロンプトとして送られます (`$ARGUMENTS` は後ろに入力した内容に、`$1`〜`$9` は個々の語に置き換わります)。一覧を表示します |
+| `/hooks` | `.agentiloop/hooks.json` から読み込んだフックを表示します ([フック](#フック-ツール呼び出しの前後で自分のコマンドを実行する) を参照) |
 | `/init` | 現在のプロジェクト用に `AGENTS.md` のひな形を作成します (上書きはしません) |
 | `/export [file]` | 会話を Markdown ファイルとして保存します (`/export notes.md`、省略時はプロジェクトフォルダーに既定名で保存) |
 | `/compact` | 今すぐ会話を要約して容量を空けます |
@@ -494,6 +495,35 @@ TUI またはチャットのプロンプトで、次のコマンドを入力し�
 ## プロジェクトの指示
 
 プロジェクトに `AGENTS.md` (または `CLAUDE.md`) を置くと、AgentiLoop は起動時にそれを読み込んで従います。ビルドコマンド、コードスタイル、避けるべきことなどを書けます。現在のフォルダーから親フォルダーへ、プロジェクトのルート (`.git` のあるフォルダー) まで探します。個人用の `~/.agentiloop/AGENTS.md` はすべてのプロジェクトに適用され、プロジェクトのファイルはその後に置かれて優先されます。ファイルは 32 KB で切り詰められます。`instructions: <パス>` という行で、読み込まれたファイルがわかります。 `@パス` だけの行 (例: `@docs/style.md`) は、それを書いたファイルからの相対パスで、そのファイルの内容に置き換わります。インポートは 3 階層まで入れ子にできます。存在しないファイル、ループ、コードブロック内の行はそのままです。
+
+---
+
+## フック: ツール呼び出しの前後で自分のコマンドを実行する
+
+フックは、決まったタイミングで AgentiLoop が代わりに実行するシェルコマンドです。ツールの実行前 (`PreToolUse`)、実行後 (`PostToolUse`)、エージェントがリクエストを終えたとき (`Stop`) に動きます。プロジェクトの `.agentiloop/hooks.json`、またはすべてのプロジェクトに効く `~/.agentiloop/hooks.json` に書きます (両方読み込まれます):
+
+```json
+{
+  "hooks": {
+    "PreToolUse":  [{ "matcher": "bash", "command": "sh .agentiloop/check-command.sh" }],
+    "PostToolUse": [{ "matcher": "write_file,edit_file", "command": "cargo fmt" }],
+    "Stop":        [{ "command": "osascript -e 'display notification \"done\" with title \"AgentiLoop\"'" }]
+  }
+}
+```
+
+- `matcher` は、フックを適用するツールを `--allow-tool` と同じ規則で指定します (名前、`mcp_*` プレフィックス、`*`)。省略するとすべてのツールが対象です。`Stop` フックでは無視されます。
+- コマンドはプロジェクトフォルダーで `sh -c` (Windows では `cmd /C`) で実行されます。stdin に JSON オブジェクトが 1 つ渡されます: `event`、`cwd`、`tool`、`input`。`PostToolUse` では `output` と `is_error`、`Stop` では `stop_reason` が加わります。環境変数 `AGENTILOOP_HOOK_EVENT` と `AGENTILOOP_TOOL` も設定されます。
+- **終了コード 2 はモデルへのメッセージです。** 終了コード 2 で終わった `PreToolUse` フックは呼び出しをブロックし、stderr に出力した内容がエラーとしてモデルに送られます。`PostToolUse` フックが 2 で終わると、その stderr がツールの結果に追加されます。それ以外の終了コードは無視されます (0 以外はログに残ります)。フックは 60 秒で強制終了されます。
+- `/hooks` で読み込まれた内容を一覧できます。壊れたファイルは起動時に報告され、スキップされます。
+
+たとえば、この `PreToolUse` フックは `bash` が `git push` を実行するのを止めます:
+
+```sh
+#!/bin/sh
+# .agentiloop/check-command.sh — stdin は呼び出しの JSON
+if grep -q 'git push' ; then echo "エージェントからの git push は許可されていません" >&2; exit 2; fi
+```
 
 ---
 
@@ -537,6 +567,7 @@ TUI またはチャットのプロンプトで、次のコマンドを入力し�
 | `env` | ウィザードが書いたあなたのキー (`KEY=value`、ファイルモード 600)。起動時に読み込まれ、シェルの `export` が優先されます |
 | `sessions/` | 会話。1 つの会話につき 1 ファイル |
 | `mcp.json` | MCP サーバー |
+| `hooks.json` | すべてのプロジェクト用のフック (プロジェクトの `.agentiloop/hooks.json` が追加されます) |
 | `history.txt` | 入力したプロンプト (↑ / ↓ 用) |
 
 ---
@@ -608,6 +639,7 @@ cargo run -p agentiloop-mcp --example mcp-example-server -- --http 8791   # ま�
 - [x] 会話の保存
 - [x] フルスクリーン TUI
 - [x] MCP クライアント
+- [x] フック
 - [ ] 次は何でしょう？
 
 ## ライセンス
