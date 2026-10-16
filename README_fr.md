@@ -497,6 +497,8 @@ Tapez-les à l'invite, dans la TUI ou dans le chat :
 
 Les modèles ne peuvent lire qu'une quantité limitée à la fois. Quand une conversation devient longue (par défaut, quand une requête atteint 150 000 tokens), AgentiLoop demande au modèle de la résumer jusque-là et continue à partir du résumé. Vous verrez une note 📦 quand cela se produit. `/compact` le fait à la demande, et `--compact-at 0` le désactive.
 
+**Cache de prompt (Anthropic).** Les requêtes vers Anthropic marquent le prompt système, les outils et le dernier message comme cachables : la requête suivante de la même conversation réutilise l'essentiel du prompt au lieu de le payer à nouveau (la partie en cache coûte environ un dixième, et la réponse démarre plus tôt). Rien à configurer. `/usage` indique combien de tokens ont été lus depuis le cache et écrits dedans, et `--json` les rapporte comme `cache_read_tokens` et `cache_write_tokens`.
+
 ---
 
 ## Instructions du projet

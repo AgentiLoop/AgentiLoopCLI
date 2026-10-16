@@ -58,7 +58,7 @@ struct WireRequest<'a> {
     model: &'a str,
     max_tokens: u32,
     system: Vec<WireSystem<'a>>,
-    messages: &'a [Message],
+    messages: Vec<Value>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     tools: Vec<WireTool<'a>>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -70,6 +70,26 @@ struct WireSystem<'a> {
     #[serde(rename = "type")]
     kind: &'static str,
     text: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cache_control: Option<Value>,
+}
+
+/// Prompt caching: a breakpoint after the system prompt (which also covers the tools, sent
+/// before it) and one on the last message, so the whole conversation prefix is reused by the
+/// next request. The API finds the longest cached prefix by itself.
+fn cache_control() -> Value {
+    serde_json::json!({"type": "ephemeral"})
+}
+
+/// Messages as JSON, with a cache breakpoint on the last block of the last message.
+fn wire_messages(messages: &[Message]) -> Vec<Value> {
+    let mut out: Vec<Value> = messages.iter().map(|m| serde_json::to_value(m).unwrap_or(Value::Null)).collect();
+    if let Some(last) = out.last_mut().and_then(|m| m.get_mut("content")).and_then(|c| c.as_array_mut()).and_then(|a| a.last_mut()) {
+        if let Some(obj) = last.as_object_mut() {
+            obj.insert("cache_control".into(), cache_control());
+        }
+    }
+    out
 }
 
 #[derive(Serialize)]
@@ -93,6 +113,10 @@ struct WireUsage {
     input_tokens: u64,
     #[serde(default)]
     output_tokens: u64,
+    #[serde(default)]
+    cache_read_input_tokens: u64,
+    #[serde(default)]
+    cache_creation_input_tokens: u64,
 }
 
 #[derive(Deserialize)]
@@ -192,15 +216,15 @@ impl AnthropicProvider {
     async fn send_messages(&self, req: &ProviderRequest, stream: bool) -> anyhow::Result<reqwest::Response> {
         let mut system = Vec::with_capacity(2);
         if self.is_oauth() {
-            system.push(WireSystem { kind: "text", text: CLAUDE_CODE_IDENTITY });
+            system.push(WireSystem { kind: "text", text: CLAUDE_CODE_IDENTITY, cache_control: None });
         }
-        system.push(WireSystem { kind: "text", text: &req.system });
+        system.push(WireSystem { kind: "text", text: &req.system, cache_control: Some(cache_control()) });
 
         let body = WireRequest {
             model: &req.model,
             max_tokens: req.max_tokens,
             system,
-            messages: &req.messages,
+            messages: wire_messages(&req.messages),
             tools: req
                 .tools
                 .iter()
@@ -274,6 +298,8 @@ impl Provider for AnthropicProvider {
             stop_reason: parse_stop_reason(wire.stop_reason.as_deref()),
             input_tokens: wire.usage.input_tokens,
             output_tokens: wire.usage.output_tokens,
+            cache_read_tokens: wire.usage.cache_read_input_tokens,
+            cache_write_tokens: wire.usage.cache_creation_input_tokens,
         })
     }
 
@@ -290,6 +316,7 @@ impl Provider for AnthropicProvider {
         let mut stop_reason = None;
         let mut input_tokens = 0;
         let mut output_tokens = 0;
+        let (mut cache_read_tokens, mut cache_write_tokens) = (0, 0);
 
         while let Some(chunk) = body.next().await {
             buf.extend_from_slice(&chunk.context("reading Anthropic stream")?);
@@ -300,7 +327,11 @@ impl Provider for AnthropicProvider {
                 let Some(data) = line.trim_end().strip_prefix("data:") else { continue };
                 let event: WireEvent = serde_json::from_str(data.trim_start()).context("decoding stream event")?;
                 match event {
-                    WireEvent::MessageStart { message } => input_tokens = message.usage.input_tokens,
+                    WireEvent::MessageStart { message } => {
+                        input_tokens = message.usage.input_tokens;
+                        cache_read_tokens = message.usage.cache_read_input_tokens;
+                        cache_write_tokens = message.usage.cache_creation_input_tokens;
+                    }
                     WireEvent::ContentBlockStart { content_block } => blocks.push(match content_block {
                         WireBlockStart::Text {} => Partial::Text(String::new()),
                         WireBlockStart::ToolUse { id, name } => Partial::ToolUse { id, name, json: String::new() },
@@ -357,6 +388,8 @@ impl Provider for AnthropicProvider {
             stop_reason,
             input_tokens,
             output_tokens,
+            cache_read_tokens,
+            cache_write_tokens,
         })
     }
 }
@@ -369,7 +402,7 @@ mod tests {
 
     const SSE: &str = "\
 event: message_start
-data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"m\",\"usage\":{\"input_tokens\":25,\"output_tokens\":1}}}
+data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"m\",\"usage\":{\"input_tokens\":25,\"output_tokens\":1,\"cache_read_input_tokens\":2000,\"cache_creation_input_tokens\":300}}}
 
 event: content_block_start
 data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}
@@ -426,6 +459,30 @@ data: {\"type\":\"message_stop\"}
         format!("http://{addr}")
     }
 
+    #[test]
+    fn cache_breakpoints_sit_on_the_system_prompt_and_the_last_message_block() {
+        let msgs = vec![
+            Message::user_text("hi"),
+            Message { role: Role::Assistant, content: vec![ContentBlock::ToolUse { id: "t1".into(), name: "x".into(), input: Value::Null }] },
+            Message::tool_results(vec![
+                ContentBlock::ToolResult { tool_use_id: "t1".into(), content: "a".into(), is_error: false },
+                ContentBlock::ToolResult { tool_use_id: "t2".into(), content: "b".into(), is_error: false },
+            ]),
+        ];
+        let wire = wire_messages(&msgs);
+        assert!(wire[0]["content"][0].get("cache_control").is_none());
+        assert!(wire[1]["content"][0].get("cache_control").is_none());
+        assert!(wire[2]["content"][0].get("cache_control").is_none());
+        assert_eq!(wire[2]["content"][1]["cache_control"], serde_json::json!({"type": "ephemeral"}));
+        assert_eq!(wire[2]["content"][1]["tool_use_id"], "t2");
+        assert!(wire_messages(&[]).is_empty());
+        let system = vec![WireSystem { kind: "text", text: "s", cache_control: Some(cache_control()) }];
+        let v = serde_json::to_value(&system).unwrap();
+        assert_eq!(v[0]["cache_control"]["type"], "ephemeral");
+        let plain = serde_json::to_value(WireSystem { kind: "text", text: "s", cache_control: None }).unwrap();
+        assert!(plain.get("cache_control").is_none());
+    }
+
     #[tokio::test]
     async fn streams_text_deltas_and_assembles_tool_use() {
         let base_url = serve_once().await;
@@ -446,6 +503,7 @@ data: {\"type\":\"message_stop\"}
         assert_eq!(resp.stop_reason, StopReason::ToolUse);
         assert_eq!(resp.input_tokens, 25);
         assert_eq!(resp.output_tokens, 15);
+        assert_eq!((resp.cache_read_tokens, resp.cache_write_tokens), (2000, 300));
         let tools: Vec<_> = resp.message.tool_uses().collect();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].0, "toolu_1");

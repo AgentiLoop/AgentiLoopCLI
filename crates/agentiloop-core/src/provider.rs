@@ -26,6 +26,11 @@ pub struct ProviderResponse {
     pub stop_reason: StopReason,
     pub input_tokens: u64,
     pub output_tokens: u64,
+    /// Prompt tokens served from the provider's prompt cache (part of `input_tokens` or
+    /// in addition to it, as the provider counts them); 0 when unsupported.
+    pub cache_read_tokens: u64,
+    /// Prompt tokens written to the provider's prompt cache this request; 0 when unsupported.
+    pub cache_write_tokens: u64,
 }
 
 /// One entry from a provider's model catalog.

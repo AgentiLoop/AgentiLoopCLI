@@ -404,6 +404,8 @@ Type these at the prompt, in the TUI or the chat:
 
 Models can only read so much at once. When a conversation gets big (by default, when a request reaches 150,000 tokens), AgentiLoop asks the model to summarize it so far and carries on from the summary. You'll see a 📦 note when that happens. `/compact` does it on demand, and `--compact-at 0` turns it off.
 
+**Prompt caching (Anthropic).** Requests to Anthropic mark the system prompt, the tools and the latest message as cacheable, so the next request in the same conversation reuses most of the prompt instead of paying for it again (the cached part costs about a tenth, and the reply starts sooner). Nothing to configure. `/usage` shows how many tokens were read from and written to the cache, and `--json` reports them as `cache_read_tokens` and `cache_write_tokens`.
+
 ---
 
 ## Project instructions

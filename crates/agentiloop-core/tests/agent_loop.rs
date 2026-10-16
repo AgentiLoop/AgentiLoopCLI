@@ -59,6 +59,8 @@ fn text(t: &str) -> ProviderResponse {
         stop_reason: StopReason::EndTurn,
         input_tokens: 10,
         output_tokens: 5,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
     }
 }
 
@@ -71,6 +73,8 @@ fn tool_call(id: &str, name: &str, input: Value) -> ProviderResponse {
         stop_reason: StopReason::ToolUse,
         input_tokens: 10,
         output_tokens: 5,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
     }
 }
 

@@ -13,6 +13,10 @@ pub struct Usage {
     pub requests: u64,
     pub input_tokens: u64,
     pub output_tokens: u64,
+    /// Prompt tokens the provider served from its cache (Anthropic prompt caching).
+    pub cache_read_tokens: u64,
+    /// Prompt tokens the provider wrote to its cache.
+    pub cache_write_tokens: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -149,10 +153,12 @@ impl Agent {
         self.usage
     }
 
-    fn add_usage(&mut self, input: u64, output: u64) {
+    fn add_usage(&mut self, resp: &crate::provider::ProviderResponse) {
         self.usage.requests += 1;
-        self.usage.input_tokens += input;
-        self.usage.output_tokens += output;
+        self.usage.input_tokens += resp.input_tokens;
+        self.usage.output_tokens += resp.output_tokens;
+        self.usage.cache_read_tokens += resp.cache_read_tokens;
+        self.usage.cache_write_tokens += resp.cache_write_tokens;
     }
 
     /// Limits in effect for the current model, once a run has resolved them.
@@ -249,7 +255,7 @@ impl Agent {
         };
         Self::budget_request(&mut req, limits)?;
         let resp = self.provider.complete(req).await?;
-        self.add_usage(resp.input_tokens, resp.output_tokens);
+        self.add_usage(&resp);
         let summary = resp.message.text();
         anyhow::ensure!(!summary.trim().is_empty(), "compaction produced an empty summary");
 
@@ -329,7 +335,7 @@ impl Agent {
             self.pending_text.clear();
             let elapsed = started.elapsed();
             self.last_input_tokens = resp.input_tokens;
-            self.add_usage(resp.input_tokens, resp.output_tokens);
+            self.add_usage(&resp);
             on_event(AgentEvent::TurnComplete {
                 input_tokens: resp.input_tokens,
                 output_tokens: resp.output_tokens,

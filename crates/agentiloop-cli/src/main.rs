@@ -329,7 +329,7 @@ async fn main() -> Result<()> {
         if json {
             let err = res.as_ref().err().map(|e| format!("{e:#}"));
             let u = agent.usage();
-            let mut v = json_result_value(&last_text, err.as_deref(), &session.id, provider.name(), agent.model(), u.requests, u.input_tokens, u.output_tokens);
+            let mut v = json_result_value(&last_text, err.as_deref(), &session.id, provider.name(), agent.model(), u);
             if stream {
                 v["type"] = "result".into();
             }
@@ -668,7 +668,7 @@ async fn slash_command(
         }
         "/usage" => {
             let u = agent.usage();
-            say(usage_line(u.requests, u.input_tokens, u.output_tokens));
+            say(usage_line(u));
             let last = agent.last_input_tokens();
             if last > 0 {
                 match agent.limits() {
@@ -844,8 +844,12 @@ const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
 /exit           quit";
 
 /// `/usage` first line: tokens spent since agentiloop started.
-pub(crate) fn usage_line(requests: u64, input: u64, output: u64) -> String {
-    format!("{requests} request(s) since start: {input} input + {output} output = {} tokens", input + output)
+pub(crate) fn usage_line(u: agentiloop_core::Usage) -> String {
+    let mut line = format!("{} request(s) since start: {} input + {} output = {} tokens", u.requests, u.input_tokens, u.output_tokens, u.input_tokens + u.output_tokens);
+    if u.cache_read_tokens > 0 || u.cache_write_tokens > 0 {
+        line.push_str(&format!(" (prompt cache: {} read, {} written)", u.cache_read_tokens, u.cache_write_tokens));
+    }
+    line
 }
 
 pub(crate) fn compacted_line(before_tokens: u64, messages_dropped: usize) -> String {
@@ -976,38 +980,21 @@ pub(crate) fn append_extra(base: &str, extra: Option<&str>) -> String {
 }
 
 /// The `--json` result object for a one-shot run.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn json_result(
-    result: &str,
-    error: Option<&str>,
-    session_id: &str,
-    provider: &str,
-    model: &str,
-    requests: u64,
-    input_tokens: u64,
-    output_tokens: u64,
-) -> String {
-    json_result_value(result, error, session_id, provider, model, requests, input_tokens, output_tokens).to_string()
+pub(crate) fn json_result(result: &str, error: Option<&str>, session_id: &str, provider: &str, model: &str, u: agentiloop_core::Usage) -> String {
+    json_result_value(result, error, session_id, provider, model, u).to_string()
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn json_result_value(
-    result: &str,
-    error: Option<&str>,
-    session_id: &str,
-    provider: &str,
-    model: &str,
-    requests: u64,
-    input_tokens: u64,
-    output_tokens: u64,
-) -> serde_json::Value {
+pub(crate) fn json_result_value(result: &str, error: Option<&str>, session_id: &str, provider: &str, model: &str, u: agentiloop_core::Usage) -> serde_json::Value {
     let mut v = serde_json::json!({
         "result": result,
         "is_error": error.is_some(),
         "session_id": session_id,
         "provider": provider,
         "model": model,
-        "usage": {"requests": requests, "input_tokens": input_tokens, "output_tokens": output_tokens},
+        "usage": {
+            "requests": u.requests, "input_tokens": u.input_tokens, "output_tokens": u.output_tokens,
+            "cache_read_tokens": u.cache_read_tokens, "cache_write_tokens": u.cache_write_tokens,
+        },
     });
     if let Some(e) = error {
         v["error"] = e.into();
@@ -1058,7 +1045,10 @@ pub(crate) fn compact(v: &serde_json::Value) -> String {
 mod usage_tests {
     #[test]
     fn usage_line_totals_tokens() {
-        assert_eq!(super::usage_line(3, 1200, 340), "3 request(s) since start: 1200 input + 340 output = 1540 tokens");
+        use agentiloop_core::Usage;
+        let u = Usage { requests: 3, input_tokens: 1200, output_tokens: 340, ..Default::default() };
+        assert_eq!(super::usage_line(u), "3 request(s) since start: 1200 input + 340 output = 1540 tokens");
+        assert_eq!(super::usage_line(Usage { cache_read_tokens: 900, cache_write_tokens: 50, ..u }), "3 request(s) since start: 1200 input + 340 output = 1540 tokens (prompt cache: 900 read, 50 written)");
     }
 }
 
@@ -1136,14 +1126,15 @@ mod json_tests {
 
     #[test]
     fn json_result_has_stable_keys_and_error_only_on_failure() {
-        let ok: serde_json::Value = serde_json::from_str(&json_result("hi \"x\"\n", None, "s1", "omlx", "m", 2, 10, 5)).unwrap();
+        let u = |requests, input_tokens, output_tokens| agentiloop_core::Usage { requests, input_tokens, output_tokens, ..Default::default() };
+        let ok: serde_json::Value = serde_json::from_str(&json_result("hi \"x\"\n", None, "s1", "omlx", "m", u(2, 10, 5))).unwrap();
         assert_eq!(ok["result"], "hi \"x\"\n");
         assert_eq!(ok["is_error"], false);
         assert_eq!(ok["usage"]["input_tokens"], 10);
         assert!(ok.get("error").is_none());
-        let bad: serde_json::Value = serde_json::from_str(&json_result("", Some("boom"), "s1", "omlx", "m", 0, 0, 0)).unwrap();
+        let bad: serde_json::Value = serde_json::from_str(&json_result("", Some("boom"), "s1", "omlx", "m", u(0, 0, 0))).unwrap();
         assert_eq!((bad["is_error"].as_bool(), bad["error"].as_str()), (Some(true), Some("boom")));
-        assert_eq!(json_result("a", None, "s", "p", "m", 1, 2, 3), r#"{"is_error":false,"model":"m","provider":"p","result":"a","session_id":"s","usage":{"input_tokens":2,"output_tokens":3,"requests":1}}"#);
+        assert_eq!(json_result("a", None, "s", "p", "m", u(1, 2, 3)), r#"{"is_error":false,"model":"m","provider":"p","result":"a","session_id":"s","usage":{"cache_read_tokens":0,"cache_write_tokens":0,"input_tokens":2,"output_tokens":3,"requests":1}}"#);
     }
 
     #[test]
@@ -1165,7 +1156,7 @@ mod json_tests {
         );
         assert_eq!(event_json(&AgentEvent::Compacted { before_tokens: 100, messages_dropped: 4 }), r#"{"before_tokens":100,"messages_dropped":4,"type":"compacted"}"#);
         assert_eq!(event_json(&AgentEvent::Done { stop_reason: StopReason::EndTurn }), r#"{"stop_reason":"end_turn","type":"done"}"#);
-        let mut v = json_result_value("a", None, "s", "p", "m", 1, 2, 3);
+        let mut v = json_result_value("a", None, "s", "p", "m", agentiloop_core::Usage::default());
         v["type"] = "result".into();
         assert_eq!(v["type"], "result");
         assert_eq!(v["result"], "a");

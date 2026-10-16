@@ -375,6 +375,8 @@ pub(crate) async fn read_stream(
         stop_reason: stop,
         input_tokens,
         output_tokens,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
     })
 }
 

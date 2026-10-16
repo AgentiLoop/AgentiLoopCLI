@@ -580,6 +580,8 @@ impl Provider for OpenAIProvider {
             stop_reason: parse_finish(choice.finish_reason.as_deref(), has_calls),
             input_tokens: usage.prompt_tokens,
             output_tokens: usage.completion_tokens,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
         })
     }
 
@@ -662,6 +664,8 @@ impl Provider for OpenAIProvider {
             stop_reason: parse_finish(finish.as_deref(), has_calls),
             input_tokens: usage.prompt_tokens,
             output_tokens: usage.completion_tokens,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
         })
     }
 }

@@ -498,6 +498,8 @@ Tipp diese an der Eingabeaufforderung ein, in der TUI oder im Chat:
 
 Modelle können nur eine begrenzte Menge auf einmal lesen. Wenn eine Unterhaltung groß wird (standardmäßig, wenn eine Anfrage 150.000 Tokens erreicht), bittet AgentiLoop das Modell, das Bisherige zusammenzufassen, und macht auf Basis der Zusammenfassung weiter. Du siehst dann einen 📦-Hinweis. `/compact` macht das auf Wunsch, und `--compact-at 0` schaltet es ab.
 
+**Prompt-Caching (Anthropic).** Anfragen an Anthropic markieren den System-Prompt, die Tools und die letzte Nachricht als cachebar, sodass die nächste Anfrage im selben Gespräch den Großteil des Prompts wiederverwendet, statt ihn erneut zu bezahlen (der gecachte Teil kostet etwa ein Zehntel, und die Antwort beginnt früher). Nichts zu konfigurieren. `/usage` zeigt, wie viele Tokens aus dem Cache gelesen und in ihn geschrieben wurden, und `--json` meldet sie als `cache_read_tokens` und `cache_write_tokens`.
+
 ---
 
 ## Projektanweisungen

@@ -498,6 +498,8 @@ agentiloop --yes "run the tests and fix any failures"        # 无人值守，�
 
 模型一次能读取的内容是有限的。当对话变得很长时（默认是请求达到 150,000 个 token 时），AgentiLoop 会让模型总结目前为止的内容，并在总结的基础上继续。发生这种情况时，你会看到一条 📦 提示。`/compact` 可以按需执行总结，`--compact-at 0` 则会关闭此功能。
 
+**提示词缓存（Anthropic）。** 发给 Anthropic 的请求会把系统提示词、工具和最新一条消息标记为可缓存，这样同一会话的下一次请求会复用大部分提示词，而不用再付一次费（缓存部分约为十分之一的价格，回复也更早开始）。无需任何配置。`/usage` 会显示从缓存读取和写入缓存的 token 数，`--json` 会以 `cache_read_tokens` 和 `cache_write_tokens` 报告。
+
 ---
 
 ## 项目说明
