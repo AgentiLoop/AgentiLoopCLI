@@ -272,6 +272,7 @@ Options:
       --deny-tool <NAME>             Never run this tool; the model is told it was denied (same name rules). Beats --allow-tool and --yes
       --append-system-prompt <TEXT>  Extra text added to the end of the system prompt for this run (never saved) [env: AGENTILOOP_APPEND_SYSTEM_PROMPT=]
       --json                         One-shot only: print the answer as one JSON object on stdout (result, is_error, session_id, provider, model, usage) instead of streaming text. Tool activity still goes to stderr
+      --stream-json                  One-shot only: print every event as one JSON object per line on stdout as it happens (text_delta, text, tool_call, tool_result, turn, compacted, done), then the same result object as --json with "type": "result". Nothing else is printed
   -h, --help                         Print help
   -V, --version                      Print version
 ```
@@ -443,6 +444,7 @@ agentiloop --new          # начать новый разговор (стары
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | Не запускать MCP-серверы (см. ниже) |
 | `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | Дополнительный текст в конце системного промпта для этого запуска (не сохраняется) |
 | `--json` | | С разовым запросом: выводит ответ одним JSON-объектом (`result`, `is_error`, `session_id`, `provider`, `model`, `usage`) в stdout. Работа инструментов остаётся в stderr |
+| `--stream-json` | | С разовым запросом: печатает каждое событие по мере появления как один JSON-объект на строку в stdout (`text_delta`, `text`, `tool_call`, `tool_result`, `turn`, `compacted`, `done`), затем тот же объект результата, что и `--json`, с `"type": "result"`. Больше ничего не печатается. Для редакторов и скриптов, которым нужен прогресс |
 | `--setup` | | Снова запустить мастер первоначальной настройки (провайдер, ключ, модель). Вместе с `--tui` он запускается внутри полноэкранного интерфейса |
 | `--reset` | | Как с нуля: удаляет `~/.agentiloop`, блок agentiloop в профиле оболочки и записи Связки ключей, созданные мастером (в Windows — заданные им пользовательские переменные окружения). Написанные вручную строки `export` только комментируются, и только с вашего согласия. Добавьте `--yes`, чтобы пропустить вопросы |
 | `--max-turns <n>` | | Максимальное число шагов агента на один запрос (по умолчанию 50) |

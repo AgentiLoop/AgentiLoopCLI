@@ -102,6 +102,12 @@ struct Cli {
     #[arg(long, requires = "prompt")]
     json: bool,
 
+    /// One-shot only: print every event as one JSON object per line on stdout as it happens
+    /// (text_delta, text, tool_call, tool_result, turn, compacted, done), then the same result
+    /// object as --json with "type": "result". Nothing else is printed.
+    #[arg(long = "stream-json", requires = "prompt", conflicts_with = "json")]
+    stream_json: bool,
+
     /// One-shot prompt. If omitted, starts an interactive REPL. A lone `-` in it is replaced by
     /// what is piped on stdin: `git diff | agentiloop "review this" -`.
     prompt: Vec<String>,
@@ -285,7 +291,8 @@ async fn main() -> Result<()> {
     if !cli.prompt.is_empty() {
         let mut tracker = diff::Tracker::new(cwd.clone());
         agentiloop_tools::undo::begin_turn();
-        let json = cli.json;
+        let json = cli.json || cli.stream_json;
+        let stream = cli.stream_json;
         let mut last_text = String::new();
         let res = match expand_stdin(&cli.prompt, || {
             let mut text = String::new();
@@ -304,6 +311,10 @@ async fn main() -> Result<()> {
                                 AgentEvent::AssistantText(t) => last_text = t.clone(),
                                 _ => {}
                             }
+                            if stream {
+                                println!("{}", event_json(&ev));
+                                return;
+                            }
                             if matches!(ev, AgentEvent::AssistantTextDelta(_) | AgentEvent::AssistantText(_)) {
                                 return;
                             }
@@ -318,7 +329,11 @@ async fn main() -> Result<()> {
         if json {
             let err = res.as_ref().err().map(|e| format!("{e:#}"));
             let u = agent.usage();
-            println!("{}", json_result(&last_text, err.as_deref(), &session.id, provider.name(), agent.model(), u.requests, u.input_tokens, u.output_tokens));
+            let mut v = json_result_value(&last_text, err.as_deref(), &session.id, provider.name(), agent.model(), u.requests, u.input_tokens, u.output_tokens);
+            if stream {
+                v["type"] = "result".into();
+            }
+            println!("{v}");
         }
         mcp.shutdown().await;
         return res;
@@ -972,6 +987,20 @@ pub(crate) fn json_result(
     input_tokens: u64,
     output_tokens: u64,
 ) -> String {
+    json_result_value(result, error, session_id, provider, model, requests, input_tokens, output_tokens).to_string()
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn json_result_value(
+    result: &str,
+    error: Option<&str>,
+    session_id: &str,
+    provider: &str,
+    model: &str,
+    requests: u64,
+    input_tokens: u64,
+    output_tokens: u64,
+) -> serde_json::Value {
     let mut v = serde_json::json!({
         "result": result,
         "is_error": error.is_some(),
@@ -983,6 +1012,26 @@ pub(crate) fn json_result(
     if let Some(e) = error {
         v["error"] = e.into();
     }
+    v
+}
+
+/// One `--stream-json` line per agent event.
+pub(crate) fn event_json(ev: &AgentEvent) -> String {
+    let v = match ev {
+        AgentEvent::AssistantTextDelta(t) => serde_json::json!({"type": "text_delta", "text": t}),
+        AgentEvent::AssistantText(t) => serde_json::json!({"type": "text", "text": t}),
+        AgentEvent::ToolCall { id, name, input } => serde_json::json!({"type": "tool_call", "id": id, "name": name, "input": input}),
+        AgentEvent::ToolResult { id, name, output, is_error } => {
+            serde_json::json!({"type": "tool_result", "id": id, "name": name, "output": output, "is_error": is_error})
+        }
+        AgentEvent::TurnComplete { input_tokens, output_tokens, elapsed_ms, first_token_ms } => serde_json::json!({
+            "type": "turn", "input_tokens": input_tokens, "output_tokens": output_tokens, "elapsed_ms": elapsed_ms, "first_token_ms": first_token_ms,
+        }),
+        AgentEvent::Compacted { before_tokens, messages_dropped } => {
+            serde_json::json!({"type": "compacted", "before_tokens": before_tokens, "messages_dropped": messages_dropped})
+        }
+        AgentEvent::Done { stop_reason } => serde_json::json!({"type": "done", "stop_reason": stop_reason}),
+    };
     v.to_string()
 }
 
@@ -1083,7 +1132,7 @@ mod git_tests {
 
 #[cfg(test)]
 mod json_tests {
-    use super::json_result;
+    use super::{event_json, json_result, json_result_value};
 
     #[test]
     fn json_result_has_stable_keys_and_error_only_on_failure() {
@@ -1095,6 +1144,31 @@ mod json_tests {
         let bad: serde_json::Value = serde_json::from_str(&json_result("", Some("boom"), "s1", "omlx", "m", 0, 0, 0)).unwrap();
         assert_eq!((bad["is_error"].as_bool(), bad["error"].as_str()), (Some(true), Some("boom")));
         assert_eq!(json_result("a", None, "s", "p", "m", 1, 2, 3), r#"{"is_error":false,"model":"m","provider":"p","result":"a","session_id":"s","usage":{"input_tokens":2,"output_tokens":3,"requests":1}}"#);
+    }
+
+    #[test]
+    fn stream_json_lines_have_a_type_and_the_event_fields() {
+        use agentiloop_core::{AgentEvent, StopReason};
+        assert_eq!(event_json(&AgentEvent::AssistantTextDelta("hi".into())), r#"{"text":"hi","type":"text_delta"}"#);
+        assert_eq!(event_json(&AgentEvent::AssistantText("hi there".into())), r#"{"text":"hi there","type":"text"}"#);
+        assert_eq!(
+            event_json(&AgentEvent::ToolCall { id: "t1".into(), name: "bash".into(), input: serde_json::json!({"command": "ls"}) }),
+            r#"{"id":"t1","input":{"command":"ls"},"name":"bash","type":"tool_call"}"#
+        );
+        assert_eq!(
+            event_json(&AgentEvent::ToolResult { id: "t1".into(), name: "bash".into(), output: "a\nb".into(), is_error: false }),
+            r#"{"id":"t1","is_error":false,"name":"bash","output":"a\nb","type":"tool_result"}"#
+        );
+        assert_eq!(
+            event_json(&AgentEvent::TurnComplete { input_tokens: 10, output_tokens: 5, elapsed_ms: 900, first_token_ms: None }),
+            r#"{"elapsed_ms":900,"first_token_ms":null,"input_tokens":10,"output_tokens":5,"type":"turn"}"#
+        );
+        assert_eq!(event_json(&AgentEvent::Compacted { before_tokens: 100, messages_dropped: 4 }), r#"{"before_tokens":100,"messages_dropped":4,"type":"compacted"}"#);
+        assert_eq!(event_json(&AgentEvent::Done { stop_reason: StopReason::EndTurn }), r#"{"stop_reason":"end_turn","type":"done"}"#);
+        let mut v = json_result_value("a", None, "s", "p", "m", 1, 2, 3);
+        v["type"] = "result".into();
+        assert_eq!(v["type"], "result");
+        assert_eq!(v["result"], "a");
     }
 }
 

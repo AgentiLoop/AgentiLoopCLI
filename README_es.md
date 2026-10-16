@@ -272,6 +272,7 @@ Options:
       --deny-tool <NAME>             Never run this tool; the model is told it was denied (same name rules). Beats --allow-tool and --yes
       --append-system-prompt <TEXT>  Extra text added to the end of the system prompt for this run (never saved) [env: AGENTILOOP_APPEND_SYSTEM_PROMPT=]
       --json                         One-shot only: print the answer as one JSON object on stdout (result, is_error, session_id, provider, model, usage) instead of streaming text. Tool activity still goes to stderr
+      --stream-json                  One-shot only: print every event as one JSON object per line on stdout as it happens (text_delta, text, tool_call, tool_result, turn, compacted, done), then the same result object as --json with "type": "result". Nothing else is printed
   -h, --help                         Print help
   -V, --version                      Print version
 ```
@@ -444,6 +445,7 @@ Cada opción también se puede configurar con una variable de entorno, que apare
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | No inicia servidores MCP (mira más abajo) |
 | `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | Texto extra al final del prompt del sistema para esta ejecución (no se guarda) |
 | `--json` | | Con un prompt de una sola vez: imprime la respuesta como un objeto JSON (`result`, `is_error`, `session_id`, `provider`, `model`, `usage`) en stdout. La actividad de herramientas queda en stderr |
+| `--stream-json` | | Con un prompt de una sola vez: imprime cada evento como un objeto JSON por línea en stdout según ocurre (`text_delta`, `text`, `tool_call`, `tool_result`, `turn`, `compacted`, `done`), y al final el mismo objeto de resultado que `--json` con `"type": "result"`. No se imprime nada más. Para editores y scripts que quieren ver el progreso |
 | `--setup` | | Vuelve a ejecutar el asistente de primera configuración (proveedor, clave, modelo). Combínalo con `--tui` para ejecutarlo dentro de la interfaz a pantalla completa |
 | `--reset` | | Como nuevo: borra `~/.agentiloop`, el bloque de agentiloop en tu perfil de shell y los elementos del Llavero que creó el asistente (en Windows: las variables de entorno de usuario que definió). Las líneas `export` escritas a mano solo se comentan, y solo si dices que sí. Añade `--yes` para saltarte las preguntas |
 | `--max-turns <n>` | | Máximo de pasos que puede dar el agente por petición (50 por defecto) |
