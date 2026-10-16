@@ -276,6 +276,7 @@ async fn main() -> Result<()> {
             }
             None => Session::new(cwd.clone(), provider.name(), agent.model()),
         };
+        agent.set_cache_key(session.id.clone());
         Ok::<_, anyhow::Error>((provider, mcp, sessions_dir, agent, session))
     }
     .await;
@@ -666,6 +667,7 @@ async fn slash_command(
             agentiloop_tools::undo::clear();
             agentiloop_tools::todo::clear();
             *session = Session::new(session.cwd.clone(), provider.name(), agent.model());
+            agent.set_cache_key(session.id.clone());
             say(format!("context and tool history cleared; new session {}", session.id));
         }
         "/usage" => {
@@ -801,6 +803,7 @@ async fn slash_command(
                     agent.clear();
                     agent.history = s.history.clone();
                     agent.set_model(s.model.clone());
+                    agent.set_cache_key(s.id.clone());
                     say(format!("resumed session {} ({} messages, model {}): {}", s.id, s.history.len(), s.model, s.title()));
                     *session = s;
                 }

@@ -99,6 +99,7 @@ impl OpenAIProvider {
                 .collect(),
             stream,
             stream_options: stream.then_some(WireStreamOptions { include_usage: true }),
+            prompt_cache_key: if official { req.cache_key.as_deref() } else { None },
         }
     }
 
@@ -126,6 +127,9 @@ impl OpenAIProvider {
                 .iter()
                 .map(|t| serde_json::json!({"type": "function", "name": t.name, "description": t.description, "parameters": t.input_schema}))
                 .collect();
+        }
+        if let Some(key) = &req.cache_key {
+            body["prompt_cache_key"] = serde_json::json!(key);
         }
         let resp = self
             .auth(self.client.post(format!("{}/responses", self.base_url)))
@@ -238,6 +242,10 @@ struct WireRequest<'a> {
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     stream_options: Option<WireStreamOptions>,
+    /// api.openai.com only: routes the automatic prompt cache so every turn of
+    /// a session hits the same cache. Other servers may reject unknown fields.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prompt_cache_key: Option<&'a str>,
 }
 
 #[derive(Serialize)]
@@ -354,6 +362,21 @@ struct WireUsage {
     prompt_tokens: u64,
     #[serde(default)]
     completion_tokens: u64,
+    /// OpenAI: `cached_tokens` is the part of `prompt_tokens` served from the prompt cache.
+    #[serde(default)]
+    prompt_tokens_details: Option<WirePromptTokensDetails>,
+}
+
+impl WireUsage {
+    fn cached_tokens(&self) -> u64 {
+        self.prompt_tokens_details.as_ref().map_or(0, |d| d.cached_tokens)
+    }
+}
+
+#[derive(Deserialize, Default)]
+struct WirePromptTokensDetails {
+    #[serde(default)]
+    cached_tokens: u64,
 }
 
 #[derive(Deserialize)]
@@ -580,7 +603,7 @@ impl Provider for OpenAIProvider {
             stop_reason: parse_finish(choice.finish_reason.as_deref(), has_calls),
             input_tokens: usage.prompt_tokens,
             output_tokens: usage.completion_tokens,
-            cache_read_tokens: 0,
+            cache_read_tokens: usage.cached_tokens(),
             cache_write_tokens: 0,
         })
     }
@@ -664,7 +687,7 @@ impl Provider for OpenAIProvider {
             stop_reason: parse_finish(finish.as_deref(), has_calls),
             input_tokens: usage.prompt_tokens,
             output_tokens: usage.completion_tokens,
-            cache_read_tokens: 0,
+            cache_read_tokens: usage.cached_tokens(),
             cache_write_tokens: 0,
         })
     }
@@ -729,6 +752,7 @@ mod tests {
             messages: vec![Message::user_text("hi")],
             tools: vec![],
             max_tokens: 16,
+            cache_key: None,
         }
     }
 
@@ -747,7 +771,7 @@ data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\
 
 data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}
 
-data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[],\"usage\":{\"prompt_tokens\":139,\"completion_tokens\":21,\"total_tokens\":160}}
+data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[],\"usage\":{\"prompt_tokens\":139,\"completion_tokens\":21,\"total_tokens\":160,\"prompt_tokens_details\":{\"cached_tokens\":128}}}
 
 data: [DONE]
 
@@ -764,6 +788,7 @@ data: [DONE]
         assert_eq!(resp.message.text(), "Let me look.");
         assert_eq!(resp.stop_reason, StopReason::ToolUse);
         assert_eq!((resp.input_tokens, resp.output_tokens), (139, 21));
+        assert_eq!((resp.cache_read_tokens, resp.cache_write_tokens), (128, 0));
         let calls: Vec<_> = resp.message.tool_uses().collect();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "call_abc");
@@ -805,6 +830,22 @@ data: [DONE]
         assert_eq!(calls[0].1, "bash");
         assert_eq!(calls[0].2, &serde_json::json!({"command": "ls"}));
         assert_eq!((resp.input_tokens, resp.output_tokens), (7, 3));
+        assert_eq!(resp.cache_read_tokens, 0);
+    }
+
+    #[test]
+    fn prompt_cache_key_only_goes_to_official_openai() {
+        let mut r = req();
+        r.cache_key = Some("sess-1".into());
+        let official = OpenAIProvider::new("k", DEFAULT_BASE_URL);
+        let body = serde_json::to_value(official.wire_request(&r, true)).unwrap();
+        assert_eq!(body["prompt_cache_key"], "sess-1");
+        let local = OpenAIProvider::new("k", "http://localhost:11434/v1");
+        let body = serde_json::to_value(local.wire_request(&r, true)).unwrap();
+        assert!(body.get("prompt_cache_key").is_none());
+        r.cache_key = None;
+        let body = serde_json::to_value(official.wire_request(&r, true)).unwrap();
+        assert!(body.get("prompt_cache_key").is_none());
     }
 
     #[test]

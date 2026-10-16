@@ -493,6 +493,7 @@ data: {\"type\":\"message_stop\"}
             messages: vec![Message::user_text("hi")],
             tools: vec![],
             max_tokens: 16,
+            cache_key: None,
         };
 
         let mut deltas = Vec::new();

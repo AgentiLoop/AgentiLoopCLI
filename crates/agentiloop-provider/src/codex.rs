@@ -307,6 +307,7 @@ pub(crate) async fn read_stream(
     let mut buf: Vec<u8> = Vec::new();
     let mut content = Vec::new();
     let (mut stop, mut input_tokens, mut output_tokens) = (StopReason::EndTurn, 0, 0);
+    let mut cache_read_tokens = 0;
 
     while let Some(chunk) = body.next().await {
         buf.extend_from_slice(&chunk.with_context(|| format!("reading {who} stream"))?);
@@ -347,6 +348,7 @@ pub(crate) async fn read_stream(
                     let r = &ev["response"];
                     input_tokens = r["usage"]["input_tokens"].as_u64().unwrap_or(0);
                     output_tokens = r["usage"]["output_tokens"].as_u64().unwrap_or(0);
+                    cache_read_tokens = r["usage"]["input_tokens_details"]["cached_tokens"].as_u64().unwrap_or(0);
                     if ev["type"] == "response.incomplete" {
                         stop = match r["incomplete_details"]["reason"].as_str() {
                             Some("max_output_tokens") => StopReason::MaxTokens,
@@ -375,7 +377,7 @@ pub(crate) async fn read_stream(
         stop_reason: stop,
         input_tokens,
         output_tokens,
-        cache_read_tokens: 0,
+        cache_read_tokens,
         cache_write_tokens: 0,
     })
 }
@@ -460,6 +462,7 @@ mod tests {
             messages: vec![Message::user_text("hi")],
             tools: vec![ToolSpec { name: "list_dir".into(), description: "d".into(), input_schema: json!({"type": "object"}) }],
             max_tokens: 16,
+            cache_key: None,
         }
     }
 
@@ -527,7 +530,7 @@ mod tests {
             json!({"type": "response.function_call_arguments.delta", "item_id": "fc1", "delta": "{\"pa"}),
             json!({"type": "response.output_item.done", "item": {"type": "function_call", "id": "fc1", "call_id": "call_9", "name": "list_dir", "arguments": "{\"path\":\"/tmp\"}"}}),
             json!({"type": "response.output_item.done", "item": {"type": "web_search_call", "id": "ws1"}}),
-            json!({"type": "response.completed", "response": {"usage": {"input_tokens": 43, "output_tokens": 5}}}),
+            json!({"type": "response.completed", "response": {"usage": {"input_tokens": 43, "output_tokens": 5, "input_tokens_details": {"cached_tokens": 40}}}}),
         ]);
         let (base, seen) = serve(vec![("200 OK", body)]).await;
         let p = CodexProvider::new(auth_file(&jwt(FAR, "acct")), base, "http://unused");
@@ -537,6 +540,7 @@ mod tests {
         assert_eq!(resp.message.text(), "Let me look.");
         assert_eq!(resp.stop_reason, StopReason::ToolUse);
         assert_eq!((resp.input_tokens, resp.output_tokens), (43, 5));
+        assert_eq!(resp.cache_read_tokens, 40);
         let calls: Vec<_> = resp.message.tool_uses().collect();
         assert_eq!(calls, vec![("call_9", "list_dir", &json!({"path": "/tmp"}))]);
 

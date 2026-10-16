@@ -18,6 +18,10 @@ pub struct ProviderRequest {
     pub messages: Vec<Message>,
     pub tools: Vec<ToolSpec>,
     pub max_tokens: u32,
+    /// Stable id for the conversation (the session id). Providers that route
+    /// their prompt cache by key (OpenAI `prompt_cache_key`) send it along so
+    /// every turn of a session lands on the same cache. None = don't send.
+    pub cache_key: Option<String>,
 }
 
 #[derive(Debug, Clone)]

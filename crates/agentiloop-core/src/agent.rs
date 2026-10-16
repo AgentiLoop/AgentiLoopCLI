@@ -118,6 +118,8 @@ pub struct Agent {
     pending_text: String,
     /// Limits resolved from the provider catalog for `config.model`; cleared on `set_model`.
     limits: Option<ModelLimits>,
+    /// Sent as `ProviderRequest::cache_key` on every turn; set to the session id by the CLI.
+    cache_key: Option<String>,
 }
 
 impl Agent {
@@ -128,7 +130,12 @@ impl Agent {
         config: AgentConfig,
         ctx: ToolContext,
     ) -> Self {
-        Self { provider, tools, policy, config, ctx, history: Vec::new(), last_input_tokens: 0, usage: Usage::default(), pending_text: String::new(), limits: None }
+        Self { provider, tools, policy, config, ctx, history: Vec::new(), last_input_tokens: 0, usage: Usage::default(), pending_text: String::new(), limits: None, cache_key: None }
+    }
+
+    /// Key the provider's prompt cache on this conversation (see `ProviderRequest::cache_key`).
+    pub fn set_cache_key(&mut self, key: impl Into<String>) {
+        self.cache_key = Some(key.into());
     }
 
     pub fn model(&self) -> &str {
@@ -252,6 +259,7 @@ impl Agent {
             ))],
             tools: Vec::new(),
             max_tokens: 4096,
+            cache_key: None,
         };
         Self::budget_request(&mut req, limits)?;
         let resp = self.provider.complete(req).await?;
@@ -318,6 +326,7 @@ impl Agent {
                 messages: self.history.clone(),
                 tools: self.tool_specs(),
                 max_tokens: limits.max_tokens,
+                cache_key: self.cache_key.clone(),
             };
             Self::budget_request(&mut req, limits)?;
 
