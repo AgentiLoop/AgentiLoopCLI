@@ -383,6 +383,12 @@ Touches dans la TUI : **Enter** envoie · **↑ / ↓** parcourent les demandes 
 
 ---
 
+## Mentionner des fichiers avec @
+
+Tapez `@` suivi d'un chemin n'importe où dans un prompt et AgentiLoop joint ce fichier à ce que reçoit le modèle : `explique @src/main.rs` envoie votre phrase plus le texte du fichier avec les numéros de ligne. Un dossier (`@src`) joint sa liste. Les chemins sont relatifs au dossier du projet (ou absolus, ou `~/…`) ; un mot qui ne désigne rien est laissé tel quel, les adresses e-mail ne risquent donc rien. Les fichiers sont coupés à 64 Ko, les dossiers à 200 entrées, et une ligne 📎 montre ce qui a été joint. Fonctionne dans la TUI, le chat et les prompts en une fois.
+
+---
+
 ## Il se souvient de votre configuration
 
 Vous ne tapez vos options qu'une seule fois. AgentiLoop enregistre la façon dont vous l'avez lancé ; la prochaine fois, un simple `agentiloop` démarre donc de la même manière :

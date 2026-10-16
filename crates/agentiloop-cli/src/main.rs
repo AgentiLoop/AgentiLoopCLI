@@ -292,6 +292,10 @@ async fn main() -> Result<()> {
             io::stdin().read_to_string(&mut text).map(|_| text)
         }) {
             Ok(prompt) => {
+                let (prompt, attached) = agentiloop_core::mentions::expand(&prompt, &cwd);
+                for a in &attached {
+                    eprintln!("{}", agentiloop_core::mentions::describe(a));
+                }
                 agent
                     .run(&prompt, |ev| {
                         if json {
@@ -374,6 +378,10 @@ async fn main() -> Result<()> {
                 let tx = ui_tx.clone();
                 let tracker = &mut tracker;
                 agentiloop_tools::undo::begin_turn();
+                let (line, attached) = agentiloop_core::mentions::expand(&line, &cwd);
+                for a in &attached {
+                    let _ = ui_tx.send(tui::UiMsg::Line(agentiloop_core::mentions::describe(a)));
+                }
                 let res = {
                     let run = agent.run(&line, move |ev| {
                         // Snapshot/diff before the event crosses to the UI thread:
@@ -480,8 +488,12 @@ async fn main() -> Result<()> {
         // Line mode has no raw keyboard during a run, so Ctrl-C is its cancel key:
         // a signal while the agent works, or Ctrl-C at a permission prompt.
         agentiloop_tools::undo::begin_turn();
+        let (line, attached) = agentiloop_core::mentions::expand(line, &cwd);
+        for a in &attached {
+            eprintln!("{}", agentiloop_core::mentions::describe(a));
+        }
         let res = tokio::select! {
-            res = agent.run(line, |ev| render_tracked(&mut tracker, ev)) => Some(res),
+            res = agent.run(&line, |ev| render_tracked(&mut tracker, ev)) => Some(res),
             _ = tokio::signal::ctrl_c() => None,
             _ = repl_io.cancel.notified() => None,
         };

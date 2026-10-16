@@ -9,6 +9,7 @@ pub mod session;
 pub mod instructions;
 pub mod commands;
 pub mod hooks;
+pub mod mentions;
 
 pub use agent::{Agent, AgentConfig, AgentEvent, ModelLimits, Usage};
 pub use hooks::Hooks;

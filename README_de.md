@@ -384,6 +384,12 @@ Tasten in der TUI: **Enter** sendet · **↑ / ↓** blättern durch frühere An
 
 ---
 
+## Dateien mit @ erwähnen
+
+Tippe irgendwo im Prompt `@` gefolgt von einem Pfad, und AgentiLoop hängt diese Datei an das an, was das Modell bekommt: `erkläre @src/main.rs` schickt deinen Satz plus den Text der Datei mit Zeilennummern. Ein Ordner (`@src`) hängt seine Liste an. Pfade sind relativ zum Projektordner (oder absolut, oder `~/…`); ein Wort, das nichts benennt, bleibt unverändert, E-Mail-Adressen sind also sicher. Dateien werden bei 64 KB abgeschnitten, Ordner bei 200 Einträgen, und eine 📎-Zeile zeigt, was angehängt wurde. Funktioniert in der TUI, im Chat und bei Einmal-Prompts.
+
+---
+
 ## Er merkt sich deine Einstellungen
 
 Du gibst deine Optionen nur einmal ein. AgentiLoop speichert, wie du es gestartet hast, sodass beim nächsten Mal ein einfaches `agentiloop` genauso startet:

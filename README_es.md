@@ -384,6 +384,12 @@ Teclas en la TUI: **Enter** envía · **↑ / ↓** recorren las peticiones ante
 
 ---
 
+## Menciona archivos con @
+
+Escribe `@` seguido de una ruta en cualquier parte del prompt y AgentiLoop adjunta ese archivo a lo que recibe el modelo: `explica @src/main.rs` envía tu frase más el texto del archivo con números de línea. Una carpeta (`@src`) adjunta su listado. Las rutas son relativas a la carpeta del proyecto (o absolutas, o `~/…`); una palabra que no nombra nada se deja tal cual, así que las direcciones de correo están a salvo. Los archivos se recortan a 64 KB, las carpetas a 200 entradas, y una línea 📎 muestra qué se adjuntó. Funciona en la TUI, el chat y los prompts de una sola vez.
+
+---
+
 ## Recuerda tu configuración
 
 Solo escribes tus opciones una vez. AgentiLoop guarda cómo lo lanzaste, así que la próxima vez un simple `agentiloop` arranca igual:
