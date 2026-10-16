@@ -10,9 +10,11 @@ pub mod instructions;
 pub mod commands;
 pub mod hooks;
 pub mod mentions;
+pub mod subagent;
 
 pub use agent::{Agent, AgentConfig, AgentEvent, ModelLimits, Usage};
 pub use hooks::Hooks;
+pub use subagent::TaskTool;
 pub use message::{ContentBlock, Message, Role, StopReason};
 pub use permission::{Permission, PermissionPolicy};
 pub use provider::{ModelInfo, Provider, ProviderRequest, ProviderResponse, ToolSpec};

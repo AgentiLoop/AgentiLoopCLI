@@ -278,7 +278,7 @@ Type `@` followed by a path anywhere in a prompt and AgentiLoop attaches that fi
 
 ## What can it do? (tools)
 
-The agent works with nine built-in tools. You don't call them yourself. You describe the goal, and the agent picks the tool:
+The agent works with ten built-in tools. You don't call them yourself. You describe the goal, and the agent picks the tool:
 
 | Tool | What it does | Asks first? |
 |---|---|---|
@@ -291,6 +291,7 @@ The agent works with nine built-in tools. You don't call them yourself. You desc
 | `write_file` | Creates a new file or overwrites one | **Yes** |
 | `edit_file` | Changes an exact piece of text in a file | **Yes** |
 | `bash` | Runs a shell command, like tests, builds or `git` (`sh -c` on Mac/Linux, `cmd /C` on Windows) | **Yes** |
+| `task` | Starts a sub-agent with an empty conversation for a self-contained job (exploring, researching) and brings back only its answer. It has the same tools and asks the same questions; it cannot start sub-agents of its own | No (its own tool calls ask as usual) |
 
 Want more tools, like web search, databases or GitHub? Add MCP servers; see [Adding tools with MCP](#adding-tools-with-mcp-optional).
 

@@ -224,7 +224,7 @@ agentiloop "explain what this project does"
 
 ### ¿Qué puede hacer? (herramientas)
 
-El agente trabaja con nueve herramientas integradas. No las llamas tú. Describes el objetivo y el agente elige la herramienta:
+El agente trabaja con diez herramientas integradas. No las llamas tú. Describes el objetivo y el agente elige la herramienta:
 
 | Herramienta | Qué hace | ¿Pregunta antes? |
 |---|---|---|
@@ -237,6 +237,7 @@ El agente trabaja con nueve herramientas integradas. No las llamas tú. Describe
 | `write_file` | Crea un archivo nuevo o sobrescribe uno | **Sí** |
 | `edit_file` | Cambia un fragmento exacto de texto en un archivo | **Sí** |
 | `bash` | Ejecuta un comando de shell, como tests, compilaciones o `git` (`sh -c` en Mac/Linux, `cmd /C` en Windows) | **Sí** |
+| `task` | Lanza un subagente con una conversación vacía para una tarea autocontenida (explorar, investigar) y devuelve solo su respuesta. Tiene las mismas herramientas y hace las mismas preguntas; no puede lanzar subagentes propios | No (sus propias llamadas a herramientas preguntan como siempre) |
 
 ¿Quieres más herramientas, como búsqueda web, bases de datos o GitHub? Añade servidores MCP; consulta [Añadir herramientas con MCP](#añadir-herramientas-con-mcp-opcional).
 

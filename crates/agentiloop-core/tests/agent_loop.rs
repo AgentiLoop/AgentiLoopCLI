@@ -554,3 +554,45 @@ fn hooks_block_calls_add_feedback_and_run_on_stop() {
     assert_eq!(stop["stop_reason"], "end_turn");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn task_tool_runs_a_child_agent_and_returns_only_its_answer() {
+    use agentiloop_core::subagent::{format_outcome, TaskOutcome};
+    use agentiloop_core::TaskTool;
+    // Parent asks for a task; the child (same scripted provider) calls echo, then answers;
+    // the parent then finishes.
+    let p = ScriptedProvider::new(vec![
+        tool_call("t1", "task", json!({"prompt": "look around", "description": "explore"})),
+        tool_call("c1", "echo", json!({"msg": "child"})),
+        text("child answer"),
+        text("parent done"),
+    ]);
+    let mut tools = ToolRegistry::new();
+    tools.register(Echo);
+    let policy: Arc<dyn PermissionPolicy> = Arc::new(agentiloop_core::permission::AllowAll);
+    let config = AgentConfig { model: "mock".into(), max_turns: 5, ..Default::default() };
+    tools.register(TaskTool::new(p.clone(), &tools, policy.clone(), config.clone()));
+    let mut a = Agent::new(p.clone(), tools, policy, config, ToolContext { cwd: std::env::temp_dir() });
+    let (res, events) = collect(&mut a, "go");
+    res.unwrap();
+
+    let result = events
+        .iter()
+        .find_map(|e| match e {
+            AgentEvent::ToolResult { name, output, is_error, .. } if name == "task" => Some((output.clone(), *is_error)),
+            _ => None,
+        })
+        .expect("task result");
+    assert!(!result.1, "{}", result.0);
+    assert!(result.0.starts_with("child answer\n\n[sub-agent: 2 turn(s), 1 tool call(s)"), "{}", result.0);
+    // The child's echo call never reached the parent's event stream or history.
+    assert!(!events.iter().any(|e| matches!(e, AgentEvent::ToolCall { name, .. } if name == "echo")));
+    assert_eq!(a.history.len(), 4);
+    // The child saw no `task` tool, so it cannot recurse.
+    let reqs = p.requests.lock().unwrap();
+    assert_eq!(reqs.len(), 4);
+    assert!(reqs[0].tools.iter().any(|t| t.name == "task"));
+    assert!(!reqs[1].tools.iter().any(|t| t.name == "task") && reqs[1].tools.iter().any(|t| t.name == "echo"));
+    assert_eq!(reqs[1].messages.len(), 1, "child starts with an empty conversation");
+    assert!(format_outcome(&TaskOutcome { answer: "  ".into(), turns: 1, tool_calls: 0, input_tokens: 1, output_tokens: 2 }).starts_with("(the sub-agent gave no final answer)"));
+}

@@ -224,7 +224,7 @@ agentiloop "explain what this project does"
 
 ### Was kann er? (Tools)
 
-Der Agent arbeitet mit neun eingebauten Tools. Du rufst sie nicht selbst auf. Du beschreibst das Ziel, und der Agent wählt das Tool:
+Der Agent arbeitet mit zehn eingebauten Tools. Du rufst sie nicht selbst auf. Du beschreibst das Ziel, und der Agent wählt das Tool:
 
 | Tool | Was es macht | Fragt vorher? |
 |---|---|---|
@@ -237,6 +237,7 @@ Der Agent arbeitet mit neun eingebauten Tools. Du rufst sie nicht selbst auf. Du
 | `write_file` | Erstellt eine neue Datei oder überschreibt eine | **Ja** |
 | `edit_file` | Ändert eine exakte Textstelle in einer Datei | **Ja** |
 | `bash` | Führt einen Shell-Befehl aus, z. B. Tests, Builds oder `git` (`sh -c` auf Mac/Linux, `cmd /C` unter Windows) | **Ja** |
+| `task` | Startet einen Sub-Agenten mit leerem Gespräch für eine abgeschlossene Aufgabe (erkunden, recherchieren) und bringt nur dessen Antwort zurück. Er hat dieselben Tools und stellt dieselben Fragen; eigene Sub-Agenten kann er nicht starten | Nein (seine eigenen Tool-Aufrufe fragen wie gewohnt) |
 
 Du willst mehr Tools, etwa Websuche, Datenbanken oder GitHub? Füge MCP-Server hinzu; siehe [Tools mit MCP hinzufügen](#tools-mit-mcp-hinzufügen-optional).
 

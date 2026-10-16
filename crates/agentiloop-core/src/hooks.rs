@@ -165,6 +165,11 @@ impl Hooks {
         self.0.iter()
     }
 
+    /// The same hooks minus the Stop ones (a sub-agent finishing is not the end of the request).
+    pub fn without_stop(&self) -> Hooks {
+        Hooks(self.0.iter().filter(|h| h.event != HookEvent::Stop).cloned().collect())
+    }
+
     /// Lines for `/hooks`.
     pub fn listing(&self) -> String {
         if self.0.is_empty() {

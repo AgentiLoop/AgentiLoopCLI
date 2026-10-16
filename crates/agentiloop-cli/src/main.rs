@@ -265,6 +265,8 @@ async fn main() -> Result<()> {
             tracing::warn!("could not save settings: {e:#}");
         }
 
+        // `task` sub-agents share everything but the conversation; registered last so the child's copy of the tools lacks it.
+        tools.register(agentiloop_core::TaskTool::new(provider.clone(), &tools, policy.clone(), config.clone()));
         let mut agent = Agent::new(provider.clone(), tools, policy, config, ToolContext { cwd: cwd.clone() });
         let session = match resumed {
             Some(s) => {
