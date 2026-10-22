@@ -712,3 +712,61 @@ fn a_failure_after_streamed_text_is_not_retried() {
     assert_eq!(*p.calls.lock().unwrap(), 1);
     assert!(!events.iter().any(|e| matches!(e, AgentEvent::Retry { .. })));
 }
+
+/// Read-only tool for the plan-mode test.
+struct Peek;
+
+#[async_trait]
+impl Tool for Peek {
+    fn name(&self) -> &str {
+        "peek"
+    }
+    fn description(&self) -> &str {
+        "peek"
+    }
+    fn input_schema(&self) -> Value {
+        json!({"type":"object"})
+    }
+    async fn call(&self, _ctx: &ToolContext, _input: Value) -> ToolResult {
+        Ok("peeked".into())
+    }
+}
+
+#[test]
+fn plan_mode_refuses_mutating_tools_and_task_and_adds_the_plan_prompt() {
+    let p = ScriptedProvider::new(vec![
+        tool_call("1", "echo", json!({"msg": "x"})),
+        tool_call("2", "peek", json!({})),
+        tool_call("3", "task", json!({"prompt": "explore"})),
+        text("here is the plan"),
+    ]);
+    let mut tools = ToolRegistry::new();
+    tools.register(Echo);
+    tools.register(Peek);
+    tools.register(agentiloop_core::TaskTool::new(p.clone(), &tools, Arc::new(agentiloop_core::permission::AllowAll), AgentConfig { model: "mock".into(), ..Default::default() }));
+    let mut a = Agent::new(p.clone(), tools, Arc::new(agentiloop_core::permission::AllowAll), AgentConfig { model: "mock".into(), ..Default::default() }, ToolContext { cwd: std::env::temp_dir() });
+    assert!(!a.plan_mode());
+    a.set_plan_mode(true);
+    let (res, events) = collect(&mut a, "change x");
+    res.unwrap();
+    let results: Vec<(String, bool)> = events.iter().filter_map(|e| match e {
+        AgentEvent::ToolResult { output, is_error, .. } => Some((output.clone(), *is_error)),
+        _ => None,
+    }).collect();
+    assert_eq!(results.len(), 3, "{results:?}");
+    assert!(results[0].1 && results[0].0.contains("plan mode is on") && results[0].0.contains("`echo`"), "{results:?}");
+    assert_eq!(results[1], ("peeked".to_string(), false));
+    assert!(results[2].1 && results[2].0.contains("`task`"), "{results:?}");
+    let reqs = p.requests.lock().unwrap();
+    assert!(reqs.iter().all(|r| r.system.ends_with(agentiloop_core::PLAN_MODE_PROMPT)), "plan prompt missing");
+    assert!(reqs[0].system.starts_with(agentiloop_core::agent::DEFAULT_SYSTEM_PROMPT));
+    drop(reqs);
+
+    // Off again: the prompt is plain and mutating tools run.
+    a.set_plan_mode(false);
+    *p.responses.lock().unwrap() = vec![tool_call("4", "echo", json!({"msg": "y"})), text("done")];
+    let (res, events) = collect(&mut a, "now do it");
+    res.unwrap();
+    assert!(events.iter().any(|e| matches!(e, AgentEvent::ToolResult { output, is_error: false, .. } if output == "echo:y")));
+    assert!(!p.requests.lock().unwrap().last().unwrap().system.contains(agentiloop_core::PLAN_MODE_PROMPT));
+}

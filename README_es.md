@@ -272,6 +272,7 @@ Options:
       --reset                        Back to brand new: delete ~/.agentiloop (settings, env, history, sessions, mcp.json), the agentiloop block in your shell profile and Keychain items the wizard created. Asks first unless --yes
       --allow-tool <NAME>            Run this tool without asking (repeatable or comma-separated; `mcp_*` matches a prefix)
       --deny-tool <NAME>             Never run this tool; the model is told it was denied (same name rules). Beats --allow-tool and --yes
+      --plan                         Plan mode: tools that change something (write_file, edit_file, bash, task, mutating MCP tools) are switched off and the model is asked for a plan instead. Toggle with /plan [env: AGENTILOOP_PLAN=]
       --append-system-prompt <TEXT>  Extra text added to the end of the system prompt for this run (never saved) [env: AGENTILOOP_APPEND_SYSTEM_PROMPT=]
       --json                         One-shot only: print the answer as one JSON object on stdout (result, is_error, session_id, provider, model, usage) instead of streaming text. Tool activity still goes to stderr
       --stream-json                  One-shot only: print every event as one JSON object per line on stdout as it happens (text_delta, text, tool_call, tool_result, turn, compacted, retry, done), then the same result object as --json with "type": "result". Nothing else is printed
@@ -450,6 +451,7 @@ Cada opción también se puede configurar con una variable de entorno, que apare
 | `--yes` | `AGENTILOOP_YES` | No pregunta antes de ejecutar herramientas. ⚠️ Solo para uso automatizado y de confianza |
 | `--allow-tool <name>` | | Ejecuta esta herramienta sin preguntar; repite la opción o usa comas. `mcp_*` coincide con un prefijo. Útil en CI sin `--yes` |
 | `--deny-tool <name>` | | Nunca ejecuta esta herramienta: se le dice al modelo que fue denegada. Tiene prioridad sobre `--allow-tool` y `--yes` |
+| `--plan` | `AGENTILOOP_PLAN` | Modo plan: empieza con todas las herramientas que cambian algo desactivadas (`write_file`, `edit_file`, `bash`, `task`, herramientas MCP que no son de solo lectura). El modelo lee y busca, y luego responde con un plan numerado en vez de hacer el trabajo. `/plan` lo desactiva (o activa) durante una sesión |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | No inicia servidores MCP (mira más abajo) |
 | `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | Texto extra al final del prompt del sistema para esta ejecución (no se guarda) |
 | `--json` | | Con un prompt de una sola vez: imprime la respuesta como un objeto JSON (`result`, `is_error`, `session_id`, `provider`, `model`, `usage`) en stdout. La actividad de herramientas queda en stderr |
@@ -494,6 +496,7 @@ Escríbelos en el prompt, en la TUI o en el chat:
 | `/diff` | Muestra qué cambió en el árbol de trabajo de git (estado más diff, cortado a 200 líneas) |
 | `/commands` | Tus propios comandos: cada `.agentiloop/commands/<name>.md` (proyecto) o `~/.agentiloop/commands/<name>.md` pasa a ser `/<name>` y envía el archivo como prompt (`$ARGUMENTS` se sustituye por lo que escribas después, `$1`–`$9` por sus palabras). Los lista |
 | `/hooks` | Muestra los hooks cargados desde `.agentiloop/hooks.json` (ver [Hooks](#hooks-ejecuta-tus-propios-comandos-alrededor-de-las-herramientas)) |
+| `/plan [on\|off]` | Activa o desactiva el modo plan (sin argumento, alterna). Mientras está activo, las herramientas que cambian algo se niegan a ejecutarse y el modelo responde con un plan; la TUI muestra **PLAN** en la línea de estado |
 | `/init` | Crea un `AGENTS.md` inicial para el proyecto actual (nunca sobrescribe) |
 | `/export [file]` | Guarda la conversación como archivo Markdown (`/export notes.md`, o un nombre por defecto en la carpeta del proyecto) |
 | `/compact` | Resume la conversación ahora para liberar espacio |

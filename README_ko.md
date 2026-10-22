@@ -272,6 +272,7 @@ Options:
       --reset                        Back to brand new: delete ~/.agentiloop (settings, env, history, sessions, mcp.json), the agentiloop block in your shell profile and Keychain items the wizard created. Asks first unless --yes
       --allow-tool <NAME>            Run this tool without asking (repeatable or comma-separated; `mcp_*` matches a prefix)
       --deny-tool <NAME>             Never run this tool; the model is told it was denied (same name rules). Beats --allow-tool and --yes
+      --plan                         Plan mode: tools that change something (write_file, edit_file, bash, task, mutating MCP tools) are switched off and the model is asked for a plan instead. Toggle with /plan [env: AGENTILOOP_PLAN=]
       --append-system-prompt <TEXT>  Extra text added to the end of the system prompt for this run (never saved) [env: AGENTILOOP_APPEND_SYSTEM_PROMPT=]
       --json                         One-shot only: print the answer as one JSON object on stdout (result, is_error, session_id, provider, model, usage) instead of streaming text. Tool activity still goes to stderr
       --stream-json                  One-shot only: print every event as one JSON object per line on stdout as it happens (text_delta, text, tool_call, tool_result, turn, compacted, retry, done), then the same result object as --json with "type": "result". Nothing else is printed
@@ -449,6 +450,7 @@ agentiloop --new          # 새 대화 시작 (이전 대화는 저장된 채로
 | `--yes` | `AGENTILOOP_YES` | 도구를 실행하기 전에 묻지 않아요. ⚠️ 신뢰할 수 있는 자동화 용도로만 사용하세요 |
 | `--allow-tool <name>` | | 이 도구를 묻지 않고 실행해요. 옵션을 반복하거나 쉼표로 구분해요. `mcp_*`는 접두사와 일치해요. `--yes` 없이 쓰는 CI에 좋아요 |
 | `--deny-tool <name>` | | 이 도구를 절대 실행하지 않아요. 모델에게는 거부됐다고 알려 줘요. `--allow-tool`과 `--yes`보다 우선해요 |
+| `--plan` | `AGENTILOOP_PLAN` | 플랜 모드: 무언가를 바꾸는 모든 도구 (`write_file`, `edit_file`, `bash`, `task`, 읽기 전용이 아닌 MCP 도구) 를 끈 채로 시작해요. 모델은 읽고 검색한 뒤 작업 대신 번호가 매겨진 계획으로 답해요. 세션 중에는 `/plan`으로 끄거나 켤 수 있어요 |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | MCP 서버를 시작하지 않아요 (아래 참고) |
 | `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | 이번 실행에만 시스템 프롬프트 끝에 덧붙이는 텍스트 (저장되지 않아요) |
 | `--json` | | 원샷 프롬프트에서 답변을 JSON 객체 하나(`result`, `is_error`, `session_id`, `provider`, `model`, `usage`)로 stdout에 출력해요. 도구 활동은 stderr에 남아요 |
@@ -493,6 +495,7 @@ TUI나 채팅의 프롬프트에서 다음을 입력하세요:
 | `/diff` | git 작업 트리에서 바뀐 내용을 보여 줘요 (상태와 diff, 200줄에서 잘라요) |
 | `/commands` | 나만의 명령: `.agentiloop/commands/<name>.md` (프로젝트) 또는 `~/.agentiloop/commands/<name>.md` 파일이 `/<name>`이 되어 파일 내용을 프롬프트로 보내요 (`$ARGUMENTS`는 뒤에 입력한 내용으로, `$1`~`$9`는 각 단어로 바뀌어요). 목록을 보여 줘요 |
 | `/hooks` | `.agentiloop/hooks.json`에서 읽어 온 훅을 보여줘요 ([훅](#훅-도구-호출-전후에-내-명령-실행하기) 참고) |
+| `/plan [on\|off]` | 플랜 모드를 켜거나 꺼요 (인수가 없으면 전환). 켜져 있는 동안 무언가를 바꾸는 도구는 실행을 거부하고 모델은 계획으로 답해요. TUI 상태 줄에 **PLAN**이 표시돼요 |
 | `/init` | 현재 프로젝트용 `AGENTS.md` 초안을 만들어요 (덮어쓰지 않아요) |
 | `/export [file]` | 대화를 Markdown 파일로 저장해요 (`/export notes.md`, 생략하면 프로젝트 폴더에 기본 이름으로 저장) |
 | `/compact` | 지금 대화를 요약해서 공간을 확보해요 |

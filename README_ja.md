@@ -272,6 +272,7 @@ Options:
       --reset                        Back to brand new: delete ~/.agentiloop (settings, env, history, sessions, mcp.json), the agentiloop block in your shell profile and Keychain items the wizard created. Asks first unless --yes
       --allow-tool <NAME>            Run this tool without asking (repeatable or comma-separated; `mcp_*` matches a prefix)
       --deny-tool <NAME>             Never run this tool; the model is told it was denied (same name rules). Beats --allow-tool and --yes
+      --plan                         Plan mode: tools that change something (write_file, edit_file, bash, task, mutating MCP tools) are switched off and the model is asked for a plan instead. Toggle with /plan [env: AGENTILOOP_PLAN=]
       --append-system-prompt <TEXT>  Extra text added to the end of the system prompt for this run (never saved) [env: AGENTILOOP_APPEND_SYSTEM_PROMPT=]
       --json                         One-shot only: print the answer as one JSON object on stdout (result, is_error, session_id, provider, model, usage) instead of streaming text. Tool activity still goes to stderr
       --stream-json                  One-shot only: print every event as one JSON object per line on stdout as it happens (text_delta, text, tool_call, tool_result, turn, compacted, retry, done), then the same result object as --json with "type": "result". Nothing else is printed
@@ -450,6 +451,7 @@ agentiloop --new          # 新しい会話を開始 (以前の会話は保存�
 | `--yes` | `AGENTILOOP_YES` | ツールを実行する前に確認しません。⚠️ 信頼できる自動化用途でのみ使ってください |
 | `--allow-tool <name>` | | このツールを確認なしで実行します。オプションの繰り返しやカンマ区切りが使えます。`mcp_*` は前方一致です。`--yes` を使わない CI に便利です |
 | `--deny-tool <name>` | | このツールを実行しません。モデルには拒否されたと伝わります。`--allow-tool` と `--yes` より優先されます |
+| `--plan` | `AGENTILOOP_PLAN` | プランモード: 何かを変更するツール (`write_file`、`edit_file`、`bash`、`task`、読み取り専用でない MCP ツール) をすべてオフにして開始します。モデルは読んで検索したうえで、作業する代わりに番号付きの計画を返します。セッション中は `/plan` でオフ (またはオン) にできます |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | MCP サーバーを起動しません (下記参照) |
 | `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | この実行に限り、システムプロンプトの末尾に追加するテキスト (保存されません) |
 | `--json` | | ワンショットのプロンプトで、回答を 1 つの JSON オブジェクト (`result`、`is_error`、`session_id`、`provider`、`model`、`usage`) として stdout に出力します。ツールの動作は stderr に出ます |
@@ -494,6 +496,7 @@ TUI またはチャットのプロンプトで、次のコマンドを入力し�
 | `/diff` | git 作業ツリーの変更を表示します (ステータスと diff、200 行で省略) |
 | `/commands` | 独自コマンド: `.agentiloop/commands/<name>.md` (プロジェクト) または `~/.agentiloop/commands/<name>.md` が `/<name>` になり、ファイルの内容がプロンプトとして送られます (`$ARGUMENTS` は後ろに入力した内容に、`$1`〜`$9` は個々の語に置き換わります)。一覧を表示します |
 | `/hooks` | `.agentiloop/hooks.json` から読み込んだフックを表示します ([フック](#フック-ツール呼び出しの前後で自分のコマンドを実行する) を参照) |
+| `/plan [on\|off]` | プランモードのオン/オフ (引数なしで切り替え)。オンの間は、何かを変更するツールは実行を拒否し、モデルは計画で答えます。TUI のステータス行に **PLAN** と表示されます |
 | `/init` | 現在のプロジェクト用に `AGENTS.md` のひな形を作成します (上書きはしません) |
 | `/export [file]` | 会話を Markdown ファイルとして保存します (`/export notes.md`、省略時はプロジェクトフォルダーに既定名で保存) |
 | `/compact` | 今すぐ会話を要約して容量を空けます |

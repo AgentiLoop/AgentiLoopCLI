@@ -272,6 +272,7 @@ Options:
       --reset                        Back to brand new: delete ~/.agentiloop (settings, env, history, sessions, mcp.json), the agentiloop block in your shell profile and Keychain items the wizard created. Asks first unless --yes
       --allow-tool <NAME>            Run this tool without asking (repeatable or comma-separated; `mcp_*` matches a prefix)
       --deny-tool <NAME>             Never run this tool; the model is told it was denied (same name rules). Beats --allow-tool and --yes
+      --plan                         Plan mode: tools that change something (write_file, edit_file, bash, task, mutating MCP tools) are switched off and the model is asked for a plan instead. Toggle with /plan [env: AGENTILOOP_PLAN=]
       --append-system-prompt <TEXT>  Extra text added to the end of the system prompt for this run (never saved) [env: AGENTILOOP_APPEND_SYSTEM_PROMPT=]
       --json                         One-shot only: print the answer as one JSON object on stdout (result, is_error, session_id, provider, model, usage) instead of streaming text. Tool activity still goes to stderr
       --stream-json                  One-shot only: print every event as one JSON object per line on stdout as it happens (text_delta, text, tool_call, tool_result, turn, compacted, retry, done), then the same result object as --json with "type": "result". Nothing else is printed
@@ -450,6 +451,7 @@ agentiloop --new          # 开始一段新对话（旧对话仍会保存）
 | `--yes` | `AGENTILOOP_YES` | 运行工具前不询问。⚠️ 仅用于可信的自动化场景 |
 | `--allow-tool <name>` | | 无需询问直接运行此工具；可重复该选项或用逗号分隔。`mcp_*` 匹配前缀。适合不用 `--yes` 的 CI |
 | `--deny-tool <name>` | | 绝不运行此工具：会告知模型已被拒绝。优先于 `--allow-tool` 和 `--yes` |
+| `--plan` | `AGENTILOOP_PLAN` | 计划模式：启动时关闭所有会改动内容的工具（`write_file`、`edit_file`、`bash`、`task`、非只读的 MCP 工具）。模型只读取和搜索，然后给出编号的计划而不是直接动手。会话中可用 `/plan` 关闭（或开启） |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | 不启动 MCP 服务器（见下文） |
 | `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | 本次运行追加到系统提示末尾的文本（不会保存） |
 | `--json` | | 配合单次提示：把回答作为一个 JSON 对象（`result`、`is_error`、`session_id`、`provider`、`model`、`usage`）输出到 stdout。工具活动仍在 stderr |
@@ -494,6 +496,7 @@ agentiloop --yes "run the tests and fix any failures"        # 无人值守，�
 | `/diff` | 显示 git 工作树中的更改（状态加 diff，超过 200 行会截断） |
 | `/commands` | 自定义命令：每个 `.agentiloop/commands/<name>.md`（项目）或 `~/.agentiloop/commands/<name>.md` 都会变成 `/<name>`，并把文件内容作为提示发送（`$ARGUMENTS` 会被命令后输入的内容替换，`$1`–`$9` 为其中的各个词）。此命令列出它们 |
 | `/hooks` | 显示从 `.agentiloop/hooks.json` 加载的钩子（见 [钩子](#钩子在工具调用前后运行你自己的命令)） |
+| `/plan [on\|off]` | 开启或关闭计划模式（不带参数则切换）。开启期间，会改动内容的工具拒绝运行，模型以计划作答；TUI 状态行显示 **PLAN** |
 | `/init` | 为当前项目创建 `AGENTS.md` 模板（从不覆盖已有文件） |
 | `/export [file]` | 将对话保存为 Markdown 文件（`/export notes.md`，省略则在项目文件夹中使用默认名称） |
 | `/compact` | 立即总结对话以释放空间 |

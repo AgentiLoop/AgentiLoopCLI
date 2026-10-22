@@ -98,6 +98,11 @@ struct Cli {
     #[arg(long = "deny-tool", value_name = "NAME", value_delimiter = ',')]
     deny_tool: Vec<String>,
 
+    /// Plan mode: tools that change something (write_file, edit_file, bash, task, mutating MCP
+    /// tools) are switched off and the model is asked for a plan instead. Toggle with /plan.
+    #[arg(long, env = "AGENTILOOP_PLAN")]
+    plan: bool,
+
     /// Extra text added to the end of the system prompt for this run (never saved).
     #[arg(long, value_name = "TEXT", env = "AGENTILOOP_APPEND_SYSTEM_PROMPT")]
     append_system_prompt: Option<String>,
@@ -282,6 +287,10 @@ async fn main() -> Result<()> {
             None => Session::new(cwd.clone(), provider.name(), agent.model()),
         };
         agent.set_cache_key(session.id.clone());
+        agent.set_plan_mode(cli.plan);
+        if cli.plan {
+            note(plan_line(true));
+        }
         Ok::<_, anyhow::Error>((provider, mcp, sessions_dir, agent, session))
     }
     .await;
@@ -349,7 +358,8 @@ async fn main() -> Result<()> {
 
     if let Some(ui) = ui {
         let status = |agent: &Agent, session: &Session| {
-            format!(" AgentiLoop  {}  {}  {}  session {} ", cwd.display(), provider.name(), agent.model(), session.id)
+            let plan = if agent.plan_mode() { "  PLAN" } else { "" };
+            format!(" AgentiLoop  {}  {}  {}  session {}{plan} ", cwd.display(), provider.name(), agent.model(), session.id)
         };
         let _ = ui_tx.send(tui::UiMsg::Status(status(&agent, &session)));
         // A continued session shows its earlier conversation, not an empty screen.
@@ -743,6 +753,19 @@ async fn slash_command(
         },
         "/commands" => say(agentiloop_core::commands::listing(&agentiloop_core::commands::load(&session.cwd, settings::home().as_deref()))),
         "/hooks" => say(agent.hooks().listing()),
+        "/plan" => {
+            let on = match arg {
+                "" => !agent.plan_mode(),
+                "on" => true,
+                "off" => false,
+                _ => {
+                    say("usage: /plan [on|off]".into());
+                    return Ok(());
+                }
+            };
+            agent.set_plan_mode(on);
+            say(plan_line(on));
+        }
         "/todos" => match agentiloop_tools::todo::current() {
             Some(t) => say(t),
             None => say("no todo list yet (the model creates one for multi-step work)".into()),
@@ -877,6 +900,7 @@ const HELP: &str = "!<command>      run a shell command here; its output joins t
 /init           create a starter AGENTS.md for this project\n\
 /commands       list your custom commands (.agentiloop/commands/*.md)\n\
 /hooks          list the hooks loaded from .agentiloop/hooks.json\n\
+/plan [on|off]  plan mode: tools that change something are off, the model plans instead\n\
 /diff           show what changed in the git working tree\n\
 /todos          show the model's current task checklist\n\
 /undo           revert the file changes from the last prompt\n\
@@ -894,6 +918,15 @@ pub(crate) fn usage_line(u: agentiloop_core::Usage) -> String {
         line.push_str(&format!(" (prompt cache: {} read, {} written)", u.cache_read_tokens, u.cache_write_tokens));
     }
     line
+}
+
+/// What `/plan` and `--plan` print.
+pub(crate) fn plan_line(on: bool) -> String {
+    if on {
+        "plan mode on: write_file, edit_file, bash, task and other tools that change something are off; the model inspects and proposes a plan (/plan to turn it off)".into()
+    } else {
+        "plan mode off: tools run again (with the usual permission prompts)".into()
+    }
 }
 
 pub(crate) fn compacted_line(before_tokens: u64, messages_dropped: usize) -> String {

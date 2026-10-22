@@ -120,6 +120,13 @@ with less context. Write a dense summary that preserves: the user's goals and co
 symbols touched (with paths), what has been verified to work, what failed and why, and any pending next steps. \
 Do not add commentary. Output only the summary.";
 
+/// Added to the system prompt while plan mode is on (`Agent::set_plan_mode`).
+pub const PLAN_MODE_PROMPT: &str = "PLAN MODE IS ON. You may only inspect the project: read files, list folders, search. \
+Every tool that changes something (writing or editing files, shell commands, sub-agents) is switched off and will refuse. \
+Do not try to work around that. Instead, work out what needs to be done and reply with a concrete, numbered plan: \
+which files you would change and how, which commands you would run, and what could go wrong. \
+Finish by telling the user to turn plan mode off (/plan) when they want you to carry it out.";
+
 /// Tool output longer than this is trimmed in the compaction transcript.
 const TRANSCRIPT_RESULT_LIMIT: usize = 2_000;
 
@@ -160,6 +167,8 @@ pub struct Agent {
     limits: Option<ModelLimits>,
     /// Sent as `ProviderRequest::cache_key` on every turn; set to the session id by the CLI.
     cache_key: Option<String>,
+    /// Plan mode: tools that change something are refused and the model is asked for a plan.
+    plan_mode: bool,
 }
 
 impl Agent {
@@ -170,7 +179,17 @@ impl Agent {
         config: AgentConfig,
         ctx: ToolContext,
     ) -> Self {
-        Self { provider, tools, policy, config, ctx, history: Vec::new(), last_input_tokens: 0, usage: Usage::default(), pending_text: String::new(), limits: None, cache_key: None }
+        Self { provider, tools, policy, config, ctx, history: Vec::new(), last_input_tokens: 0, usage: Usage::default(), pending_text: String::new(), limits: None, cache_key: None, plan_mode: false }
+    }
+
+    /// Plan mode on/off: while on, every mutating tool and `task` refuse to run and
+    /// `PLAN_MODE_PROMPT` is added to the system prompt, so the model inspects and plans.
+    pub fn set_plan_mode(&mut self, on: bool) {
+        self.plan_mode = on;
+    }
+
+    pub fn plan_mode(&self) -> bool {
+        self.plan_mode
     }
 
     /// Key the provider's prompt cache on this conversation (see `ProviderRequest::cache_key`).
@@ -366,9 +385,10 @@ impl Agent {
         self.history.push(Message::user_text(user_input));
 
         for _ in 0..self.config.max_turns {
+            let system = if self.plan_mode { format!("{}\n\n{PLAN_MODE_PROMPT}", self.config.system_prompt) } else { self.config.system_prompt.clone() };
             let mut req = ProviderRequest {
                 model: self.config.model.clone(),
-                system: self.config.system_prompt.clone(),
+                system,
                 messages: self.history.clone(),
                 tools: self.tool_specs(),
                 max_tokens: limits.max_tokens,
@@ -451,6 +471,9 @@ impl Agent {
             .get(name)
             .ok_or_else(|| ToolError::InvalidInput(format!("unknown tool `{name}`")))?;
 
+        if self.plan_mode && (tool.is_mutating() || name == crate::subagent::TASK_TOOL_NAME) {
+            return Err(ToolError::Denied(format!("plan mode is on: `{name}` is switched off; describe what you would do instead")));
+        }
         match self.policy.check(name, tool.is_mutating(), &input).await {
             Permission::Allow => {}
             Permission::Deny => return Err(ToolError::Denied(format!("user declined `{name}`"))),
