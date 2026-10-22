@@ -205,6 +205,10 @@ pub struct App {
     files_scroll: Cell<isize>,
     /// Where the files pane was drawn last frame, so the wheel over it scrolls the pane.
     files_area: RefCell<Option<Rect>>,
+    /// Pane width the user dragged the divider to; `None` = the default split.
+    files_width: Option<u16>,
+    /// The divider is being dragged (left button held since a click on it).
+    dragging_divider: bool,
     /// `Some(secret)` while the setup wizard waits for an answer on the input line.
     asking: Option<bool>,
 }
@@ -296,6 +300,8 @@ impl App {
             show_files: true,
             files_scroll: Cell::new(0),
             files_area: RefCell::new(None),
+            files_width: None,
+            dragging_divider: false,
             asking: None,
         }
     }
@@ -567,10 +573,11 @@ impl App {
     /// Wheel scrolls the transcript (or the files pane when over it); a left
     /// click on a link opens it; a left drag selects text and copies it on
     /// release (mouse capture hides the terminal's own selection, so the TUI
-    /// provides one).
+    /// provides one); dragging the files pane's divider resizes the pane.
     pub fn handle_mouse(&mut self, m: MouseEvent) -> Option<Action> {
         let pos = (m.column, m.row);
-        let over_files = self.files_area.borrow().is_some_and(|a| a.contains(pos.into()));
+        let files_area = *self.files_area.borrow();
+        let over_files = files_area.is_some_and(|a| a.contains(pos.into()));
         match m.kind {
             MouseEventKind::ScrollUp => {
                 self.selection = None;
@@ -599,8 +606,19 @@ impl App {
                     self.selection = None;
                     return Some(Action::OpenUrl(url));
                 }
+                if let Some(a) = files_area.filter(|a| m.column == a.x && a.contains(pos.into())) {
+                    self.selection = None;
+                    self.dragging_divider = true;
+                    self.files_width = Some(a.width);
+                    return None;
+                }
                 let area = self.sel_areas.borrow().iter().copied().find(|a| a.contains(pos.into()));
                 self.selection = area.map(|area| Selection { area, anchor: pos, head: pos });
+            }
+            MouseEventKind::Drag(MouseButton::Left) if self.dragging_divider => {
+                if let Some(a) = files_area {
+                    self.files_width = Some(a.right().saturating_sub(m.column));
+                }
             }
             MouseEventKind::Drag(MouseButton::Left) => {
                 if let Some(s) = &mut self.selection {
@@ -611,6 +629,7 @@ impl App {
                     );
                 }
             }
+            MouseEventKind::Up(MouseButton::Left) if self.dragging_divider => self.dragging_divider = false,
             MouseEventKind::Up(MouseButton::Left) => match self.selection {
                 Some(s) if s.anchor != s.head => return Some(Action::CopySelection),
                 _ => self.selection = None,
@@ -632,7 +651,11 @@ impl App {
 
         // Claude Code-style "files changed" pane on the right, when there's room.
         let transcript = if self.show_files && !self.files.is_empty() && transcript.width >= 100 {
-            let pane_w = (transcript.width * 2 / 5).clamp(36, 90);
+            // Dragging the divider overrides the default split; the transcript keeps at least 40 columns.
+            let pane_w = match self.files_width {
+                Some(w) => w.clamp(36, transcript.width - 40),
+                None => (transcript.width * 2 / 5).clamp(36, 90),
+            };
             let [left, right] = Layout::horizontal([Constraint::Min(40), Constraint::Length(pane_w)]).areas(transcript);
             self.draw_files(frame, right);
             self.sel_areas.borrow_mut().push(right);
@@ -1444,6 +1467,31 @@ mod tests {
         // A new change snaps the pane back to the top of that file's diff.
         app.apply(change("big.txt", "", &format!("{after}line31\n")));
         assert!(pane(&app).contains("1 + line1"));
+    }
+
+    #[test]
+    fn dragging_the_divider_resizes_the_files_pane() {
+        let mut app = App::new("s");
+        app.apply(change("a.txt", "", "x\n"));
+        let ev = |kind, col| MouseEvent { kind, column: col, row: 3, modifiers: KeyModifiers::NONE };
+        // 120 cols → default pane is 48 wide, divider at column 72.
+        screen(&app, 120, 16);
+        assert_eq!(app.files_area.borrow().unwrap().x, 72);
+        assert!(app.handle_mouse(ev(MouseEventKind::Down(MouseButton::Left), 72)).is_none());
+        assert!(app.selection.is_none(), "a click on the divider starts a resize, not a selection");
+        app.handle_mouse(ev(MouseEventKind::Drag(MouseButton::Left), 60));
+        screen(&app, 120, 16);
+        assert_eq!(app.files_area.borrow().unwrap().x, 60);
+        // The transcript keeps at least 40 columns however far it's dragged.
+        app.handle_mouse(ev(MouseEventKind::Drag(MouseButton::Left), 5));
+        screen(&app, 120, 16);
+        assert_eq!(app.files_area.borrow().unwrap().x, 40);
+        assert!(app.handle_mouse(ev(MouseEventKind::Up(MouseButton::Left), 5)).is_none());
+        assert!(!app.dragging_divider);
+        // After release, dragging elsewhere no longer moves the divider.
+        app.handle_mouse(ev(MouseEventKind::Drag(MouseButton::Left), 90));
+        screen(&app, 120, 16);
+        assert_eq!(app.files_area.borrow().unwrap().x, 40);
     }
 
     #[test]
