@@ -684,7 +684,7 @@ impl App {
         } else {
             Line::from(if self.asking.is_some() { " setup " } else { " prompt " })
         };
-        // Claude Code-style input: thin dim rules above and below, no side borders, a "›" gutter.
+        // Claude Code-style input: thin dim rules above and below, no side borders, a ">" gutter.
         let block = Block::default()
             .borders(Borders::TOP | Borders::BOTTOM)
             .border_style(Style::default().fg(Color::DarkGray))
@@ -692,7 +692,7 @@ impl App {
         let inner = block.inner(input);
         frame.render_widget(block, input);
         frame.render_widget(
-            Paragraph::new("›").style(Style::default().fg(Color::Rgb(0xE0, 0x8A, 0x5B))),
+            Paragraph::new(">").style(Style::default().fg(Color::Rgb(0xE0, 0x8A, 0x5B))),
             Rect { width: 1, height: 1, ..inner },
         );
         let inner = Rect { x: inner.x + 2, width: inner.width.saturating_sub(2), ..inner };
