@@ -246,12 +246,11 @@ async fn main() -> Result<()> {
             None => provider.default_model().to_string(),
         };
         let mut config = AgentConfig { model, max_turns, compact_at_tokens: compact_at, max_retries: cli.max_retries, ..Default::default() };
-        let instructions = agentiloop_core::instructions::load(&cwd, settings::home().as_deref());
+        let (prompt, instructions) = system_prompt(&cwd, cli.append_system_prompt.as_deref());
         for i in &instructions {
             note(format!("instructions: {}", i.path.display()));
         }
-        config.system_prompt = agentiloop_core::instructions::append_to_prompt(&config.system_prompt, &instructions);
-        config.system_prompt = append_extra(&config.system_prompt, cli.append_system_prompt.as_deref());
+        config.system_prompt = prompt;
         let (hooks, hook_errors) = agentiloop_core::Hooks::load(&agentiloop_core::hooks::default_paths(&cwd, settings::home().as_deref()));
         for e in hook_errors {
             note(format!("hooks: {e}"));
@@ -392,6 +391,12 @@ async fn main() -> Result<()> {
                 let _ = ui_tx.send(tui::UiMsg::Idle);
                 continue;
             }
+            // `# note` goes to AGENTS.md, not to the model.
+            if let Some(text) = agentiloop_core::instructions::note_line(&line) {
+                let _ = ui_tx.send(tui::UiMsg::Line(remember_note(&mut agent, &cwd, text, cli.append_system_prompt.as_deref())));
+                let _ = ui_tx.send(tui::UiMsg::Idle);
+                continue;
+            }
             if line.starts_with('/') {
                 // Collect the command's output into one transcript entry so
                 // multi-line output (the /model list) isn't double-spaced.
@@ -523,6 +528,10 @@ async fn main() -> Result<()> {
             persist(&mut session, &agent, sessions_dir.as_deref());
             continue;
         }
+        if let Some(text) = agentiloop_core::instructions::note_line(line) {
+            eprintln!("{}", remember_note(&mut agent, &cwd, text, cli.append_system_prompt.as_deref()));
+            continue;
+        }
         if line.starts_with('/') {
             let before = session.id.clone();
             slash_command(line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), &mcp, true, &mut wizard::Terminal, &mut |s| {
@@ -623,6 +632,27 @@ fn persist(session: &mut Session, agent: &Agent, dir: Option<&Path>) {
     }
     if let Err(e) = session.save(dir) {
         eprintln!("warning: could not save session: {e:#}");
+    }
+}
+
+/// The system prompt for `cwd`: the default, the AGENTS.md / CLAUDE.md instructions found
+/// (returned too, for the startup notes), then any `--append-system-prompt` text.
+fn system_prompt(cwd: &Path, extra: Option<&str>) -> (String, Vec<agentiloop_core::instructions::Instructions>) {
+    use agentiloop_core::instructions;
+    let found = instructions::load(cwd, settings::home().as_deref());
+    let prompt = append_extra(&instructions::append_to_prompt(agentiloop_core::agent::DEFAULT_SYSTEM_PROMPT, &found), extra);
+    (prompt, found)
+}
+
+/// A `# note` line: append it to the project's AGENTS.md and reload the instructions into the
+/// running agent's system prompt, so the note counts from the next request. Returns what to show.
+fn remember_note(agent: &mut Agent, cwd: &Path, text: &str, extra: Option<&str>) -> String {
+    match agentiloop_core::instructions::remember(cwd, text) {
+        Ok(path) => {
+            agent.set_system_prompt(system_prompt(cwd, extra).0);
+            format!("\u{1f4dd} noted in {} (in effect from the next request)", path.display())
+        }
+        Err(e) => e,
     }
 }
 
@@ -893,6 +923,7 @@ async fn slash_command(
 }
 
 const HELP: &str = "!<command>      run a shell command here; its output joins the conversation\n\
+# <note>        remember the note in this project's AGENTS.md (under ## Notes)\n\
 /model [n|id]   show picker, or pick #n / set id directly\n\
 /mcp            list MCP servers and their tools\n\
 /usage          tokens used since start and how full the context is\n\

@@ -280,6 +280,12 @@ Type `@` followed by a path anywhere in a prompt and AgentiLoop attaches that fi
 ## Run a shell command with !
 
 Start a line with `!` and AgentiLoop runs it as a shell command instead of sending it to the model: `!git status`, `!cargo test`, `!ls src`. You see the output right away, and it is added to the conversation, so you can follow up with "fix those test failures" and the model already has them. The command runs in the project folder with the same shell, 120 s timeout and 30 KB output cap as the model's own `bash` tool. Works in the TUI and the chat.
+
+---
+
+## Remember something with #
+
+Start a line with `# ` and AgentiLoop saves the rest as a note in the project's `AGENTS.md` instead of sending it to the model: `# run cargo fmt before every commit`, `# the API client lives in src/net`. The note is added as a bullet under a `## Notes` heading (the file is created from the `/init` template if there is none, and an existing `CLAUDE.md` is used instead). Since `AGENTS.md` goes into the system prompt, the model follows the note from the next request on, and in every later session. Works in the TUI and the chat.
 ---
 
 ## What can it do? (tools)
@@ -390,6 +396,7 @@ Type these at the prompt, in the TUI or the chat:
 | Command | What it does |
 |---|---|
 | `!<command>` | Runs a shell command here and adds its output to the conversation (see [Run a shell command with !](#run-a-shell-command-with-)) |
+| `# <note>` | Saves the note in this project's `AGENTS.md` under `## Notes` (see [Remember something with #](#remember-something-with-)) |
 | `/model` | Show available models. `/model 3` or `/model <id>` switches (and is remembered) |
 | `/sessions` | List your saved conversations, newest first |
 | `/resume <n or id>` | Reopen one of them |

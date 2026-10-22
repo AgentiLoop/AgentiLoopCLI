@@ -398,6 +398,12 @@ Tippe irgendwo im Prompt `@` gefolgt von einem Pfad, und AgentiLoop hängt dies
 ## Shell-Befehle mit ! ausführen
 
 Beginne eine Zeile mit `!`, und AgentiLoop führt sie als Shell-Befehl aus, statt sie an das Modell zu schicken: `!git status`, `!cargo test`, `!ls src`. Du siehst die Ausgabe sofort, und sie wird der Unterhaltung hinzugefügt – du kannst also mit „behebe diese Testfehler“ weitermachen, und das Modell kennt sie schon. Der Befehl läuft im Projektordner mit derselben Shell, 120 s Timeout und 30 KB Ausgabelimit wie das `bash`-Tool des Modells. Funktioniert in der TUI und im Chat.
+
+---
+
+## Etwas mit # merken
+
+Beginne eine Zeile mit `# `, und AgentiLoop speichert den Rest als Notiz in der `AGENTS.md` des Projekts, statt ihn an das Modell zu schicken: `# vor jedem Commit cargo fmt ausführen`, `# der API-Client liegt in src/net`. Die Notiz wird als Aufzählungspunkt unter einer Überschrift `## Notes` eingetragen (gibt es die Datei nicht, wird sie aus der `/init`-Vorlage erzeugt; eine vorhandene `CLAUDE.md` wird stattdessen verwendet). Da `AGENTS.md` in den System-Prompt wandert, befolgt das Modell die Notiz ab der nächsten Anfrage und in jeder späteren Sitzung. Funktioniert in der TUI und im Chat.
 ---
 
 ## Er merkt sich deine Einstellungen
@@ -487,6 +493,7 @@ Tipp diese an der Eingabeaufforderung ein, in der TUI oder im Chat:
 | Befehl | Was er macht |
 |---|---|
 | `!<Befehl>` | Führt einen Shell-Befehl direkt aus und fügt die Ausgabe der Unterhaltung hinzu (siehe [Shell-Befehle mit ! ausführen](#shell-befehle-mit--ausführen)) |
+| `# <Notiz>` | Speichert die Notiz in der `AGENTS.md` dieses Projekts unter `## Notes` (siehe [Etwas mit # merken](#etwas-mit--merken)) |
 | `/model` | Zeigt die verfügbaren Modelle. `/model 3` oder `/model <id>` wechselt (und wird gemerkt) |
 | `/sessions` | Listet deine gespeicherten Unterhaltungen auf, die neueste zuerst |
 | `/resume <n or id>` | Öffnet eine davon erneut |

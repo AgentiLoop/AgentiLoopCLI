@@ -397,6 +397,12 @@ Tapez `@` suivi d'un chemin n'importe où dans un prompt et AgentiLoop joint ce
 ## Lancer une commande shell avec !
 
 Commencez une ligne par `!` et AgentiLoop l'exécute comme commande shell au lieu de l'envoyer au modèle : `!git status`, `!cargo test`, `!ls src`. Vous voyez la sortie tout de suite et elle est ajoutée à la conversation : vous pouvez enchaîner avec « corrige ces tests qui échouent », le modèle les a déjà. La commande tourne dans le dossier du projet avec le même shell, le même délai de 120 s et la même limite de sortie de 30 Ko que l'outil `bash` du modèle. Fonctionne dans la TUI et dans le chat.
+
+---
+
+## Retenir quelque chose avec #
+
+Commencez une ligne par `# ` et AgentiLoop enregistre le reste comme note dans l'`AGENTS.md` du projet au lieu de l'envoyer au modèle : `# lancer cargo fmt avant chaque commit`, `# le client API est dans src/net`. La note est ajoutée comme puce sous un titre `## Notes` (le fichier est créé à partir du modèle de `/init` s'il n'existe pas, et un `CLAUDE.md` existant est utilisé à la place). Comme `AGENTS.md` entre dans le prompt système, le modèle suit la note dès la requête suivante et dans toutes les sessions ultérieures. Fonctionne dans la TUI et dans le chat.
 ---
 
 ## Il se souvient de votre configuration
@@ -486,6 +492,7 @@ Tapez-les à l'invite, dans la TUI ou dans le chat :
 | Commande | Ce qu'elle fait |
 |---|---|
 | `!<commande>` | Lance une commande shell ici et ajoute sa sortie à la conversation (voir [Lancer une commande shell avec !](#lancer-une-commande-shell-avec-)) |
+| `# <note>` | Enregistre la note dans l'`AGENTS.md` de ce projet sous `## Notes` (voir [Retenir quelque chose avec #](#retenir-quelque-chose-avec-)) |
 | `/model` | Affiche les modèles disponibles. `/model 3` ou `/model <id>` change de modèle (et c'est retenu) |
 | `/sessions` | Liste vos conversations enregistrées, des plus récentes aux plus anciennes |
 | `/resume <n or id>` | Rouvre l'une d'elles |

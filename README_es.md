@@ -398,6 +398,12 @@ Escribe `@` seguido de una ruta en cualquier parte del prompt y AgentiLoop adjun
 ## Ejecuta un comando de shell con !
 
 Empieza una línea con `!` y AgentiLoop la ejecuta como comando de shell en vez de enviarla al modelo: `!git status`, `!cargo test`, `!ls src`. Ves la salida al instante y se añade a la conversación, así que puedes seguir con «arregla esos tests que fallan» y el modelo ya los tiene. El comando se ejecuta en la carpeta del proyecto con la misma shell, tiempo límite de 120 s y tope de salida de 30 KB que la herramienta `bash` del modelo. Funciona en la TUI y en el chat.
+
+---
+
+## Recuerda algo con #
+
+Empieza una línea con `# ` y AgentiLoop guarda el resto como una nota en el `AGENTS.md` del proyecto en vez de enviarlo al modelo: `# ejecuta cargo fmt antes de cada commit`, `# el cliente de la API está en src/net`. La nota se añade como un punto bajo un encabezado `## Notes` (si no existe el archivo, se crea a partir de la plantilla de `/init`; si hay un `CLAUDE.md`, se usa ese). Como `AGENTS.md` va al prompt del sistema, el modelo sigue la nota desde la siguiente petición y en todas las sesiones posteriores. Funciona en la TUI y en el chat.
 ---
 
 ## Recuerda tu configuración
@@ -487,6 +493,7 @@ Escríbelos en el prompt, en la TUI o en el chat:
 | Comando | Qué hace |
 |---|---|
 | `!<comando>` | Ejecuta un comando de shell aquí y añade su salida a la conversación (ver [Ejecuta un comando de shell con !](#ejecuta-un-comando-de-shell-con-)) |
+| `# <nota>` | Guarda la nota en el `AGENTS.md` de este proyecto bajo `## Notes` (ver [Recuerda algo con #](#recuerda-algo-con-)) |
 | `/model` | Muestra los modelos disponibles. `/model 3` o `/model <id>` cambia de modelo (y se recuerda) |
 | `/sessions` | Lista tus conversaciones guardadas, de la más reciente a la más antigua |
 | `/resume <n or id>` | Vuelve a abrir una de ellas |

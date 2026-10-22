@@ -158,6 +158,64 @@ pub fn init(dir: &Path) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// The note behind a `# note` prompt line: the text after `# `, or None when the line isn't
+/// one (`#` alone, a `#hashtag`, or a line that merely contains a `#`).
+pub fn note_line(line: &str) -> Option<&str> {
+    let rest = line.trim().strip_prefix("# ")?.trim();
+    (!rest.is_empty()).then_some(rest)
+}
+
+/// Heading under which `remember` collects notes.
+pub const NOTES_HEADING: &str = "## Notes";
+
+/// The project instruction file a note goes to: the nearest `AGENTS.md` / `CLAUDE.md` from
+/// `cwd` upwards (stopping at the repository root), else a new `AGENTS.md` in `cwd`.
+pub fn notes_path(cwd: &Path) -> PathBuf {
+    for dir in cwd.ancestors() {
+        if let Some(path) = FILE_NAMES.iter().map(|n| dir.join(n)).find(|p| p.is_file()) {
+            return path;
+        }
+        if dir.join(".git").exists() {
+            break;
+        }
+    }
+    cwd.join(FILE_NAMES[0])
+}
+
+/// Appends `note` as a bullet at the end of the `NOTES_HEADING` section of the project's
+/// instruction file (`notes_path`), adding the section when missing and creating the file
+/// from `init_template` when there is none. Returns the file.
+pub fn remember(cwd: &Path, note: &str) -> Result<PathBuf, String> {
+    let path = notes_path(cwd);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => init_template(path.parent().unwrap_or(cwd)),
+        Err(e) => return Err(format!("could not read {}: {e}", path.display())),
+    };
+    let bullet = format!("- {}", note.trim().replace('\n', " "));
+    let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+    match lines.iter().position(|l| l.trim_end() == NOTES_HEADING) {
+        Some(h) => {
+            // The section ends at the next heading (or the file's end), trailing blank lines excluded.
+            let mut end = lines[h + 1..].iter().position(|l| l.starts_with("## ")).map_or(lines.len(), |i| h + 1 + i);
+            while end > h + 1 && lines[end - 1].trim().is_empty() {
+                end -= 1;
+            }
+            let insert = if end == h + 1 { vec![String::new(), bullet] } else { vec![bullet] };
+            lines.splice(end..end, insert);
+        }
+        None => {
+            if lines.last().is_some_and(|l| !l.trim().is_empty()) {
+                lines.push(String::new());
+            }
+            lines.extend([NOTES_HEADING.to_string(), String::new(), bullet]);
+        }
+    }
+    let out = lines.join("\n") + "\n";
+    std::fs::write(&path, out).map_err(|e| format!("could not write {}: {e}", path.display()))?;
+    Ok(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -258,5 +316,50 @@ mod tests {
         assert!(init_template(&empty).contains("(add the commands"));
         let _ = std::fs::remove_dir_all(&d);
         let _ = std::fs::remove_dir_all(&empty);
+    }
+
+    #[test]
+    fn note_lines_need_a_hash_and_a_space() {
+        assert_eq!(note_line("# always run cargo fmt"), Some("always run cargo fmt"));
+        assert_eq!(note_line("  #  spaced  "), Some("spaced"));
+        assert_eq!(note_line("#"), None);
+        assert_eq!(note_line("# "), None);
+        assert_eq!(note_line("#hashtag"), None);
+        assert_eq!(note_line("fix bug #12"), None);
+    }
+
+    #[test]
+    fn remember_creates_appends_and_keeps_the_notes_section_together() {
+        let d = scratch("remember");
+        std::fs::write(d.join("Cargo.toml"), "").unwrap();
+        // No file: the template is created with a Notes section at the end.
+        let path = remember(&d, "use tabs").unwrap();
+        assert_eq!(path, d.join("AGENTS.md"));
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.starts_with("# agentiloop-instr-remember-") && text.ends_with("## Do not\n\n- (things to avoid: generated files, secrets, risky commands)\n\n## Notes\n\n- use tabs\n"), "{text}");
+        // Second note joins the list.
+        remember(&d, "  no unwrap\nin lib code ").unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.ends_with("## Notes\n\n- use tabs\n- no unwrap in lib code\n"), "{text}");
+        // A Notes section in the middle keeps its place; the file keeps its trailing text.
+        std::fs::write(&path, "# P\n\n## Notes\n\n- one\n\n\n## Do not\n\n- x\n").unwrap();
+        remember(&d, "two").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "# P\n\n## Notes\n\n- one\n- two\n\n\n## Do not\n\n- x\n");
+        // An empty Notes heading at the end gets a blank line, then the bullet.
+        std::fs::write(&path, "# P\n\n## Notes").unwrap();
+        remember(&d, "three").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "# P\n\n## Notes\n\n- three\n");
+        // CLAUDE.md in a parent (inside the repo) is the file; a .git boundary stops the walk.
+        let repo = scratch("remember-repo");
+        std::fs::create_dir_all(repo.join(".git")).unwrap();
+        std::fs::create_dir_all(repo.join("sub/deep")).unwrap();
+        std::fs::write(repo.join("CLAUDE.md"), "rules\n").unwrap();
+        assert_eq!(notes_path(&repo.join("sub/deep")), repo.join("CLAUDE.md"));
+        std::fs::write(repo.parent().unwrap().join("AGENTS.md"), "outside\n").unwrap();
+        std::fs::remove_file(repo.join("CLAUDE.md")).unwrap();
+        assert_eq!(notes_path(&repo.join("sub/deep")), repo.join("sub/deep/AGENTS.md"));
+        std::fs::remove_file(repo.parent().unwrap().join("AGENTS.md")).unwrap();
+        let _ = std::fs::remove_dir_all(&d);
+        let _ = std::fs::remove_dir_all(&repo);
     }
 }

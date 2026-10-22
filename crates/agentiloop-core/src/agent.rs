@@ -206,6 +206,11 @@ impl Agent {
         self.limits = None;
     }
 
+    /// Replace the system prompt (the CLI rebuilds it after a `# note` changed AGENTS.md).
+    pub fn set_system_prompt(&mut self, prompt: impl Into<String>) {
+        self.config.system_prompt = prompt.into();
+    }
+
     pub fn hooks(&self) -> &Hooks {
         &self.config.hooks
     }
