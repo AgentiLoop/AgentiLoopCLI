@@ -685,12 +685,15 @@ impl App {
             Line::from(if self.asking.is_some() { " setup " } else { " prompt " })
         };
         // Claude Code-style input: thin dim rules above and below, no side borders, a ">" gutter.
-        let block = Block::default()
-            .borders(Borders::TOP | Borders::BOTTOM)
-            .border_style(Style::default().fg(Color::DarkGray))
-            .title(title);
-        let inner = block.inner(input);
-        frame.render_widget(block, input);
+        // Rules are rows of underlined spaces: the terminal draws underline as one continuous
+        // stroke, unlike '─' glyphs which can render jagged/gapped depending on the font.
+        let rule = Style::default().fg(Color::DarkGray).add_modifier(Modifier::UNDERLINED);
+        let top = Rect { height: 1, ..input };
+        let bottom = Rect { y: input.y + input.height.saturating_sub(1), height: 1, ..input };
+        // The title keeps the default text color; only the underline is dim.
+        frame.render_widget(Paragraph::new(title.patch_style(Style::default().fg(Color::Reset))).style(rule), top);
+        frame.render_widget(Paragraph::new("").style(rule), bottom);
+        let inner = Rect { y: input.y + 1, height: input.height.saturating_sub(2), ..input };
         frame.render_widget(
             Paragraph::new(">").style(Style::default().fg(Color::Rgb(0xE0, 0x8A, 0x5B))),
             Rect { width: 1, height: 1, ..inner },
