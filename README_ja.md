@@ -447,7 +447,7 @@ agentiloop --new          # 新しい会話を開始 (以前の会話は保存�
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | MCP サーバーを起動しません (下記参照) |
 | `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | この実行に限り、システムプロンプトの末尾に追加するテキスト (保存されません) |
 | `--json` | | ワンショットのプロンプトで、回答を 1 つの JSON オブジェクト (`result`、`is_error`、`session_id`、`provider`、`model`、`usage`) として stdout に出力します。ツールの動作は stderr に出ます |
-| `--stream-json` | | ワンショットのプロンプトで: 各イベントを発生時に 1 行 1 JSON オブジェクトで stdout に出力し (`text_delta`、`text`、`tool_call`、`tool_result`、`turn`、`compacted`、`done`)、最後に `--json` と同じ結果オブジェクトを `"type": "result"` 付きで出力します。それ以外は何も出力しません。進捗を見たいエディターやスクリプト向け |
+| `--stream-json` | | ワンショットのプロンプトで: 各イベントを発生時に 1 行 1 JSON オブジェクトで stdout に出力し (`text_delta`、`text`、`tool_call`、`tool_result`、`turn`、`compacted`、`retry`、`done`)、最後に `--json` と同じ結果オブジェクトを `"type": "result"` 付きで出力します。それ以外は何も出力しません。進捗を見たいエディターやスクリプト向け |
 | `--setup` | | 初回セットアップウィザードを再実行します (プロバイダー、キー、モデル)。`--tui` と組み合わせるとフルスクリーン画面の中で実行されます |
 | `--reset` | | 初期状態に戻します: `~/.agentiloop`、シェルプロファイル内の agentiloop ブロック、ウィザードが作成したキーチェーン項目（Windows では、ウィザードが設定したユーザー環境変数）を削除します。手書きの `export` 行はコメントアウトされるだけで、しかも同意した場合のみです。`--yes` を付けると確認を省略します |
 | `--max-turns <n>` | | 1 回のリクエストでエージェントが実行できる最大ステップ数 (デフォルト 50) |
