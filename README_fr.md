@@ -383,7 +383,7 @@ Vous verrez les réponses de l'agent, chaque outil qu'il utilise (🔧) et chaqu
 | **Chat** (ligne par ligne) | `agentiloop` | Les terminaux simples, ou si vous préférez le texte brut |
 | **Ponctuel** | `agentiloop "explain this project"` | Une seule question : il répond, puis se ferme. Pratique dans les scripts |
 
-Touches dans la TUI : **Enter** envoie · **↑ / ↓** parcourent les demandes précédentes · **PgUp / PgDn** ou la molette de la souris font défiler · **Ctrl-U** efface la ligne · **Ctrl-C** quitte.
+Touches dans la TUI : **Enter** envoie · **↑ / ↓** parcourent les demandes précédentes · **PgUp / PgDn** ou la molette de la souris font défiler · **Ctrl-F** affiche ou masque le panneau *fichiers modifiés* (la molette au-dessus fait défiler le panneau ; faites glisser son bord gauche pour le redimensionner) · **Esc** arrête la demande en cours (la session est conservée) · **Ctrl-U** efface la ligne · **Ctrl-C** quitte.
 
 ---
 

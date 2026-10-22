@@ -384,7 +384,7 @@ agentiloop --tui
 | **单次** | `agentiloop "explain this project"` | 只问一个问题：回答后就退出。在脚本中很方便 |
 | **管道** | `git diff \| agentiloop "review this" -` | 通过管道传入文本，并在提示中写 `-`：它会被管道内容替换。适合 diff 和日志 |
 
-TUI 中的按键：**Enter** 发送 · **↑ / ↓** 浏览之前的提示 · **PgUp / PgDn** 或鼠标滚轮滚动 · **Ctrl-U** 清空当前行 · **Ctrl-C** 退出。
+TUI 中的按键：**Enter** 发送 · **↑ / ↓** 浏览之前的提示 · **PgUp / PgDn** 或鼠标滚轮滚动 · **Ctrl-F** 显示或隐藏*已修改文件*面板（在面板上滚动滚轮可滚动面板；拖动其左边缘可调整宽度） · **Esc** 停止正在运行的请求（会话保留） · **Ctrl-U** 清空当前行 · **Ctrl-C** 退出。
 
 ---
 

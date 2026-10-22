@@ -384,7 +384,7 @@ Du siehst die Antworten des Agenten, jedes Tool, das er benutzt (🔧), und jede
 | **Einmalig** | `agentiloop "explain this project"` | Eine einzelne Frage: Er antwortet und beendet sich dann. Praktisch in Skripten |
 | **Per Pipe** | `git diff \| agentiloop "review this" -` | Text per Pipe übergeben und `-` im Prompt setzen: Es wird durch den Pipe-Inhalt ersetzt. Praktisch für Diffs und Logs |
 
-Tasten in der TUI: **Enter** sendet · **↑ / ↓** blättern durch frühere Anfragen · **PgUp / PgDn** oder das Mausrad scrollen · **Ctrl-U** löscht die Zeile · **Ctrl-C** beendet.
+Tasten in der TUI: **Enter** sendet · **↑ / ↓** blättern durch frühere Anfragen · **PgUp / PgDn** oder das Mausrad scrollen · **Ctrl-F** zeigt oder versteckt das Fenster *geänderte Dateien* (das Mausrad darüber scrollt das Fenster; am linken Rand ziehen ändert die Breite) · **Esc** bricht die laufende Anfrage ab (die Sitzung bleibt erhalten) · **Ctrl-U** löscht die Zeile · **Ctrl-C** beendet.
 
 ---
 

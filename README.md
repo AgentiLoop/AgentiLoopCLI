@@ -266,7 +266,7 @@ Still stuck? [Open an issue](https://github.com/AgentiLoop/AgentiLoopCLI/issues)
 | **One-shot** | `agentiloop "explain this project"` | One question: it answers, then exits. Handy in scripts |
 | **Piped** | `git diff \| agentiloop "review this" -` | Pipe text in with a `-` in the prompt: it is replaced by what was piped. Handy for diffs and logs |
 
-Keys in the TUI: **Enter** sends · **↑ / ↓** go through earlier prompts · **PgUp / PgDn** or the mouse wheel scrolls · **Esc** stops the running request (the session is kept) · **Ctrl-U** clears the line · **Ctrl-C** quits.
+Keys in the TUI: **Enter** sends · **↑ / ↓** go through earlier prompts · **PgUp / PgDn** or the mouse wheel scrolls · **Ctrl-F** shows or hides the *files changed* pane (the wheel over it scrolls the pane; drag its left edge to resize it) · **Esc** stops the running request (the session is kept) · **Ctrl-U** clears the line · **Ctrl-C** quits.
 
 ---
 

@@ -384,7 +384,7 @@ Verás las respuestas del agente, cada herramienta que usa (🔧) y cada resulta
 | **Una sola vez** | `agentiloop "explain this project"` | Una pregunta: responde y termina. Práctico en scripts |
 | **Con pipe** | `git diff \| agentiloop "review this" -` | Envía texto por pipe y pon `-` en el prompt: se sustituye por lo enviado. Práctico para diffs y logs |
 
-Teclas en la TUI: **Enter** envía · **↑ / ↓** recorren las peticiones anteriores · **PgUp / PgDn** o la rueda del ratón desplazan · **Ctrl-U** borra la línea · **Ctrl-C** sale.
+Teclas en la TUI: **Enter** envía · **↑ / ↓** recorren las peticiones anteriores · **PgUp / PgDn** o la rueda del ratón desplazan · **Ctrl-F** muestra u oculta el panel de *archivos modificados* (la rueda sobre él desplaza el panel; arrastra su borde izquierdo para cambiar el ancho) · **Esc** detiene la petición en curso (la sesión se conserva) · **Ctrl-U** borra la línea · **Ctrl-C** sale.
 
 ---
 
