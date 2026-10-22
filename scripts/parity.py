@@ -10,6 +10,7 @@ see differs:
   * every request body sent to the provider (system prompt, tools, history)
   * --json and --stream-json output, the saved session file and settings.json
   * sessions round-trip: Go resumes a Rust session and Rust resumes a Go one
+  * the line REPL: /rewind lists prompts, restores their files and cuts the session
   * README headings per language
 
 Usage:
@@ -46,7 +47,8 @@ def chunk(delta, finish=None):
 
 
 class FakeOpenAI(BaseHTTPRequestHandler):
-    """First answer of every prompt calls list_dir; once a tool result is in, it answers in text."""
+    """First answer of every prompt calls a tool (write_file for prompts starting with "write",
+    else list_dir); once a tool result is in, it answers in text."""
     requests = []
 
     def log_message(self, *a):
@@ -75,9 +77,12 @@ class FakeOpenAI(BaseHTTPRequestHandler):
         if msgs and msgs[-1].get("role") == "tool":
             events = [chunk({"role": "assistant", "content": "Done: "}), chunk({"content": "listed."}), chunk({}, "stop")]
         else:
+            last = msgs[-1].get("content") if msgs else ""
+            last = last if isinstance(last, str) else " ".join(p.get("text", "") for p in last)
+            name, args = ("write_file", {"path": "notes.txt", "content": last}) if last.startswith("write") else ("list_dir", {"path": "."})
             events = [chunk({"role": "assistant", "tool_calls": [{"index": 0, "id": "call_1", "type": "function",
-                                                                   "function": {"name": "list_dir", "arguments": ""}}]}),
-                      chunk({"tool_calls": [{"index": 0, "function": {"arguments": "{\"path\": \".\"}"}}]}),
+                                                                   "function": {"name": name, "arguments": ""}}]}),
+                      chunk({"tool_calls": [{"index": 0, "function": {"arguments": json.dumps(args)}}]}),
                       chunk({}, "tool_calls")]
         events.append({"id": "c1", "object": "chat.completion.chunk", "choices": [],
                        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}})
@@ -100,10 +105,10 @@ class Run:
                         OPENAI_BASE_URL=f"http://127.0.0.1:{port}/v1", AGENTILOOP_YES="1", AGENTILOOP_NO_MCP="1",
                         NO_COLOR="1", TERM="dumb")
 
-    def __call__(self, *args, check_exit=True):
+    def __call__(self, *args, check_exit=True, stdin=None):
         FakeOpenAI.requests = []
         p = subprocess.run([self.binary, *args], env=self.env, capture_output=True, text=True, timeout=60,
-                           stdin=subprocess.DEVNULL)
+                           input=stdin, stdin=None if stdin is not None else subprocess.DEVNULL)
         if check_exit and p.returncode != 0:
             raise SystemExit(f"{self.binary} {' '.join(args)} exited {p.returncode}:\n{p.stderr}")
         return p, FakeOpenAI.requests
@@ -123,6 +128,21 @@ def norm_out(stdout):
     """--json / --stream-json output with the session id masked."""
     return [{**o, "session_id": "*"} if "session_id" in o else o
             for o in (json.loads(l) for l in stdout.splitlines() if l.strip())]
+
+
+def norm_repl(stderr):
+    """REPL stderr without blank lines (rustyline and liner space piped input differently) and session ids."""
+    return [re.sub(r"\b\d{10}-\d+\b", "<id>", l) for l in stderr.splitlines() if l.strip()]
+
+
+def repl_rewind(run, work):
+    """Two prompts that write notes.txt, then /rewind back through both; returns what to compare."""
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir()
+    script = "write first\nwrite second\n/rewind\n/rewind 2\n/rewind\n/rewind 1\n/rewind\n/exit\n"
+    p, reqs = run("-p", "openai", "-m", "fake-model", "-C", str(work), "--no-tui", "--new", stdin=script)
+    notes = work / "notes.txt"
+    return norm_repl(p.stderr), reqs, notes.read_text() if notes.exists() else None, norm_session(run.sessions()[-1])
 
 
 def flags(help_text):
@@ -203,6 +223,13 @@ def main():
         check("resume the other's session: saved session",
               norm_session(rs.home / f".agentiloop/sessions/{g_id}.json"),
               norm_session(go.home / f".agentiloop/sessions/{r_id}.json"))
+
+        print("REPL /rewind")
+        r, g = repl_rewind(rs, root / "repl"), repl_rewind(go, root / "repl")
+        check("/rewind output", r[0], g[0])
+        check("/rewind requests to the provider", r[1], g[1])
+        check("/rewind leaves notes.txt as before the first prompt", (r[2], g[2]), (None, None))
+        check("/rewind saved session", r[3], g[3])
     finally:
         server.shutdown()
         shutil.rmtree(root, ignore_errors=True)
