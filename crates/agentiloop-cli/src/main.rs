@@ -33,7 +33,7 @@ struct Cli {
     model: Option<String>,
 
     /// Skip all permission prompts (dangerous; intended for CI). Never remembered.
-    #[arg(long, env = "AGENTILOOP_YES")]
+    #[arg(long, env = "AGENTILOOP_YES", value_parser = clap::builder::FalseyValueParser::new())]
     yes: bool,
 
     /// Max provider round-trips per prompt [default: last used, then 50].
@@ -68,7 +68,7 @@ struct Cli {
     new: bool,
 
     /// Full-screen terminal UI (ratatui) instead of the line REPL. Remembered.
-    #[arg(long, env = "AGENTILOOP_TUI", conflicts_with = "prompt")]
+    #[arg(long, env = "AGENTILOOP_TUI", value_parser = clap::builder::FalseyValueParser::new(), conflicts_with = "prompt")]
     tui: bool,
 
     /// Use the line REPL even if the TUI was used last time.
@@ -76,7 +76,7 @@ struct Cli {
     no_tui: bool,
 
     /// Don't start MCP servers from ~/.agentiloop/mcp.json / ./.mcp.json.
-    #[arg(long, env = "AGENTILOOP_NO_MCP")]
+    #[arg(long, env = "AGENTILOOP_NO_MCP", value_parser = clap::builder::FalseyValueParser::new())]
     no_mcp: bool,
 
     /// Run the first-time setup wizard (provider, key, model). Runs by itself on a
@@ -100,7 +100,7 @@ struct Cli {
 
     /// Plan mode: tools that change something (write_file, edit_file, bash, task, mutating MCP
     /// tools) are switched off and the model is asked for a plan instead. Toggle with /plan.
-    #[arg(long, env = "AGENTILOOP_PLAN")]
+    #[arg(long, env = "AGENTILOOP_PLAN", value_parser = clap::builder::FalseyValueParser::new())]
     plan: bool,
 
     /// Extra text added to the end of the system prompt for this run (never saved).
