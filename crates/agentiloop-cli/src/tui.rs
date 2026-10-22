@@ -658,7 +658,7 @@ impl App {
     pub fn draw(&self, frame: &mut Frame) {
         self.sel_areas.borrow_mut().clear();
         let [transcript, input, status] =
-            Layout::vertical([Constraint::Min(1), Constraint::Length(3), Constraint::Length(1)]).areas(frame.area());
+            Layout::vertical([Constraint::Min(1), Constraint::Length(4), Constraint::Length(1)]).areas(frame.area());
 
         // Claude Code-style "files changed" pane on the right, when there's room.
         let transcript = if self.show_files && !self.files.is_empty() && transcript.width >= 100 {
@@ -688,20 +688,29 @@ impl App {
         let inner = block.inner(input);
         self.sel_areas.borrow_mut().push(inner);
         let shown = if self.asking == Some(true) { "•".repeat(self.input.chars().count()) } else { self.input.clone() };
-        frame.render_widget(Paragraph::new(shown).block(block), input);
+        // Hard-wrap at the box width (two rows) so the cursor maps 1:1 to a cell; scroll to keep it visible.
+        let cols = inner.width.max(1) as usize;
+        let chars: Vec<char> = shown.chars().collect();
+        let lines: Vec<Line> = chars.chunks(cols).map(|c| Line::from(c.iter().collect::<String>())).collect();
+        let cur = self.input[..self.cursor].chars().count();
+        let (row, col) = ((cur / cols) as u16, (cur % cols) as u16);
+        let scroll = row.saturating_sub(inner.height.saturating_sub(1));
+        frame.render_widget(Paragraph::new(lines).block(block).scroll((scroll, 0)), input);
         if self.modal.is_none() {
-            let col = self.input[..self.cursor].chars().count() as u16;
-            frame.set_cursor_position((inner.x + col.min(inner.width.saturating_sub(1)), inner.y));
+            frame.set_cursor_position((inner.x + col, inner.y + row - scroll));
         }
 
         let help = "  Enter send · Esc cancel · ↑↓ history · PgUp/PgDn scroll · click links · drag to copy · Ctrl-F files · Ctrl-C quit";
-        let mut bar = vec![Span::raw(self.status.clone())];
+        let mut bar = vec![Span::styled(self.status.clone(), Style::default().fg(Color::White))];
         if let Some(s) = &self.speed {
             bar.push(Span::styled(format!("⏱ {s} "), Style::default().fg(Color::Green)));
         }
-        bar.push(Span::styled(help, Style::default().fg(Color::DarkGray)));
+        bar.push(Span::styled(help, Style::default().fg(Color::Rgb(0xE0, 0x8A, 0x5B))));
         let bar = Line::from(bar);
-        frame.render_widget(Paragraph::new(bar).style(Style::default().add_modifier(Modifier::REVERSED)), status);
+        frame.render_widget(
+            Paragraph::new(bar).style(Style::default().fg(Color::Rgb(0xE0, 0x8A, 0x5B)).add_modifier(Modifier::REVERSED)),
+            status,
+        );
 
         if let Some(sel) = &self.selection {
             let buf = frame.buffer_mut();
@@ -1220,10 +1229,10 @@ mod tests {
         let mut app = App::new("s");
         app.apply(UiMsg::User("earlier question".into()));
         app.apply(UiMsg::Event(AgentEvent::AssistantText("earlier answer".into())));
-        let s = screen(&app, 40, 8);
+        let s = screen(&app, 40, 9);
         assert!(s.contains("> earlier question") && s.contains("earlier answer"), "{s}");
         app.apply(UiMsg::Clear);
-        assert!(!screen(&app, 40, 8).contains("earlier"));
+        assert!(!screen(&app, 40, 9).contains("earlier"));
     }
 
     #[test]
@@ -1263,7 +1272,7 @@ mod tests {
         let mut app = App::new("s");
         app.apply(UiMsg::Event(AgentEvent::ToolCall { id: "1".into(), name: "bash".into(), input: serde_json::json!({"cmd":"ls"}) }));
         app.apply(UiMsg::Event(AgentEvent::ToolResult { id: "1".into(), name: "bash".into(), output: "boom".into(), is_error: true }));
-        let s = screen(&app, 50, 8);
+        let s = screen(&app, 50, 9);
         assert!(s.contains("\u{1f527}") && s.contains("bash {\"cmd\":\"ls\"}"), "{s}");
         assert!(s.contains("✖ boom"), "{s}");
     }
@@ -1345,7 +1354,7 @@ mod tests {
     fn blank_line_in_text_renders_as_one_blank_row() {
         let mut app = App::new("s");
         app.apply(UiMsg::Event(AgentEvent::AssistantText("para one\n\npara two".into())));
-        let s = screen(&app, 20, 8);
+        let s = screen(&app, 20, 9);
         let rows: Vec<&str> = s.lines().map(str::trim_end).collect();
         let one = rows.iter().position(|r| *r == "para one").unwrap();
         let two = rows.iter().position(|r| *r == "para two").unwrap();
@@ -1467,7 +1476,7 @@ mod tests {
     fn edit_diff_shows_numbered_tinted_lines() {
         let mut app = App::new("s");
         app.apply(change("src/a.txt", "one\ntwo\nthree\n", "one\nTWO\nthree\n"));
-        let mut t = Terminal::new(TestBackend::new(60, 10)).unwrap();
+        let mut t = Terminal::new(TestBackend::new(60, 11)).unwrap();
         t.draw(|f| app.draw(f)).unwrap();
         let buf = t.backend().buffer();
         let row = |y: u16| (0..60).map(|x| buf.cell((x, y)).unwrap().symbol()).collect::<String>();
