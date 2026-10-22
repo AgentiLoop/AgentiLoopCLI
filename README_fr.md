@@ -390,6 +390,12 @@ Touches dans la TUI : **Enter** envoie · **↑ / ↓** parcourent les demandes 
 
 Tapez `@` suivi d'un chemin n'importe où dans un prompt et AgentiLoop joint ce fichier à ce que reçoit le modèle : `explique @src/main.rs` envoie votre phrase plus le texte du fichier avec les numéros de ligne. Un dossier (`@src`) joint sa liste. Les chemins sont relatifs au dossier du projet (ou absolus, ou `~/…`) ; un mot qui ne désigne rien est laissé tel quel, les adresses e-mail ne risquent donc rien. Les fichiers sont coupés à 64 Ko, les dossiers à 200 entrées, et une ligne 📎 montre ce qui a été joint. Fonctionne dans la TUI, le chat et les prompts en une fois.
 
+
+---
+
+## Lancer une commande shell avec !
+
+Commencez une ligne par `!` et AgentiLoop l'exécute comme commande shell au lieu de l'envoyer au modèle : `!git status`, `!cargo test`, `!ls src`. Vous voyez la sortie tout de suite et elle est ajoutée à la conversation : vous pouvez enchaîner avec « corrige ces tests qui échouent », le modèle les a déjà. La commande tourne dans le dossier du projet avec le même shell, le même délai de 120 s et la même limite de sortie de 30 Ko que l'outil `bash` du modèle. Fonctionne dans la TUI et dans le chat.
 ---
 
 ## Il se souvient de votre configuration
@@ -450,7 +456,7 @@ Chaque option peut aussi être définie par une variable d'environnement, indiqu
 | `--setup` | | Relance l'assistant de première configuration (fournisseur, clé, modèle). Avec `--tui`, il s'exécute dans l'interface plein écran |
 | `--reset` | | Retour à neuf : supprime `~/.agentiloop`, le bloc agentiloop de votre profil shell et les éléments du Trousseau créés par l'assistant (sous Windows : les variables d'environnement utilisateur qu'il a définies). Les lignes `export` écrites à la main sont seulement mises en commentaire, et seulement si vous acceptez. Ajoutez `--yes` pour sauter les questions |
 | `--max-turns <n>` | | Nombre maximal d'étapes que l'agent peut faire par demande (50 par défaut) |
-| `--max-retries <n>` | `AGENTILOOP_MAX_RETRIES` | Combien de fois une requête qui échoue pour une raison passagère (limite de débit, surcharge, erreur serveur, connexion coupée) est renvoyée avant que l'erreur ne s'affiche : après 1 s, 2 s, 4 s… (3 par défaut, `0` = jamais). Une ligne `⟳ retry 1/3` montre chaque tentative. Pas de nouvel essai si la réponse a déjà commencé à arriver |
+| `--max-retries <n>` | `AGENTILOOP_MAX_RETRIES` | Combien de fois une requête qui échoue pour une raison passagère (limite de débit, surcharge, erreur serveur, connexion coupée) est renvoyée avant que l'erreur ne s'affiche : après 1 s, 2 s, 4 s… (3 par défaut, `0` = jamais). Une ligne `⟳ retry 1/3` montre chaque tentative. Pas de nouvel essai si la réponse a déjà commencé à arriver |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | Quand résumer une longue conversation (150000 par défaut, `0` = jamais) |
 | `-h` / `-V` | | Aide / version |
 
@@ -477,6 +483,7 @@ Tapez-les à l'invite, dans la TUI ou dans le chat :
 
 | Commande | Ce qu'elle fait |
 |---|---|
+| `!<commande>` | Lance une commande shell ici et ajoute sa sortie à la conversation (voir [Lancer une commande shell avec !](#lancer-une-commande-shell-avec-)) |
 | `/model` | Affiche les modèles disponibles. `/model 3` ou `/model <id>` change de modèle (et c'est retenu) |
 | `/sessions` | Liste vos conversations enregistrées, des plus récentes aux plus anciennes |
 | `/resume <n or id>` | Rouvre l'une d'elles |

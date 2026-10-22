@@ -274,6 +274,12 @@ Keys in the TUI: **Enter** sends · **↑ / ↓** go through earlier prompts · 
 
 Type `@` followed by a path anywhere in a prompt and AgentiLoop attaches that file to what the model receives: `explain @src/main.rs` sends your sentence plus the file's text with line numbers. A folder (`@src`) attaches its listing. Paths are relative to the project folder (or absolute, or `~/…`); a word that names nothing is left alone, so e-mail addresses are safe. Files are cut at 64 KB, folders at 200 entries, and a 📎 line shows what was attached. Works in the TUI, the chat and one-shot prompts.
 
+
+---
+
+## Run a shell command with !
+
+Start a line with `!` and AgentiLoop runs it as a shell command instead of sending it to the model: `!git status`, `!cargo test`, `!ls src`. You see the output right away, and it is added to the conversation, so you can follow up with "fix those test failures" and the model already has them. The command runs in the project folder with the same shell, 120 s timeout and 30 KB output cap as the model's own `bash` tool. Works in the TUI and the chat.
 ---
 
 ## What can it do? (tools)
@@ -382,6 +388,7 @@ Type these at the prompt, in the TUI or the chat:
 
 | Command | What it does |
 |---|---|
+| `!<command>` | Runs a shell command here and adds its output to the conversation (see [Run a shell command with !](#run-a-shell-command-with-)) |
 | `/model` | Show available models. `/model 3` or `/model <id>` switches (and is remembered) |
 | `/sessions` | List your saved conversations, newest first |
 | `/resume <n or id>` | Reopen one of them |

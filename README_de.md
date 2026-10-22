@@ -391,6 +391,12 @@ Tasten in der TUI: **Enter** sendet · **↑ / ↓** blättern durch frühere An
 
 Tippe irgendwo im Prompt `@` gefolgt von einem Pfad, und AgentiLoop hängt diese Datei an das an, was das Modell bekommt: `erkläre @src/main.rs` schickt deinen Satz plus den Text der Datei mit Zeilennummern. Ein Ordner (`@src`) hängt seine Liste an. Pfade sind relativ zum Projektordner (oder absolut, oder `~/…`); ein Wort, das nichts benennt, bleibt unverändert, E-Mail-Adressen sind also sicher. Dateien werden bei 64 KB abgeschnitten, Ordner bei 200 Einträgen, und eine 📎-Zeile zeigt, was angehängt wurde. Funktioniert in der TUI, im Chat und bei Einmal-Prompts.
 
+
+---
+
+## Shell-Befehle mit ! ausführen
+
+Beginne eine Zeile mit `!`, und AgentiLoop führt sie als Shell-Befehl aus, statt sie an das Modell zu schicken: `!git status`, `!cargo test`, `!ls src`. Du siehst die Ausgabe sofort, und sie wird der Unterhaltung hinzugefügt – du kannst also mit „behebe diese Testfehler“ weitermachen, und das Modell kennt sie schon. Der Befehl läuft im Projektordner mit derselben Shell, 120 s Timeout und 30 KB Ausgabelimit wie das `bash`-Tool des Modells. Funktioniert in der TUI und im Chat.
 ---
 
 ## Er merkt sich deine Einstellungen
@@ -451,7 +457,7 @@ Jede Option lässt sich auch über eine Umgebungsvariable setzen, die in der zwe
 | `--setup` | | Startet den Einrichtungsassistenten erneut (Anbieter, Schlüssel, Modell). Zusammen mit `--tui` läuft er in der Vollbild-Oberfläche |
 | `--reset` | | Zurück auf Anfang: löscht `~/.agentiloop`, den agentiloop-Block in deinem Shell-Profil und die vom Assistenten angelegten Schlüsselbund-Einträge (unter Windows: die von ihm gesetzten Benutzer-Umgebungsvariablen). Von Hand geschriebene `export`-Zeilen werden nur auskommentiert, und nur wenn du zustimmst. Mit `--yes` entfallen die Rückfragen |
 | `--max-turns <n>` | | Maximale Anzahl Schritte, die der Agent pro Anfrage machen darf (Standard 50) |
-| `--max-retries <n>` | `AGENTILOOP_MAX_RETRIES` | Wie oft eine Anfrage, die aus einem vorübergehenden Grund fehlschlägt (Rate-Limit, überlastet, Serverfehler, abgebrochene Verbindung), erneut gesendet wird, bevor du den Fehler siehst: nach 1 s, 2 s, 4 s… (Standard 3, `0` = nie). Eine Zeile `⟳ retry 1/3` zeigt jeden Versuch. Nicht mehr, sobald die Antwort schon gestreamt wird |
+| `--max-retries <n>` | `AGENTILOOP_MAX_RETRIES` | Wie oft eine Anfrage, die aus einem vorübergehenden Grund fehlschlägt (Rate-Limit, überlastet, Serverfehler, abgebrochene Verbindung), erneut gesendet wird, bevor du den Fehler siehst: nach 1 s, 2 s, 4 s… (Standard 3, `0` = nie). Eine Zeile `⟳ retry 1/3` zeigt jeden Versuch. Nicht mehr, sobald die Antwort schon gestreamt wird |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | Wann eine lange Unterhaltung zusammengefasst wird (Standard 150000, `0` = nie) |
 | `-h` / `-V` | | Hilfe / Version |
 
@@ -478,6 +484,7 @@ Tipp diese an der Eingabeaufforderung ein, in der TUI oder im Chat:
 
 | Befehl | Was er macht |
 |---|---|
+| `!<Befehl>` | Führt einen Shell-Befehl direkt aus und fügt die Ausgabe der Unterhaltung hinzu (siehe [Shell-Befehle mit ! ausführen](#shell-befehle-mit--ausführen)) |
 | `/model` | Zeigt die verfügbaren Modelle. `/model 3` oder `/model <id>` wechselt (und wird gemerkt) |
 | `/sessions` | Listet deine gespeicherten Unterhaltungen auf, die neueste zuerst |
 | `/resume <n or id>` | Öffnet eine davon erneut |

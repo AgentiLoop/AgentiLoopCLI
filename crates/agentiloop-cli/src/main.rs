@@ -373,6 +373,15 @@ async fn main() -> Result<()> {
             };
             // A custom command (`.agentiloop/commands/<name>.md`) turns into its prompt.
             let line = agentiloop_core::commands::resolve(&line, &session.cwd, settings::home().as_deref()).unwrap_or(line);
+            // `!cmd` runs here, not through the model; the output joins the conversation.
+            if let Some(cmd) = agentiloop_core::shell_passthrough(&line) {
+                let output = run_shell(&cwd, cmd).await;
+                let _ = ui_tx.send(tui::UiMsg::Line(shell_line(cmd, &output)));
+                agent.add_shell_output(cmd, &output);
+                persist(&mut session, &agent, sessions_dir.as_deref());
+                let _ = ui_tx.send(tui::UiMsg::Idle);
+                continue;
+            }
             if line.starts_with('/') {
                 // Collect the command's output into one transcript entry so
                 // multi-line output (the /model list) isn't double-spaced.
@@ -497,6 +506,13 @@ async fn main() -> Result<()> {
         let line = mcp_prompt.as_deref().unwrap_or(line);
         let expanded = agentiloop_core::commands::resolve(line, &session.cwd, settings::home().as_deref());
         let line = expanded.as_deref().unwrap_or(line);
+        if let Some(cmd) = agentiloop_core::shell_passthrough(line) {
+            let output = run_shell(&cwd, cmd).await;
+            eprintln!("{}", shell_line(cmd, &output));
+            agent.add_shell_output(cmd, &output);
+            persist(&mut session, &agent, sessions_dir.as_deref());
+            continue;
+        }
         if line.starts_with('/') {
             let before = session.id.clone();
             slash_command(line, &mut agent, &*provider, &mut saved, &mut session, sessions_dir.as_deref(), &mcp, true, &mut wizard::Terminal, &mut |s| {
@@ -598,6 +614,23 @@ fn persist(session: &mut Session, agent: &Agent, dir: Option<&Path>) {
     if let Err(e) = session.save(dir) {
         eprintln!("warning: could not save session: {e:#}");
     }
+}
+
+/// Runs a `!cmd` line through the `bash` tool (same shell, timeout and output cap as the
+/// model's commands); a failure is returned as its message.
+async fn run_shell(cwd: &Path, command: &str) -> String {
+    use agentiloop_core::Tool;
+    let ctx = ToolContext { cwd: cwd.to_path_buf() };
+    match agentiloop_tools::Bash.call(&ctx, serde_json::json!({"command": command})).await {
+        Ok(out) => out,
+        Err(e) => e.to_string(),
+    }
+}
+
+/// What a `!cmd` line shows on screen: the command, then its output.
+pub(crate) fn shell_line(command: &str, output: &str) -> String {
+    let output = output.trim_end();
+    if output.is_empty() { format!("$ {command}\n(no output)") } else { format!("$ {command}\n{output}") }
 }
 
 /// Fallback catalog used when `/v1/models` can't be reached (newest first).
@@ -836,7 +869,8 @@ async fn slash_command(
     Ok(())
 }
 
-const HELP: &str = "/model [n|id]   show picker, or pick #n / set id directly\n\
+const HELP: &str = "!<command>      run a shell command here; its output joins the conversation\n\
+/model [n|id]   show picker, or pick #n / set id directly\n\
 /mcp            list MCP servers and their tools\n\
 /usage          tokens used since start and how full the context is\n\
 /export [file]  save the conversation as Markdown\n\
@@ -1187,6 +1221,15 @@ mod json_tests {
         v["type"] = "result".into();
         assert_eq!(v["type"], "result");
         assert_eq!(v["result"], "a");
+    }
+}
+
+#[cfg(test)]
+mod shell_line_tests {
+    #[test]
+    fn shell_line_shows_the_command_then_the_output() {
+        assert_eq!(super::shell_line("ls", "a\nb\n"), "$ ls\na\nb");
+        assert_eq!(super::shell_line("true", ""), "$ true\n(no output)");
     }
 }
 

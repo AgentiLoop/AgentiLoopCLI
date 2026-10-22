@@ -241,6 +241,12 @@ impl Agent {
         limits
     }
 
+    /// Record a shell command the user ran themselves (`!cmd` in the REPL / TUI) and
+    /// its output as a user turn, so the model sees it on the next request.
+    pub fn add_shell_output(&mut self, command: &str, output: &str) {
+        self.history.push(Message::user_text(shell_note(command, output)));
+    }
+
     /// Drop all conversation context and tool history.
     pub fn clear(&mut self) {
         self.history.clear();
@@ -552,6 +558,53 @@ mod retry_tests {
         assert_eq!(retry_delay(2), Duration::from_secs(2));
         assert_eq!(retry_delay(3), Duration::from_secs(4));
         assert_eq!(retry_delay(9), Duration::from_secs(30));
+    }
+}
+
+/// The command behind a `!cmd` prompt line (REPL / TUI): the text after the `!`, or None
+/// when the line isn't one (`!` alone, or a line that merely contains a `!`).
+pub fn shell_passthrough(line: &str) -> Option<&str> {
+    let rest = line.trim().strip_prefix('!')?.trim();
+    (!rest.is_empty()).then_some(rest)
+}
+
+/// Longest shell output kept in the conversation for a `!cmd` line (bytes).
+pub const SHELL_NOTE_LIMIT: usize = 30_000;
+
+/// The user turn recorded for a `!cmd` line: the command and its (cut) output.
+pub fn shell_note(command: &str, output: &str) -> String {
+    let output = output.trim_end();
+    let body = if output.is_empty() {
+        "(no output)".to_string()
+    } else if output.len() > SHELL_NOTE_LIMIT {
+        let cut = output.floor_char_boundary(SHELL_NOTE_LIMIT);
+        format!("{}\n…[{} more bytes]", &output[..cut], output.len() - cut)
+    } else {
+        output.to_string()
+    };
+    format!("I ran this shell command myself in the project folder:\n$ {command}\n\n{body}")
+}
+
+#[cfg(test)]
+mod shell_tests {
+    use super::*;
+
+    #[test]
+    fn bang_lines_are_shell_commands() {
+        assert_eq!(shell_passthrough("!git status"), Some("git status"));
+        assert_eq!(shell_passthrough("  ! ls -la  "), Some("ls -la"));
+        assert_eq!(shell_passthrough("!"), None);
+        assert_eq!(shell_passthrough("!   "), None);
+        assert_eq!(shell_passthrough("fix it!"), None);
+        assert_eq!(shell_passthrough("/help"), None);
+    }
+
+    #[test]
+    fn shell_note_has_the_command_and_the_cut_output() {
+        assert_eq!(shell_note("ls", "a\nb\n"), "I ran this shell command myself in the project folder:\n$ ls\n\na\nb");
+        assert!(shell_note("true", "  \n").ends_with("(no output)"));
+        let big = "x".repeat(SHELL_NOTE_LIMIT + 10);
+        assert!(shell_note("cat big", &big).ends_with("…[10 more bytes]"));
     }
 }
 
