@@ -143,8 +143,8 @@ async fn bash_times_out() {
 #[test]
 fn default_registry_has_all_builtins() {
     let r = default_registry();
-    assert_eq!(r.len(), 9);
-    for name in ["read_file", "write_file", "edit_file", "list_dir", "glob", "grep", "web_fetch", "todo_write", "bash"] {
+    assert_eq!(r.len(), 10);
+    for name in ["read_file", "write_file", "edit_file", "list_dir", "glob", "grep", "web_fetch", "todo_write", "bash", "change_dir"] {
         assert!(r.get(name).is_some(), "missing {name}");
     }
     assert!(!r.get("read_file").unwrap().is_mutating());

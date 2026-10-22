@@ -11,10 +11,12 @@ pub mod commands;
 pub mod hooks;
 pub mod mentions;
 pub mod subagent;
+pub mod cd;
 
 pub use agent::{is_transient, retry_delay, shell_note, shell_passthrough, Agent, AgentConfig, AgentEvent, ModelLimits, Usage, DEFAULT_MAX_RETRIES, PLAN_MODE_PROMPT};
 pub use hooks::Hooks;
 pub use subagent::TaskTool;
+pub use cd::ChangeDir;
 pub use message::{ContentBlock, Message, Role, StopReason};
 pub use permission::{Permission, PermissionPolicy};
 pub use provider::{ModelInfo, Provider, ProviderRequest, ProviderResponse, ToolSpec};

@@ -214,6 +214,15 @@ impl Agent {
         self.limits = None;
     }
 
+    /// The working directory tools run in (`change_dir` and `/cd` move it).
+    pub fn cwd(&self) -> &std::path::Path {
+        &self.ctx.cwd
+    }
+
+    pub fn set_cwd(&mut self, cwd: impl Into<std::path::PathBuf>) {
+        self.ctx.cwd = cwd.into();
+    }
+
     /// Replace the system prompt (the CLI rebuilds it after a `# note` changed AGENTS.md).
     pub fn set_system_prompt(&mut self, prompt: impl Into<String>) {
         self.config.system_prompt = prompt.into();
@@ -474,8 +483,15 @@ impl Agent {
             self.history.push(Message::tool_results(Vec::with_capacity(calls.len())));
             for (id, name, input) in calls {
                 on_event(AgentEvent::ToolCall { id: id.clone(), name: name.clone(), input: input.clone() });
+                let cd = (name == crate::cd::CHANGE_DIR_TOOL_NAME).then(|| input.clone());
                 let (output, is_error) = match self.execute(&name, input).await {
-                    Ok(out) => (out, false),
+                    Ok(out) => {
+                        // A successful `change_dir` moves every later tool call.
+                        if let Some(dir) = cd.as_ref().and_then(|i| i["path"].as_str()).and_then(|p| crate::cd::resolve_dir(&self.ctx.cwd, p).ok()) {
+                            self.ctx.cwd = dir;
+                        }
+                        (out, false)
+                    }
                     Err(e) => (e.to_string(), true),
                 };
                 on_event(AgentEvent::ToolResult {

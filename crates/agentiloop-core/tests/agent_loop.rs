@@ -180,6 +180,26 @@ fn tool_call_round_trip_feeds_result_back() {
 }
 
 #[test]
+fn change_dir_moves_the_agent_only_when_it_succeeds() {
+    let tmp = std::env::temp_dir().canonicalize().unwrap();
+    let sub = tmp.join("agentiloop-change-dir-loop");
+    std::fs::create_dir_all(&sub).unwrap();
+    let p = ScriptedProvider::new(vec![
+        tool_call("t1", "change_dir", json!({"path": "no-such-dir-here"})),
+        tool_call("t2", "change_dir", json!({"path": "agentiloop-change-dir-loop"})),
+        text("moved"),
+    ]);
+    let mut tools = ToolRegistry::new();
+    tools.register(agentiloop_core::ChangeDir);
+    let config = AgentConfig { model: "mock".into(), max_turns: 5, ..Default::default() };
+    let mut a = Agent::new(p, tools, Arc::new(agentiloop_core::permission::AllowAll), config, ToolContext { cwd: tmp.clone() });
+    let (res, events) = collect(&mut a, "go");
+    res.unwrap();
+    assert!(events.iter().any(|e| matches!(e, AgentEvent::ToolResult { id, is_error: true, .. } if id == "t1")));
+    assert_eq!(a.cwd(), sub.as_path());
+}
+
+#[test]
 fn unknown_tool_is_reported_as_error_result_not_crash() {
     let p = ScriptedProvider::new(vec![tool_call("t1", "nope", json!({})), text("ok")]);
     let mut a = agent(p, Arc::new(agentiloop_core::permission::AllowAll), 5);

@@ -137,7 +137,7 @@ async fn main() -> Result<()> {
     settings::load_env_file();
 
 
-    let cwd = match cli.cwd {
+    let mut cwd = match cli.cwd {
         Some(p) => p.canonicalize()?,
         None => std::env::current_dir()?,
     };
@@ -359,7 +359,7 @@ async fn main() -> Result<()> {
     if let Some(ui) = ui {
         let status = |agent: &Agent, session: &Session| {
             let plan = if agent.plan_mode() { "  PLAN" } else { "" };
-            format!(" AgentiLoop  {}  {}  {}  session {}{plan} ", cwd.display(), provider.name(), agent.model(), session.id)
+            format!(" AgentiLoop  {}  {}  {}  session {}{plan} ", agent.cwd().display(), provider.name(), agent.model(), session.id)
         };
         let _ = ui_tx.send(tui::UiMsg::Status(status(&agent, &session)));
         // A continued session shows its earlier conversation, not an empty screen.
@@ -464,6 +464,13 @@ async fn main() -> Result<()> {
                 }
                 persist(&mut session, &agent, sessions_dir.as_deref());
             }
+            // `/cd` or the model's `change_dir` moved the agent: the rest of the CLI follows.
+            if let Some(msg) = follow_cwd(&mut agent, &mut session, &mut cwd, cli.append_system_prompt.as_deref()) {
+                tracker = diff::Tracker::new(cwd.clone());
+                persist(&mut session, &agent, sessions_dir.as_deref());
+                let _ = ui_tx.send(tui::UiMsg::Line(msg));
+                let _ = ui_tx.send(tui::UiMsg::Status(status(&agent, &session)));
+            }
             let _ = ui_tx.send(tui::UiMsg::Idle);
         }
         drop(ui_tx);
@@ -542,6 +549,10 @@ async fn main() -> Result<()> {
             if session.id != before {
                 replay_repl(&agent.history);
             }
+            if let Some(msg) = follow_cwd(&mut agent, &mut session, &mut cwd, cli.append_system_prompt.as_deref()) {
+                tracker = diff::Tracker::new(cwd.clone());
+                eprintln!("{msg}");
+            }
             continue;
         }
         // Line mode has no raw keyboard during a run, so Ctrl-C is its cancel key:
@@ -563,6 +574,10 @@ async fn main() -> Result<()> {
                 agent.interrupt();
                 eprintln!("\ncancelled; session kept");
             }
+        }
+        if let Some(msg) = follow_cwd(&mut agent, &mut session, &mut cwd, cli.append_system_prompt.as_deref()) {
+            tracker = diff::Tracker::new(cwd.clone());
+            eprintln!("{msg}");
         }
         persist(&mut session, &agent, sessions_dir.as_deref());
     }
@@ -645,6 +660,23 @@ fn system_prompt(cwd: &Path, extra: Option<&str>) -> (String, Vec<agentiloop_cor
     let found = instructions::load(cwd, settings::home().as_deref());
     let prompt = append_extra(&instructions::append_to_prompt(agentiloop_core::agent::DEFAULT_SYSTEM_PROMPT, &found), extra);
     (prompt, found)
+}
+
+/// After `/cd` or the model's `change_dir` moved the agent: `cwd`, the session's folder and the
+/// system prompt (that folder's AGENTS.md / CLAUDE.md) follow. Returns what to show, if it moved.
+fn follow_cwd(agent: &mut Agent, session: &mut Session, cwd: &mut PathBuf, extra: Option<&str>) -> Option<String> {
+    if agent.cwd() == cwd.as_path() {
+        return None;
+    }
+    *cwd = agent.cwd().to_path_buf();
+    session.cwd = cwd.clone();
+    let (prompt, found) = system_prompt(cwd, extra);
+    agent.set_system_prompt(prompt);
+    let mut msg = format!("working directory: {}", cwd.display());
+    for i in &found {
+        msg.push_str(&format!("\ninstructions: {}", i.path.display()));
+    }
+    Some(msg)
 }
 
 /// A `# note` line: append it to the project's AGENTS.md and reload the instructions into the
@@ -808,6 +840,16 @@ async fn slash_command(
             say(status_text(&info));
         }
         "/hooks" => say(agent.hooks().listing()),
+        "/cd" => {
+            if arg.is_empty() {
+                say(format!("working directory: {}", agent.cwd().display()));
+            } else {
+                match agentiloop_core::cd::resolve_dir(agent.cwd(), arg) {
+                    Ok(dir) => agent.set_cwd(dir),
+                    Err(e) => say(format!("cd: {e}")),
+                }
+            }
+        }
         "/plan" => {
             let on = match arg {
                 "" => !agent.plan_mode(),
@@ -989,6 +1031,7 @@ const HELP: &str = "!<command>      run a shell command here; its output joins t
 /commands       list your custom commands (.agentiloop/commands/*.md)\n\
 /hooks          list the hooks loaded from .agentiloop/hooks.json\n\
 /status         where you are: folder, provider, model and its limits, session, tools, hooks, settings\n\
+/cd [dir]       show or change the working directory (the model can switch it too)\n\
 /plan [on|off]  plan mode: tools that change something are off, the model plans instead\n\
 /diff           show what changed in the git working tree\n\
 /todos          show the model's current task checklist\n\

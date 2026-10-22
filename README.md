@@ -302,6 +302,7 @@ The agent works with ten built-in tools. You don't call them yourself. You descr
 | `grep` | Searches inside files with a regular expression | No |
 | `web_fetch` | Fetches a web page or API response as plain text | **Yes** |
 | `todo_write` | Keeps the model's own checklist for multi-step work | No |
+| `change_dir` | Switches the working directory for the rest of the session ("switch to ~/Documents/GoGame") | No |
 | `write_file` | Creates a new file or overwrites one | **Yes** |
 | `edit_file` | Changes an exact piece of text in a file | **Yes** |
 | `bash` | Runs a shell command, like tests, builds or `git` (`sh -c` on Mac/Linux, `cmd /C` on Windows) | **Yes** |
@@ -409,6 +410,7 @@ Type these at the prompt, in the TUI or the chat:
 | `/diff` | Show what changed in the git working tree (status plus diff, cut at 200 lines) |
 | `/commands` | Your own commands: every `.agentiloop/commands/<name>.md` (project) or `~/.agentiloop/commands/<name>.md` becomes `/<name>`, which sends the file as the prompt (`$ARGUMENTS` is replaced by what you type after it; `$1`–`$9` by its individual words). This lists them |
 | `/hooks` | Show the hooks loaded from `.agentiloop/hooks.json` (see [Hooks](#hooks-run-your-own-commands-around-tool-calls)) |
+| `/cd [dir]` | Show or change the working directory (`~`, relative and absolute paths). Tools, `!cmd`, `@file` mentions and the session follow it, and that folder's `AGENTS.md` / `CLAUDE.md` are loaded; the model can switch it too with `change_dir` |
 | `/plan [on\|off]` | Plan mode on or off (no argument toggles). While it is on, tools that change something refuse to run and the model answers with a plan; the TUI shows **PLAN** in the status line |
 | `/init` | Create a starter `AGENTS.md` for the current project (never overwrites) |
 | `/export [file]` | Save the conversation as a Markdown file (`/export notes.md`, or a default name in the project folder) |
@@ -560,7 +562,7 @@ The project is split into five crates, and each one builds on the ones before it
 |---|---|
 | `agentiloop-core` | The heart: the agent loop, messages, the tool and provider interfaces, permissions, sessions, summarizing |
 | `agentiloop-provider` | Talks to the models: Anthropic, OpenAI-compatible servers, oMLX |
-| `agentiloop-tools` | Built-in tools: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `web_fetch`, `todo_write`, `bash` |
+| `agentiloop-tools` | Built-in tools: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `web_fetch`, `todo_write`, `bash`, `change_dir` |
 | `agentiloop-mcp` | The MCP client, ported from Agent!'s Swift AgentMCP |
 | `agentiloop-cli` | The `agentiloop` program: options, chat, TUI, settings |
 

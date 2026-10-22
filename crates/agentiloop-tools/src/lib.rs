@@ -1,4 +1,4 @@
-//! Built-in tools: read_file, write_file, edit_file, list_dir, glob, grep, web_fetch, todo_write, bash, and
+//! Built-in tools: read_file, write_file, edit_file, list_dir, glob, grep, web_fetch, todo_write, bash, change_dir, and
 //! apply_patch (registered for the Codex provider, whose models are trained on it).
 
 mod fs;
@@ -29,6 +29,7 @@ pub fn default_registry() -> ToolRegistry {
         .register(Grep)
         .register(WebFetch)
         .register(TodoWrite)
-        .register(Bash);
+        .register(Bash)
+        .register(agentiloop_core::ChangeDir);
     r
 }
