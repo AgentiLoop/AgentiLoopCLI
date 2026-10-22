@@ -707,10 +707,14 @@ impl App {
         }
         bar.push(Span::styled(help, Style::default().fg(Color::Rgb(0xE0, 0x8A, 0x5B))));
         let bar = Line::from(bar);
+        let tag = concat!(" Rust ", env!("CARGO_PKG_VERSION"), " ");
+        let [bar_area, tag_area] =
+            Layout::horizontal([Constraint::Min(0), Constraint::Length(tag.chars().count() as u16)]).areas(status);
         frame.render_widget(
             Paragraph::new(bar).style(Style::default().fg(Color::Rgb(0xE0, 0x8A, 0x5B)).add_modifier(Modifier::REVERSED)),
-            status,
+            bar_area,
         );
+        frame.render_widget(Paragraph::new(tag).style(Style::default().fg(Color::White).bg(Color::Blue)), tag_area);
 
         if let Some(sel) = &self.selection {
             let buf = frame.buffer_mut();
