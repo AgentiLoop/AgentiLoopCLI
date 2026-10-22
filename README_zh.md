@@ -508,6 +508,7 @@ agentiloop --yes "run the tests and fix any failures"        # 无人值守，�
 | `/export [file]` | 将对话保存为 Markdown 文件（`/export notes.md`，省略则在项目文件夹中使用默认名称） |
 | `/compact` | 立即总结对话以释放空间 |
 | `/usage` | 显示启动以来使用的 token 数以及上下文的占用情况 |
+| `/status` | 当前状态：文件夹、提供方、模型及其限制、会话、计划模式、工具（其中多少来自 MCP）、钩子、指令文件、设置和 token 用量 |
 | `/mcp` | 显示已连接的 MCP 服务器及其工具 |
 | `/help` | 列出这些命令 |
 | `/exit` | 退出 |

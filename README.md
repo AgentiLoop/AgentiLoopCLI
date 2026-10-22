@@ -411,6 +411,7 @@ Type these at the prompt, in the TUI or the chat:
 | `/export [file]` | Save the conversation as a Markdown file (`/export notes.md`, or a default name in the project folder) |
 | `/compact` | Summarize the conversation now to free up space |
 | `/usage` | Show the tokens used since start and how full the context is |
+| `/status` | Where you are: folder, provider, model and its limits, session, plan mode, tools (and how many come from MCP), hooks, instruction files, settings and token usage |
 | `/mcp` | Show connected MCP servers and their tools |
 | `/setup` | Run the setup wizard again (works in the TUI too). A new key or provider takes effect after a restart |
 | `/help` | List these commands |

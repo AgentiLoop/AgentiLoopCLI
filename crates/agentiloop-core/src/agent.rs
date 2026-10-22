@@ -211,6 +211,16 @@ impl Agent {
         self.config.system_prompt = prompt.into();
     }
 
+    /// The configuration in effect (model, limits, hooks, retries).
+    pub fn config(&self) -> &AgentConfig {
+        &self.config
+    }
+
+    /// Names of the registered tools, in registration order.
+    pub fn tool_names(&self) -> Vec<&str> {
+        self.tools.iter().map(|t| t.name()).collect()
+    }
+
     pub fn hooks(&self) -> &Hooks {
         &self.config.hooks
     }

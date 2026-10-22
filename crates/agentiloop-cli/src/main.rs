@@ -782,6 +782,28 @@ async fn slash_command(
             Err(e) => say(e),
         },
         "/commands" => say(agentiloop_core::commands::listing(&agentiloop_core::commands::load(&session.cwd, settings::home().as_deref()))),
+        "/status" => {
+            let instructions = agentiloop_core::instructions::load(&session.cwd, settings::home().as_deref());
+            let info = StatusInfo {
+                cwd: session.cwd.display().to_string(),
+                provider: provider.name().into(),
+                model: agent.model().into(),
+                limits: agent.limits(),
+                session_id: session.id.clone(),
+                messages: agent.history.len(),
+                last_input_tokens: agent.last_input_tokens(),
+                plan_mode: agent.plan_mode(),
+                tools: agent.tool_names().iter().map(|s| s.to_string()).collect(),
+                mcp_servers: mcp.servers.len(),
+                mcp_tools: mcp.tool_count(),
+                hooks: agent.hooks().len(),
+                instructions: instructions.iter().map(|i| i.path.display().to_string()).collect(),
+                max_turns: agent.config().max_turns,
+                max_retries: agent.config().max_retries,
+                usage: agent.usage(),
+            };
+            say(status_text(&info));
+        }
         "/hooks" => say(agent.hooks().listing()),
         "/plan" => {
             let on = match arg {
@@ -931,6 +953,7 @@ const HELP: &str = "!<command>      run a shell command here; its output joins t
 /init           create a starter AGENTS.md for this project\n\
 /commands       list your custom commands (.agentiloop/commands/*.md)\n\
 /hooks          list the hooks loaded from .agentiloop/hooks.json\n\
+/status         where you are: folder, provider, model and its limits, session, tools, hooks, settings\n\
 /plan [on|off]  plan mode: tools that change something are off, the model plans instead\n\
 /diff           show what changed in the git working tree\n\
 /todos          show the model's current task checklist\n\
@@ -949,6 +972,120 @@ pub(crate) fn usage_line(u: agentiloop_core::Usage) -> String {
         line.push_str(&format!(" (prompt cache: {} read, {} written)", u.cache_read_tokens, u.cache_write_tokens));
     }
     line
+}
+
+/// Everything `/status` shows, gathered by the caller.
+pub(crate) struct StatusInfo {
+    pub cwd: String,
+    pub provider: String,
+    pub model: String,
+    pub limits: Option<agentiloop_core::ModelLimits>,
+    pub session_id: String,
+    pub messages: usize,
+    pub last_input_tokens: u64,
+    pub plan_mode: bool,
+    pub tools: Vec<String>,
+    pub mcp_servers: usize,
+    pub mcp_tools: usize,
+    pub hooks: usize,
+    pub instructions: Vec<String>,
+    pub max_turns: usize,
+    pub max_retries: usize,
+    pub usage: agentiloop_core::Usage,
+}
+
+/// The `/status` text: one `label: value` line per item.
+pub(crate) fn status_text(s: &StatusInfo) -> String {
+    let mut model = s.model.clone();
+    match s.limits {
+        Some(l) => {
+            model.push_str(&format!("  (max output {} tokens", l.max_tokens));
+            if let Some(w) = l.context_window {
+                model.push_str(&format!(", context {w}"));
+            }
+            if l.compact_at_tokens > 0 {
+                model.push_str(&format!(", compact at {}", l.compact_at_tokens));
+            } else {
+                model.push_str(", compaction off");
+            }
+            model.push(')');
+        }
+        None => model.push_str("  (limits are looked up on the first request)"),
+    }
+    let mut session = format!("{}  ({} messages", s.session_id, s.messages);
+    if s.last_input_tokens > 0 {
+        session.push_str(&format!(", last request {} input tokens", s.last_input_tokens));
+    }
+    session.push(')');
+    let mut tools = format!("{}: {}", s.tools.len(), s.tools.join(", "));
+    if s.mcp_servers > 0 {
+        tools.push_str(&format!("  ({} of them from {} MCP server(s))", s.mcp_tools, s.mcp_servers));
+    }
+    let instructions = if s.instructions.is_empty() { "none (/init creates AGENTS.md)".to_string() } else { s.instructions.join(", ") };
+    [
+        format!("folder:        {}", s.cwd),
+        format!("provider:      {}", s.provider),
+        format!("model:         {model}"),
+        format!("session:       {session}"),
+        format!("plan mode:     {}", if s.plan_mode { "on (/plan off to run tools again)" } else { "off" }),
+        format!("tools:         {tools}"),
+        format!("hooks:         {}", if s.hooks == 0 { "none".to_string() } else { format!("{} (/hooks lists them)", s.hooks) }),
+        format!("instructions:  {instructions}"),
+        format!("settings:      max turns {}, retries {}", s.max_turns, s.max_retries),
+        format!("usage:         {}", usage_line(s.usage)),
+    ]
+    .join("\n")
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::{status_text, StatusInfo};
+
+    #[test]
+    fn status_lists_every_item_and_adapts_to_what_is_known() {
+        let mut info = StatusInfo {
+            cwd: "/p".into(),
+            provider: "anthropic".into(),
+            model: "m".into(),
+            limits: None,
+            session_id: "s1".into(),
+            messages: 0,
+            last_input_tokens: 0,
+            plan_mode: false,
+            tools: vec!["read_file".into(), "bash".into()],
+            mcp_servers: 0,
+            mcp_tools: 0,
+            hooks: 0,
+            instructions: vec![],
+            max_turns: 50,
+            max_retries: 3,
+            usage: agentiloop_core::Usage::default(),
+        };
+        let t = status_text(&info);
+        assert!(t.contains("folder:        /p") && t.contains("provider:      anthropic"), "{t}");
+        assert!(t.contains("model:         m  (limits are looked up on the first request)"), "{t}");
+        assert!(t.contains("session:       s1  (0 messages)") && t.contains("plan mode:     off"), "{t}");
+        assert!(t.contains("tools:         2: read_file, bash\n") && t.contains("hooks:         none"), "{t}");
+        assert!(t.contains("instructions:  none (/init creates AGENTS.md)") && t.contains("settings:      max turns 50, retries 3"), "{t}");
+        assert!(t.contains("usage:         0 request(s) since start"), "{t}");
+
+        info.limits = Some(agentiloop_core::ModelLimits { max_tokens: 8192, context_window: Some(200_000), compact_at_tokens: 160_000 });
+        info.messages = 4;
+        info.last_input_tokens = 1234;
+        info.plan_mode = true;
+        info.mcp_servers = 1;
+        info.mcp_tools = 1;
+        info.hooks = 2;
+        info.instructions = vec!["/p/AGENTS.md".into()];
+        let t = status_text(&info);
+        assert!(t.contains("model:         m  (max output 8192 tokens, context 200000, compact at 160000)"), "{t}");
+        assert!(t.contains("session:       s1  (4 messages, last request 1234 input tokens)"), "{t}");
+        assert!(t.contains("plan mode:     on (/plan off to run tools again)"), "{t}");
+        assert!(t.contains("tools:         2: read_file, bash  (1 of them from 1 MCP server(s))"), "{t}");
+        assert!(t.contains("hooks:         2 (/hooks lists them)") && t.contains("instructions:  /p/AGENTS.md"), "{t}");
+        info.limits = Some(agentiloop_core::ModelLimits { max_tokens: 8192, context_window: None, compact_at_tokens: 0 });
+        assert!(status_text(&info).contains("model:         m  (max output 8192 tokens, compaction off)"));
+    }
 }
 
 /// What `/plan` and `--plan` print.

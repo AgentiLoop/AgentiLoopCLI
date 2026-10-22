@@ -508,6 +508,7 @@ Tipp diese an der Eingabeaufforderung ein, in der TUI oder im Chat:
 | `/export [file]` | Speichert die Unterhaltung als Markdown-Datei (`/export notes.md` oder ein Standardname im Projektordner) |
 | `/compact` | Fasst die Unterhaltung jetzt zusammen, um Platz zu schaffen |
 | `/usage` | Zeigt die seit dem Start verbrauchten Tokens und wie voll der Kontext ist |
+| `/status` | Wo du stehst: Ordner, Anbieter, Modell und seine Limits, Sitzung, Planmodus, Tools (und wie viele davon von MCP kommen), Hooks, Instruktionsdateien, Einstellungen und Token-Verbrauch |
 | `/mcp` | Zeigt die verbundenen MCP-Server und ihre Tools |
 | `/help` | Listet diese Befehle auf |
 | `/exit` | Beenden |

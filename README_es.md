@@ -508,6 +508,7 @@ Escríbelos en el prompt, en la TUI o en el chat:
 | `/export [file]` | Guarda la conversación como archivo Markdown (`/export notes.md`, o un nombre por defecto en la carpeta del proyecto) |
 | `/compact` | Resume la conversación ahora para liberar espacio |
 | `/usage` | Muestra los tokens usados desde el inicio y cuánto contexto está ocupado |
+| `/status` | Dónde estás: carpeta, proveedor, modelo y sus límites, sesión, modo plan, herramientas (y cuántas vienen de MCP), hooks, archivos de instrucciones, ajustes y consumo de tokens |
 | `/mcp` | Muestra los servidores MCP conectados y sus herramientas |
 | `/help` | Lista estos comandos |
 | `/exit` | Salir |

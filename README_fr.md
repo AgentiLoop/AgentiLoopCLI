@@ -507,6 +507,7 @@ Tapez-les à l'invite, dans la TUI ou dans le chat :
 | `/export [file]` | Enregistre la conversation en fichier Markdown (`/export notes.md`, ou un nom par défaut dans le dossier du projet) |
 | `/compact` | Résume la conversation maintenant pour libérer de la place |
 | `/usage` | Affiche les tokens utilisés depuis le démarrage et le remplissage du contexte |
+| `/status` | Où vous en êtes : dossier, fournisseur, modèle et ses limites, session, mode plan, outils (et combien viennent de MCP), hooks, fichiers d'instructions, réglages et consommation de tokens |
 | `/mcp` | Affiche les serveurs MCP connectés et leurs outils |
 | `/help` | Liste ces commandes |
 | `/exit` | Quitter |
