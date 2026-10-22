@@ -1238,6 +1238,7 @@ pub(crate) fn append_extra(base: &str, extra: Option<&str>) -> String {
 }
 
 /// The `--json` result object for a one-shot run.
+#[cfg(test)]
 pub(crate) fn json_result(result: &str, error: Option<&str>, session_id: &str, provider: &str, model: &str, u: agentiloop_core::Usage) -> String {
     json_result_value(result, error, session_id, provider, model, u).to_string()
 }

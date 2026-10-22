@@ -1,4 +1,4 @@
-<a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_fr.svg" width="900" alt="Sidrune AI, sponsor Silver : Une seule API pour GPT, Claude et d’autres modèles d’IA de pointe. Inscrivez-vous et recevez 3 $ de crédits API." /></a>
+<a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_fr.svg" width="900" alt="Sidrune AI, sponsor Silver : Une seule API pour GPT, Claude et d’autres modèles d’IA de pointe. Inscrivez-vous et recevez 3 $ de crédits API." /></a>
 
 # AgentiLoopCLI
 
@@ -30,7 +30,7 @@ Il est écrit en Rust et fonctionne sur macOS, Linux et Windows. Il fonctionne a
 
 Créé avec AgentiLoop Agent! C'est notre bébé. Des binaires précompilés pour macOS, Linux et Windows sont disponibles sur la page [Releases](https://github.com/AgentiLoop/AgentiLoopCLI/releases), ou vous pouvez le compiler depuis les sources avec Rust.
 
-<img src="docs/pong.png" width="900" alt="AgentiLoop écrit, compile et lance un jeu Pong façon Atari en SwiftUI à partir d'une seule demande, avec le diff en direct et la fenêtre du jeu en cours" />
+<img src="docs/pong.png" width="900" alt="AgentiLoop écrit, compile et lance un jeu Pong façon Atari en SwiftUI à partir d'une seule demande, avec le diff en direct et la fenêtre du jeu en cours" />
 
 ---
 
@@ -231,13 +231,13 @@ L'agent travaille avec dix outils intégrés. Vous ne les appelez pas vous-même
 | `read_file` | Lit un fichier (avec les numéros de ligne) | Non |
 | `list_dir` | Liste les fichiers d'un dossier | Non |
 | `glob` | Trouve des fichiers par motif de nom (`*.rs`, `src/**/*.go`) | Non |
-| `grep` | Cherche dans les fichiers avec une expression régulière | Non |
-| `web_fetch` | Récupère une page web ou une réponse d'API en texte brut | **Oui** |
-| `todo_write` | Tient la liste de tâches du modèle pour les travaux en plusieurs étapes | Non |
+| `grep` | Cherche dans les fichiers avec une expression régulière | Non |
+| `web_fetch` | Récupère une page web ou une réponse d'API en texte brut | **Oui** |
+| `todo_write` | Tient la liste de tâches du modèle pour les travaux en plusieurs étapes | Non |
 | `write_file` | Crée un nouveau fichier ou en écrase un | **Oui** |
 | `edit_file` | Modifie un passage de texte précis dans un fichier | **Oui** |
 | `bash` | Lance une commande shell, comme des tests, des builds ou `git` (`sh -c` sur Mac/Linux, `cmd /C` sur Windows) | **Oui** |
-| `task` | Lance un sous-agent avec une conversation vide pour une tâche autonome (explorer, rechercher) et ne rapporte que sa réponse. Il a les mêmes outils et pose les mêmes questions ; il ne peut pas lancer ses propres sous-agents | Non (ses propres appels d'outils demandent comme d'habitude) |
+| `task` | Lance un sous-agent avec une conversation vide pour une tâche autonome (explorer, rechercher) et ne rapporte que sa réponse. Il a les mêmes outils et pose les mêmes questions ; il ne peut pas lancer ses propres sous-agents | Non (ses propres appels d'outils demandent comme d'habitude) |
 
 Vous voulez plus d'outils, comme la recherche web, des bases de données ou GitHub ? Ajoutez des serveurs MCP ; voir [Ajouter des outils avec MCP](#ajouter-des-outils-avec-mcp-facultatif).
 
@@ -383,13 +383,13 @@ Vous verrez les réponses de l'agent, chaque outil qu'il utilise (🔧) et chaqu
 | **Chat** (ligne par ligne) | `agentiloop` | Les terminaux simples, ou si vous préférez le texte brut |
 | **Ponctuel** | `agentiloop "explain this project"` | Une seule question : il répond, puis se ferme. Pratique dans les scripts |
 
-Touches dans la TUI : **Enter** envoie · **↑ / ↓** parcourent les demandes précédentes · **PgUp / PgDn** ou la molette de la souris font défiler · **Ctrl-F** affiche ou masque le panneau *fichiers modifiés* (la molette au-dessus fait défiler le panneau ; faites glisser son bord gauche pour le redimensionner) · **Esc** arrête la demande en cours (la session est conservée) · **Ctrl-U** efface la ligne · **Ctrl-C** quitte.
+Touches dans la TUI : **Enter** envoie · **↑ / ↓** parcourent les demandes précédentes · **PgUp / PgDn** ou la molette de la souris font défiler · **Ctrl-F** affiche ou masque le panneau *fichiers modifiés* (la molette au-dessus fait défiler le panneau ; faites glisser son bord gauche pour le redimensionner) · **Esc** arrête la demande en cours (la session est conservée) · **Ctrl-U** efface la ligne · **Ctrl-C** quitte.
 
 ---
 
 ## Mentionner des fichiers avec @
 
-Tapez `@` suivi d'un chemin n'importe où dans un prompt et AgentiLoop joint ce fichier à ce que reçoit le modèle : `explique @src/main.rs` envoie votre phrase plus le texte du fichier avec les numéros de ligne. Un dossier (`@src`) joint sa liste. Les chemins sont relatifs au dossier du projet (ou absolus, ou `~/…`) ; un mot qui ne désigne rien est laissé tel quel, les adresses e-mail ne risquent donc rien. Les fichiers sont coupés à 64 Ko, les dossiers à 200 entrées, et une ligne 📎 montre ce qui a été joint. Fonctionne dans la TUI, le chat et les prompts en une fois.
+Tapez `@` suivi d'un chemin n'importe où dans un prompt et AgentiLoop joint ce fichier à ce que reçoit le modèle : `explique @src/main.rs` envoie votre phrase plus le texte du fichier avec les numéros de ligne. Un dossier (`@src`) joint sa liste. Les chemins sont relatifs au dossier du projet (ou absolus, ou `~/…`) ; un mot qui ne désigne rien est laissé tel quel, les adresses e-mail ne risquent donc rien. Les fichiers sont coupés à 64 Ko, les dossiers à 200 entrées, et une ligne 📎 montre ce qui a été joint. Fonctionne dans la TUI, le chat et les prompts en une fois.
 
 
 ---
@@ -454,13 +454,13 @@ Chaque option peut aussi être définie par une variable d'environnement, indiqu
 | `-r, --resume <id>` | | Rouvre une conversation précise (trouvez les ids avec `/sessions`) |
 | `-C, --cwd <folder>` | | Travaille dans un autre dossier que celui où vous êtes |
 | `--yes` | `AGENTILOOP_YES` | Ne demande rien avant de lancer les outils. ⚠️ Uniquement pour un usage automatisé et de confiance |
-| `--allow-tool <name>` | | Exécute cet outil sans demander ; répétez l'option ou utilisez des virgules. `mcp_*` correspond à un préfixe. Utile en CI sans `--yes` |
-| `--deny-tool <name>` | | N'exécute jamais cet outil : le modèle est informé du refus. Prioritaire sur `--allow-tool` et `--yes` |
+| `--allow-tool <name>` | | Exécute cet outil sans demander ; répétez l'option ou utilisez des virgules. `mcp_*` correspond à un préfixe. Utile en CI sans `--yes` |
+| `--deny-tool <name>` | | N'exécute jamais cet outil : le modèle est informé du refus. Prioritaire sur `--allow-tool` et `--yes` |
 | `--plan` | `AGENTILOOP_PLAN` | Mode plan : démarre avec tous les outils qui modifient quelque chose désactivés (`write_file`, `edit_file`, `bash`, `task`, outils MCP qui ne sont pas en lecture seule). Le modèle lit et cherche, puis répond par un plan numéroté au lieu de faire le travail. `/plan` le désactive (ou l'active) pendant une session |
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | Ne démarre pas les serveurs MCP (voir ci-dessous) |
-| `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | Texte supplémentaire ajouté à la fin du prompt système pour cette exécution (non enregistré) |
-| `--json` | | Avec une requête unique : affiche la réponse sous forme d'un objet JSON (`result`, `is_error`, `session_id`, `provider`, `model`, `usage`) sur stdout. L'activité des outils reste sur stderr |
-| `--stream-json` | | Avec un prompt en une fois : affiche chaque événement comme un objet JSON par ligne sur stdout au fur et à mesure (`text_delta`, `text`, `tool_call`, `tool_result`, `turn`, `compacted`, `retry`, `done`), puis le même objet résultat que `--json` avec `"type": "result"`. Rien d'autre n'est affiché. Pour les éditeurs et scripts qui veulent suivre la progression |
+| `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | Texte supplémentaire ajouté à la fin du prompt système pour cette exécution (non enregistré) |
+| `--json` | | Avec une requête unique : affiche la réponse sous forme d'un objet JSON (`result`, `is_error`, `session_id`, `provider`, `model`, `usage`) sur stdout. L'activité des outils reste sur stderr |
+| `--stream-json` | | Avec un prompt en une fois : affiche chaque événement comme un objet JSON par ligne sur stdout au fur et à mesure (`text_delta`, `text`, `tool_call`, `tool_result`, `turn`, `compacted`, `retry`, `done`), puis le même objet résultat que `--json` avec `"type": "result"`. Rien d'autre n'est affiché. Pour les éditeurs et scripts qui veulent suivre la progression |
 | `--setup` | | Relance l'assistant de première configuration (fournisseur, clé, modèle). Avec `--tui`, il s'exécute dans l'interface plein écran |
 | `--reset` | | Retour à neuf : supprime `~/.agentiloop`, le bloc agentiloop de votre profil shell et les éléments du Trousseau créés par l'assistant (sous Windows : les variables d'environnement utilisateur qu'il a définies). Les lignes `export` écrites à la main sont seulement mises en commentaire, et seulement si vous acceptez. Ajoutez `--yes` pour sauter les questions |
 | `--max-turns <n>` | | Nombre maximal d'étapes que l'agent peut faire par demande (50 par défaut) |
@@ -497,16 +497,16 @@ Tapez-les à l'invite, dans la TUI ou dans le chat :
 | `/sessions` | Liste vos conversations enregistrées, des plus récentes aux plus anciennes |
 | `/resume <n or id>` | Rouvre l'une d'elles |
 | `/clear` | Efface la conversation et en démarre une nouvelle |
-| `/undo` | Annule les modifications de fichiers faites par l'agent pour votre dernier message (celles faites par `bash` ne sont pas annulées) |
-| `/todos` | Affiche la liste de tâches actuelle du modèle |
-| `/diff` | Affiche ce qui a changé dans l'arbre de travail git (état plus diff, coupé à 200 lignes) |
-| `/commands` | Vos propres commandes : chaque `.agentiloop/commands/<name>.md` (projet) ou `~/.agentiloop/commands/<name>.md` devient `/<name>` et envoie le fichier comme prompt (`$ARGUMENTS` est remplacé par ce qui suit, `$1`–`$9` par chaque mot). Les liste |
-| `/hooks` | Affiche les hooks chargés depuis `.agentiloop/hooks.json` (voir [Hooks](#hooks--lancer-vos-propres-commandes-autour-des-outils)) |
+| `/undo` | Annule les modifications de fichiers faites par l'agent pour votre dernier message (celles faites par `bash` ne sont pas annulées) |
+| `/todos` | Affiche la liste de tâches actuelle du modèle |
+| `/diff` | Affiche ce qui a changé dans l'arbre de travail git (état plus diff, coupé à 200 lignes) |
+| `/commands` | Vos propres commandes : chaque `.agentiloop/commands/<name>.md` (projet) ou `~/.agentiloop/commands/<name>.md` devient `/<name>` et envoie le fichier comme prompt (`$ARGUMENTS` est remplacé par ce qui suit, `$1`–`$9` par chaque mot). Les liste |
+| `/hooks` | Affiche les hooks chargés depuis `.agentiloop/hooks.json` (voir [Hooks](#hooks--lancer-vos-propres-commandes-autour-des-outils)) |
 | `/plan [on\|off]` | Active ou désactive le mode plan (sans argument : bascule). Tant qu'il est actif, les outils qui modifient quelque chose refusent de s'exécuter et le modèle répond par un plan ; la TUI affiche **PLAN** dans la ligne d'état |
-| `/init` | Crée un `AGENTS.md` de départ pour le projet courant (n'écrase jamais) |
-| `/export [file]` | Enregistre la conversation en fichier Markdown (`/export notes.md`, ou un nom par défaut dans le dossier du projet) |
+| `/init` | Crée un `AGENTS.md` de départ pour le projet courant (n'écrase jamais) |
+| `/export [file]` | Enregistre la conversation en fichier Markdown (`/export notes.md`, ou un nom par défaut dans le dossier du projet) |
 | `/compact` | Résume la conversation maintenant pour libérer de la place |
-| `/usage` | Affiche les tokens utilisés depuis le démarrage et le remplissage du contexte |
+| `/usage` | Affiche les tokens utilisés depuis le démarrage et le remplissage du contexte |
 | `/status` | Où vous en êtes : dossier, fournisseur, modèle et ses limites, session, mode plan, outils (et combien viennent de MCP), hooks, fichiers d'instructions, réglages et consommation de tokens |
 | `/mcp` | Affiche les serveurs MCP connectés et leurs outils |
 | `/help` | Liste ces commandes |
@@ -518,19 +518,19 @@ Tapez-les à l'invite, dans la TUI ou dans le chat :
 
 Les modèles ne peuvent lire qu'une quantité limitée à la fois. Quand une conversation devient longue (par défaut, quand une requête atteint 150 000 tokens), AgentiLoop demande au modèle de la résumer jusque-là et continue à partir du résumé. Vous verrez une note 📦 quand cela se produit. `/compact` le fait à la demande, et `--compact-at 0` le désactive.
 
-**Cache de prompt (Anthropic).** Les requêtes vers Anthropic marquent le prompt système, les outils et le dernier message comme cachables : la requête suivante de la même conversation réutilise l'essentiel du prompt au lieu de le payer à nouveau (la partie en cache coûte environ un dixième, et la réponse démarre plus tôt). Rien à configurer. `/usage` indique combien de tokens ont été lus depuis le cache et écrits dedans, et `--json` les rapporte comme `cache_read_tokens` et `cache_write_tokens`.
+**Cache de prompt (Anthropic).** Les requêtes vers Anthropic marquent le prompt système, les outils et le dernier message comme cachables : la requête suivante de la même conversation réutilise l'essentiel du prompt au lieu de le payer à nouveau (la partie en cache coûte environ un dixième, et la réponse démarre plus tôt). Rien à configurer. `/usage` indique combien de tokens ont été lus depuis le cache et écrits dedans, et `--json` les rapporte comme `cache_read_tokens` et `cache_write_tokens`.
 
 ---
 
 ## Instructions du projet
 
-Placez un fichier `AGENTS.md` (ou `CLAUDE.md`) dans votre projet : AgentiLoop le lit au démarrage et le suit (commandes de build, style de code, choses à éviter). Il le cherche dans le dossier courant puis dans les dossiers parents, jusqu'à la racine du projet (le dossier contenant `.git`). Un `~/.agentiloop/AGENTS.md` personnel s'applique à tous les projets ; le fichier du projet vient après et l'emporte. Les fichiers sont coupés à 32 Ko. Une ligne `instructions: <chemin>` indique les fichiers chargés. Une ligne qui ne contient que `@chemin` (par exemple `@docs/style.md`) est remplacée par le texte de ce fichier, relativement au fichier qui la contient. Les imports peuvent s'imbriquer sur trois niveaux ; les fichiers manquants, les boucles et les lignes dans des blocs de code sont laissés tels quels.
+Placez un fichier `AGENTS.md` (ou `CLAUDE.md`) dans votre projet : AgentiLoop le lit au démarrage et le suit (commandes de build, style de code, choses à éviter). Il le cherche dans le dossier courant puis dans les dossiers parents, jusqu'à la racine du projet (le dossier contenant `.git`). Un `~/.agentiloop/AGENTS.md` personnel s'applique à tous les projets ; le fichier du projet vient après et l'emporte. Les fichiers sont coupés à 32 Ko. Une ligne `instructions: <chemin>` indique les fichiers chargés. Une ligne qui ne contient que `@chemin` (par exemple `@docs/style.md`) est remplacée par le texte de ce fichier, relativement au fichier qui la contient. Les imports peuvent s'imbriquer sur trois niveaux ; les fichiers manquants, les boucles et les lignes dans des blocs de code sont laissés tels quels.
 
 ---
 
 ## Hooks : lancer vos propres commandes autour des outils
 
-Un hook est une commande shell qu'AgentiLoop lance pour vous à un moment précis : avant qu'un outil s'exécute (`PreToolUse`), après (`PostToolUse`), ou quand l'agent termine une requête (`Stop`). Placez-les dans `.agentiloop/hooks.json` dans votre projet, ou dans `~/.agentiloop/hooks.json` pour tous les projets (les deux sont chargés) :
+Un hook est une commande shell qu'AgentiLoop lance pour vous à un moment précis : avant qu'un outil s'exécute (`PreToolUse`), après (`PostToolUse`), ou quand l'agent termine une requête (`Stop`). Placez-les dans `.agentiloop/hooks.json` dans votre projet, ou dans `~/.agentiloop/hooks.json` pour tous les projets (les deux sont chargés) :
 
 ```json
 {
@@ -542,17 +542,17 @@ Un hook est une commande shell qu'AgentiLoop lance pour vous à un moment pré
 }
 ```
 
-- `matcher` indique à quels outils le hook s'applique, avec les mêmes règles que `--allow-tool` (noms, préfixes `mcp_*`, `*`). Omettez-le pour tous les outils. Les hooks `Stop` l'ignorent.
-- La commande tourne avec `sh -c` (`cmd /C` sous Windows) dans le dossier du projet. Elle reçoit un objet JSON sur stdin : `event`, `cwd`, `tool` et `input` ; `PostToolUse` ajoute `output` et `is_error`, `Stop` ajoute `stop_reason`. `AGENTILOOP_HOOK_EVENT` et `AGENTILOOP_TOOL` sont définies comme variables d'environnement.
-- **Le code de sortie 2 parle au modèle.** Un hook `PreToolUse` qui sort avec 2 bloque l'appel, et ce qu'il a écrit sur stderr est envoyé au modèle comme erreur. Pour un hook `PostToolUse` qui sort avec 2, son stderr est ajouté au résultat de l'outil. Tout autre code est ignoré (un code non nul est journalisé). Un hook est tué après 60 secondes.
-- `/hooks` liste ce qui a été chargé. Un fichier cassé est signalé au démarrage et ignoré.
+- `matcher` indique à quels outils le hook s'applique, avec les mêmes règles que `--allow-tool` (noms, préfixes `mcp_*`, `*`). Omettez-le pour tous les outils. Les hooks `Stop` l'ignorent.
+- La commande tourne avec `sh -c` (`cmd /C` sous Windows) dans le dossier du projet. Elle reçoit un objet JSON sur stdin : `event`, `cwd`, `tool` et `input` ; `PostToolUse` ajoute `output` et `is_error`, `Stop` ajoute `stop_reason`. `AGENTILOOP_HOOK_EVENT` et `AGENTILOOP_TOOL` sont définies comme variables d'environnement.
+- **Le code de sortie 2 parle au modèle.** Un hook `PreToolUse` qui sort avec 2 bloque l'appel, et ce qu'il a écrit sur stderr est envoyé au modèle comme erreur. Pour un hook `PostToolUse` qui sort avec 2, son stderr est ajouté au résultat de l'outil. Tout autre code est ignoré (un code non nul est journalisé). Un hook est tué après 60 secondes.
+- `/hooks` liste ce qui a été chargé. Un fichier cassé est signalé au démarrage et ignoré.
 
-Par exemple, ce hook `PreToolUse` empêche `bash` de lancer `git push` :
+Par exemple, ce hook `PreToolUse` empêche `bash` de lancer `git push` :
 
 ```sh
 #!/bin/sh
 # .agentiloop/check-command.sh — stdin est le JSON de l'appel
-if grep -q 'git push' ; then echo "git push n'est pas autorisé depuis l'agent" >&2; exit 2; fi
+if grep -q 'git push' ; then echo "git push n'est pas autorisé depuis l'agent" >&2; exit 2; fi
 ```
 
 ---
@@ -579,7 +579,7 @@ Comment ça marche :
 - **Noms des outils.** Chaque outil d'un serveur apparaît pour l'agent sous la forme `mcp_<server>_<tool>`, par exemple `mcp_Local_search`.
 - **Secrets.** `${VAR}` (ou `${VAR:-default}`) est rempli à partir de votre environnement, les clés n'ont donc pas besoin d'être dans le fichier.
 - **Permissions.** Les outils MCP demandent la permission comme n'importe quel autre outil, sauf si le serveur marque un outil comme en lecture seule.
-- **Prompts.** Les prompts enregistrés d'un serveur deviennent des commandes `/mcp__<serveur>__<prompt>`, p. ex. `/mcp__Local__summarize du texte`. Les mots après la commande remplissent les arguments du prompt dans l'ordre (ou `nom=valeur`) ; le texte renvoyé par le serveur est envoyé comme votre prompt. `/mcp` les liste.
+- **Prompts.** Les prompts enregistrés d'un serveur deviennent des commandes `/mcp__<serveur>__<prompt>`, p. ex. `/mcp__Local__summarize du texte`. Les mots après la commande remplissent les arguments du prompt dans l'ordre (ou `nom=valeur`) ; le texte renvoyé par le serveur est envoyé comme votre prompt. `/mcp` les liste.
 - **Désactiver des serveurs.** Ajoutez `"disabled": true` pour ignorer un serveur, ou lancez avec `--no-mcp` pour les ignorer tous.
 - **Sécurité.** Le `http://` simple n'est autorisé que pour localhost ; les serveurs distants exigent `https://`.
 
@@ -678,7 +678,7 @@ Nous limitons les dépendances : 18 crates externes, et chaque crate ne liste qu
 
 ---
 
-<a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_fr.svg" width="900" alt="Sidrune AI, sponsor Silver : Une seule API pour GPT, Claude et d’autres modèles d’IA de pointe. Inscrivez-vous et recevez 3 $ de crédits API." /></a>
+<a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_fr.svg" width="900" alt="Sidrune AI, sponsor Silver : Une seule API pour GPT, Claude et d’autres modèles d’IA de pointe. Inscrivez-vous et recevez 3 $ de crédits API." /></a>
 
 ---
 
