@@ -684,21 +684,32 @@ impl App {
         } else {
             Line::from(if self.asking.is_some() { " setup " } else { " prompt " })
         };
-        let block = Block::default().borders(Borders::ALL).title(title);
+        // Claude Code-style input: thin dim rules above and below, no side borders, a "›" gutter.
+        let block = Block::default()
+            .borders(Borders::TOP | Borders::BOTTOM)
+            .border_style(Style::default().fg(Color::DarkGray))
+            .title(title);
         let inner = block.inner(input);
+        frame.render_widget(block, input);
+        frame.render_widget(
+            Paragraph::new("›").style(Style::default().fg(Color::Rgb(0xE0, 0x8A, 0x5B))),
+            Rect { width: 1, height: 1, ..inner },
+        );
+        let inner = Rect { x: inner.x + 2, width: inner.width.saturating_sub(2), ..inner };
         self.sel_areas.borrow_mut().push(inner);
         let shown = if self.asking == Some(true) { "•".repeat(self.input.chars().count()) } else { self.input.clone() };
-        // Hard-wrap at the box width (two rows) so the cursor maps 1:1 to a cell; scroll to keep it visible.
+        // Hard-wrap at the input width (two rows) so the cursor maps 1:1 to a cell; scroll to keep it visible.
         let cols = inner.width.max(1) as usize;
         let chars: Vec<char> = shown.chars().collect();
         let lines: Vec<Line> = chars.chunks(cols).map(|c| Line::from(c.iter().collect::<String>())).collect();
         let cur = self.input[..self.cursor].chars().count();
         let (row, col) = ((cur / cols) as u16, (cur % cols) as u16);
         let scroll = row.saturating_sub(inner.height.saturating_sub(1));
-        frame.render_widget(Paragraph::new(lines).block(block).scroll((scroll, 0)), input);
+        frame.render_widget(Paragraph::new(lines).scroll((scroll, 0)), inner);
         if self.modal.is_none() {
             frame.set_cursor_position((inner.x + col, inner.y + row - scroll));
         }
+
 
         let help = "  Enter send · Esc cancel · ↑↓ history · PgUp/PgDn scroll · click links · drag to copy · Ctrl-F files · Ctrl-C quit";
         let mut bar = vec![Span::styled(self.status.clone(), Style::default().fg(Color::White))];
