@@ -125,10 +125,10 @@ def norm_session(path):
 
 
 def norm_out(stdout):
-    """--json / --stream-json output with the session id masked."""
-    return [{**o, "session_id": "*"} if "session_id" in o else o
+    """--json / --stream-json output with the session id and wall-clock timings masked."""
+    masked = ("session_id", "elapsed_ms", "first_token_ms")
+    return [{**o, **{k: "*" for k in masked if k in o}}
             for o in (json.loads(l) for l in stdout.splitlines() if l.strip())]
-
 
 def norm_repl(stderr):
     """REPL stderr without blank lines (rustyline and liner space piped input differently) and session ids."""
