@@ -182,7 +182,8 @@ async fn main() -> Result<()> {
         let max_turns = cli.max_turns.or(last.max_turns).unwrap_or(50);
         let compact_at = cli.compact_at.or(last.compact_at);
 
-        let provider = agentiloop_provider::from_env(cli.provider.as_deref().or(last.provider.as_deref()))?;
+        let provider = agentiloop_provider::from_env(cli.provider.as_deref().or(last.provider.as_deref()))
+            .map_err(|e| anyhow::anyhow!("{e:#}\n\nrun `agentiloop --setup --tui` to choose a provider and enter credentials"))?;
         let mut tools = agentiloop_tools::default_registry();
         // Codex models are trained on apply_patch; other providers keep the plain edit tools.
         if provider.name() == "codex" {
