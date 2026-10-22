@@ -40,6 +40,11 @@ struct Cli {
     #[arg(long)]
     max_turns: Option<usize>,
 
+    /// Retries of a provider call that fails transiently (rate limit, overloaded, 5xx,
+    /// dropped connection) before the error is reported; 0 = never retry.
+    #[arg(long, value_name = "N", env = "AGENTILOOP_MAX_RETRIES", default_value_t = agentiloop_core::DEFAULT_MAX_RETRIES)]
+    max_retries: usize,
+
     /// Summarize the conversation once a request reaches this many input tokens (0 = never)
     /// [default: last used, then 80% of the model's context window].
     #[arg(long, env = "AGENTILOOP_COMPACT_AT")]
@@ -103,7 +108,7 @@ struct Cli {
     json: bool,
 
     /// One-shot only: print every event as one JSON object per line on stdout as it happens
-    /// (text_delta, text, tool_call, tool_result, turn, compacted, done), then the same result
+    /// (text_delta, text, tool_call, tool_result, turn, compacted, retry, done), then the same result
     /// object as --json with "type": "result". Nothing else is printed.
     #[arg(long = "stream-json", requires = "prompt", conflicts_with = "json")]
     stream_json: bool,
@@ -235,7 +240,7 @@ async fn main() -> Result<()> {
                 .with_context(|| format!("{} serves no models; load one or pass --model", provider.name()))?,
             None => provider.default_model().to_string(),
         };
-        let mut config = AgentConfig { model, max_turns, compact_at_tokens: compact_at, ..Default::default() };
+        let mut config = AgentConfig { model, max_turns, compact_at_tokens: compact_at, max_retries: cli.max_retries, ..Default::default() };
         let instructions = agentiloop_core::instructions::load(&cwd, settings::home().as_deref());
         for i in &instructions {
             note(format!("instructions: {}", i.path.display()));
@@ -896,8 +901,18 @@ fn render(ev: AgentEvent) {
         AgentEvent::Compacted { before_tokens, messages_dropped } => {
             eprintln!("{}", compacted_line(before_tokens, messages_dropped));
         }
+        AgentEvent::Retry { attempt, max_retries, delay_ms, error } => {
+            eprintln!("{}", retry_line(attempt, max_retries, delay_ms, &error));
+        }
         AgentEvent::Done { .. } => {}
     }
+}
+
+/// e.g. `⟳ retry 1/3 in 1s: Anthropic 529 Service Overloaded (overloaded_error): Overloaded`
+pub(crate) fn retry_line(attempt: usize, max_retries: usize, delay_ms: u64, error: &str) -> String {
+    let error = error.lines().next().unwrap_or("");
+    let error = if error.chars().count() > 160 { format!("{}…", error.chars().take(160).collect::<String>()) } else { error.to_string() };
+    format!("\u{27f3} retry {attempt}/{max_retries} in {}s: {error}", delay_ms / 1000)
 }
 
 /// Output tokens per second for one model call. With a first-token time the
@@ -1021,6 +1036,9 @@ pub(crate) fn event_json(ev: &AgentEvent) -> String {
         }),
         AgentEvent::Compacted { before_tokens, messages_dropped } => {
             serde_json::json!({"type": "compacted", "before_tokens": before_tokens, "messages_dropped": messages_dropped})
+        }
+        AgentEvent::Retry { attempt, max_retries, delay_ms, error } => {
+            serde_json::json!({"type": "retry", "attempt": attempt, "max_retries": max_retries, "delay_ms": delay_ms, "error": error})
         }
         AgentEvent::Done { stop_reason } => serde_json::json!({"type": "done", "stop_reason": stop_reason}),
     };
@@ -1161,10 +1179,23 @@ mod json_tests {
         );
         assert_eq!(event_json(&AgentEvent::Compacted { before_tokens: 100, messages_dropped: 4 }), r#"{"before_tokens":100,"messages_dropped":4,"type":"compacted"}"#);
         assert_eq!(event_json(&AgentEvent::Done { stop_reason: StopReason::EndTurn }), r#"{"stop_reason":"end_turn","type":"done"}"#);
+        assert_eq!(
+            event_json(&AgentEvent::Retry { attempt: 1, max_retries: 3, delay_ms: 1000, error: "Anthropic 529".into() }),
+            r#"{"attempt":1,"delay_ms":1000,"error":"Anthropic 529","max_retries":3,"type":"retry"}"#
+        );
         let mut v = json_result_value("a", None, "s", "p", "m", agentiloop_core::Usage::default());
         v["type"] = "result".into();
         assert_eq!(v["type"], "result");
         assert_eq!(v["result"], "a");
+    }
+}
+
+#[cfg(test)]
+mod retry_tests {
+    #[test]
+    fn retry_line_keeps_the_first_line_of_the_error() {
+        assert_eq!(super::retry_line(2, 3, 2000, "Anthropic 529 Overloaded\ndetail"), "\u{27f3} retry 2/3 in 2s: Anthropic 529 Overloaded");
+        assert!(super::retry_line(1, 3, 1000, &"x".repeat(300)).ends_with('…'));
     }
 }
 

@@ -34,6 +34,9 @@ pub struct AgentConfig {
     pub compact_at_tokens: Option<u64>,
     /// User hooks (`.agentiloop/hooks.json`) run around tool calls and at the end of a run.
     pub hooks: Hooks,
+    /// How many times a provider call that failed transiently (rate limit, overloaded,
+    /// 5xx, dropped connection) is retried before the error is reported. 0 = never.
+    pub max_retries: usize,
 }
 
 impl Default for AgentConfig {
@@ -45,8 +48,42 @@ impl Default for AgentConfig {
             max_turns: 50,
             compact_at_tokens: None,
             hooks: Hooks::default(),
+            max_retries: DEFAULT_MAX_RETRIES,
         }
     }
+}
+
+/// Retries of a transiently failing provider call (`AgentConfig::max_retries`).
+pub const DEFAULT_MAX_RETRIES: usize = 3;
+
+/// Wait before retry `attempt` (1-based): 1 s, 2 s, 4 s, … capped at 30 s.
+pub fn retry_delay(attempt: usize) -> Duration {
+    Duration::from_secs(1u64 << attempt.saturating_sub(1).min(5)).min(Duration::from_secs(30))
+}
+
+/// HTTP statuses worth retrying: timeouts, rate limits, server errors and Anthropic's 529 overloaded.
+const TRANSIENT_STATUSES: &[u16] = &[408, 409, 425, 429, 500, 502, 503, 504, 529];
+
+/// Whether a provider error is the kind that goes away by itself: a transient HTTP
+/// status in the message (providers format them as `<name> <status> …`), an
+/// overloaded / rate-limit message, or a dropped connection or timeout. A refused
+/// connection (nothing listening) and a quota that resets in hours are not retried.
+pub fn is_transient(err: &anyhow::Error) -> bool {
+    let text = format!("{err:#}").to_lowercase();
+    if text.contains("connection refused") || text.contains("usage limit") {
+        return false;
+    }
+    // The first number in the message is the HTTP status (`Anthropic 529 …`, `codex 429: …`);
+    // later numbers (token counts in a 400's detail) are not.
+    let status = text
+        .split(|c: char| c.is_whitespace() || c == ':' || c == '(' || c == ')')
+        .find_map(|w| w.parse::<u16>().ok().filter(|n| (100..=599).contains(n)))
+        .is_some_and(|n| TRANSIENT_STATUSES.contains(&n));
+    status
+        || ["overloaded", "rate limit", "rate_limit", "timed out", "timeout", "connection reset", "connection closed",
+            "broken pipe", "error sending request", "incomplete message", "unexpected eof", "error reading", "stream error"]
+            .iter()
+            .any(|needle| text.contains(needle))
 }
 
 /// Used when the provider catalog doesn't report the model's output limit.
@@ -101,6 +138,9 @@ pub enum AgentEvent {
     TurnComplete { input_tokens: u64, output_tokens: u64, elapsed_ms: u64, first_token_ms: Option<u64> },
     /// History was summarized; `before_tokens` is the input size that triggered it.
     Compacted { before_tokens: u64, messages_dropped: usize },
+    /// A provider call failed transiently and is about to be repeated after `delay_ms`
+    /// (`attempt` of `max_retries`).
+    Retry { attempt: usize, max_retries: usize, delay_ms: u64, error: String },
     Done { stop_reason: StopReason },
 }
 
@@ -262,7 +302,7 @@ impl Agent {
             cache_key: None,
         };
         Self::budget_request(&mut req, limits)?;
-        let resp = self.provider.complete(req).await?;
+        let resp = complete_with_retry(&*self.provider, self.config.max_retries, req, &mut |_| {}).await?;
         self.add_usage(&resp);
         let summary = resp.message.text();
         anyhow::ensure!(!summary.trim().is_empty(), "compaction produced an empty summary");
@@ -333,14 +373,14 @@ impl Agent {
 
             let started = Instant::now();
             let mut first_token: Option<Duration> = None;
-            let resp = self
-                .provider
-                .complete_stream(req, &mut |delta| {
+            let resp = stream_with_retry(&*self.provider, self.config.max_retries, req, &mut |ev| {
+                if let AgentEvent::AssistantTextDelta(delta) = &ev {
                     self.pending_text.push_str(delta);
                     first_token.get_or_insert_with(|| started.elapsed());
-                    on_event(AgentEvent::AssistantTextDelta(delta.to_string()))
-                })
-                .await?;
+                }
+                on_event(ev)
+            })
+            .await?;
             self.pending_text.clear();
             let elapsed = started.elapsed();
             self.last_input_tokens = resp.input_tokens;
@@ -428,6 +468,90 @@ impl Agent {
             text.push_str(&format!("\n\n[PostToolUse hook `{}`]: {}", fb.command, fb.message));
         }
         if is_error { Err(ToolError::Failed(text)) } else { Ok(text) }
+    }
+}
+
+/// `provider.complete_stream`, repeated up to `max_retries` times while it fails
+/// transiently before any text arrived (a retry after streamed text would show it
+/// twice, so such a failure is reported). Deltas and `Retry` events go to `on_event`.
+async fn stream_with_retry(
+    provider: &dyn Provider,
+    max_retries: usize,
+    req: ProviderRequest,
+    on_event: &mut (dyn FnMut(AgentEvent) + Send),
+) -> anyhow::Result<crate::provider::ProviderResponse> {
+    let mut attempt = 0;
+    loop {
+        let mut streamed = false;
+        let res = provider
+            .complete_stream(req.clone(), &mut |delta| {
+                streamed = true;
+                on_event(AgentEvent::AssistantTextDelta(delta.to_string()))
+            })
+            .await;
+        match res {
+            Err(e) if !streamed && attempt < max_retries && is_transient(&e) => {
+                attempt += 1;
+                let delay = retry_delay(attempt);
+                tracing::warn!("provider call failed ({e:#}); retry {attempt}/{} in {delay:?}", max_retries);
+                on_event(AgentEvent::Retry { attempt, max_retries: max_retries, delay_ms: delay.as_millis() as u64, error: format!("{e:#}") });
+                tokio::time::sleep(delay).await;
+            }
+            other => return other,
+        }
+    }
+}
+
+/// `provider.complete` with the same retry policy as `stream_with_retry`.
+async fn complete_with_retry(
+    provider: &dyn Provider,
+    max_retries: usize,
+    req: ProviderRequest,
+    on_event: &mut (dyn FnMut(AgentEvent) + Send),
+) -> anyhow::Result<crate::provider::ProviderResponse> {
+    let mut attempt = 0;
+    loop {
+        match provider.complete(req.clone()).await {
+            Err(e) if attempt < max_retries && is_transient(&e) => {
+                attempt += 1;
+                let delay = retry_delay(attempt);
+                tracing::warn!("provider call failed ({e:#}); retry {attempt}/{} in {delay:?}", max_retries);
+                on_event(AgentEvent::Retry { attempt, max_retries: max_retries, delay_ms: delay.as_millis() as u64, error: format!("{e:#}") });
+                tokio::time::sleep(delay).await;
+            }
+            other => return other,
+        }
+    }
+}
+
+
+#[cfg(test)]
+mod retry_tests {
+    use super::*;
+
+    #[test]
+    fn transient_errors_are_recognised_by_status_or_message() {
+        let t = |s: &str| is_transient(&anyhow::anyhow!("{s}"));
+        assert!(t("Anthropic 529 Service Overloaded (overloaded_error): Overloaded"));
+        assert!(t("Anthropic 429 Too Many Requests (rate_limit_error): slow down"));
+        assert!(t("openai 503 Service Unavailable : upstream"));
+        assert!(t("codex 500: internal"));
+        assert!(t("Anthropic stream error (overloaded_error): Overloaded"));
+        assert!(t("request to Anthropic failed: error sending request for url (https://x)"));
+        assert!(t("reading Anthropic stream: connection reset by peer"));
+        assert!(!t("Anthropic 400 Bad Request (invalid_request_error): max_tokens 500 exceeds the limit"));
+        assert!(!t("Anthropic 401 Unauthorized (authentication_error): invalid x-api-key"));
+        assert!(!t("codex 429: ChatGPT plan usage limit reached; resets in ~5.0h"));
+        assert!(!t("request to oMLX failed: connection refused"));
+        assert!(!t("compaction produced an empty summary"));
+    }
+
+    #[test]
+    fn delay_doubles_from_one_second_and_is_capped() {
+        assert_eq!(retry_delay(1), Duration::from_secs(1));
+        assert_eq!(retry_delay(2), Duration::from_secs(2));
+        assert_eq!(retry_delay(3), Duration::from_secs(4));
+        assert_eq!(retry_delay(9), Duration::from_secs(30));
     }
 }
 

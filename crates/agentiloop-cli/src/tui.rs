@@ -370,6 +370,7 @@ impl App {
             AgentEvent::AssistantTextDelta(_) => "Writing".into(),
             AgentEvent::ToolCall { name, .. } => format!("Running {name}"),
             AgentEvent::Compacted { .. } => "Compacting".into(),
+            AgentEvent::Retry { attempt, max_retries, .. } => format!("Retrying {attempt}/{max_retries}"),
             _ => "Thinking".into(),
         };
         match ev {
@@ -422,6 +423,9 @@ impl App {
             }
             AgentEvent::Compacted { before_tokens, messages_dropped } => {
                 self.push(Kind::Info, crate::compacted_line(before_tokens, messages_dropped));
+            }
+            AgentEvent::Retry { attempt, max_retries, delay_ms, error } => {
+                self.push(Kind::Info, crate::retry_line(attempt, max_retries, delay_ms, &error));
             }
             AgentEvent::Done { .. } => {}
         }

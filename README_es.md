@@ -259,6 +259,7 @@ Options:
   -m, --model <MODEL>                Model id to use. Defaults to the last model used with this provider (~/.agentiloop/settings.json), then the provider's default [env: AGENTILOOP_MODEL=]
       --yes                          Skip all permission prompts (dangerous; intended for CI). Never remembered [env: AGENTILOOP_YES=]
       --max-turns <MAX_TURNS>        Max provider round-trips per prompt [default: last used, then 50]
+      --max-retries <N>              Retries of a provider call that fails transiently (rate limit, overloaded, 5xx, dropped connection) before the error is reported; 0 = never retry [env: AGENTILOOP_MAX_RETRIES=] [default: 3]
       --compact-at <COMPACT_AT>      Summarize the conversation once a request reaches this many input tokens (0 = never) [default: last used, then 80% of the model's context window] [env: AGENTILOOP_COMPACT_AT=]
   -C, --cwd <CWD>                    Working directory the agent operates in (defaults to cwd)
   -r, --resume <RESUME>              Resume a saved session by id (see /sessions)
@@ -273,7 +274,7 @@ Options:
       --deny-tool <NAME>             Never run this tool; the model is told it was denied (same name rules). Beats --allow-tool and --yes
       --append-system-prompt <TEXT>  Extra text added to the end of the system prompt for this run (never saved) [env: AGENTILOOP_APPEND_SYSTEM_PROMPT=]
       --json                         One-shot only: print the answer as one JSON object on stdout (result, is_error, session_id, provider, model, usage) instead of streaming text. Tool activity still goes to stderr
-      --stream-json                  One-shot only: print every event as one JSON object per line on stdout as it happens (text_delta, text, tool_call, tool_result, turn, compacted, done), then the same result object as --json with "type": "result". Nothing else is printed
+      --stream-json                  One-shot only: print every event as one JSON object per line on stdout as it happens (text_delta, text, tool_call, tool_result, turn, compacted, retry, done), then the same result object as --json with "type": "result". Nothing else is printed
   -h, --help                         Print help
   -V, --version                      Print version
 ```
@@ -446,10 +447,11 @@ Cada opción también se puede configurar con una variable de entorno, que apare
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | No inicia servidores MCP (mira más abajo) |
 | `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | Texto extra al final del prompt del sistema para esta ejecución (no se guarda) |
 | `--json` | | Con un prompt de una sola vez: imprime la respuesta como un objeto JSON (`result`, `is_error`, `session_id`, `provider`, `model`, `usage`) en stdout. La actividad de herramientas queda en stderr |
-| `--stream-json` | | Con un prompt de una sola vez: imprime cada evento como un objeto JSON por línea en stdout según ocurre (`text_delta`, `text`, `tool_call`, `tool_result`, `turn`, `compacted`, `done`), y al final el mismo objeto de resultado que `--json` con `"type": "result"`. No se imprime nada más. Para editores y scripts que quieren ver el progreso |
+| `--stream-json` | | Con un prompt de una sola vez: imprime cada evento como un objeto JSON por línea en stdout según ocurre (`text_delta`, `text`, `tool_call`, `tool_result`, `turn`, `compacted`, `retry`, `done`), y al final el mismo objeto de resultado que `--json` con `"type": "result"`. No se imprime nada más. Para editores y scripts que quieren ver el progreso |
 | `--setup` | | Vuelve a ejecutar el asistente de primera configuración (proveedor, clave, modelo). Combínalo con `--tui` para ejecutarlo dentro de la interfaz a pantalla completa |
 | `--reset` | | Como nuevo: borra `~/.agentiloop`, el bloque de agentiloop en tu perfil de shell y los elementos del Llavero que creó el asistente (en Windows: las variables de entorno de usuario que definió). Las líneas `export` escritas a mano solo se comentan, y solo si dices que sí. Añade `--yes` para saltarte las preguntas |
 | `--max-turns <n>` | | Máximo de pasos que puede dar el agente por petición (50 por defecto) |
+| `--max-retries <n>` | `AGENTILOOP_MAX_RETRIES` | Cuántas veces se reenvía una petición que falla por un motivo pasajero (límite de peticiones, sobrecarga, error del servidor, conexión cortada) antes de mostrarte el error: tras 1 s, 2 s, 4 s… (3 por defecto, `0` = nunca). Una línea `⟳ retry 1/3` muestra cada intento. No se hace si la respuesta ya empezó a llegar |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | Cuándo resumir una conversación larga (150000 por defecto, `0` = nunca) |
 | `-h` / `-V` | | Ayuda / versión |
 

@@ -596,3 +596,119 @@ fn task_tool_runs_a_child_agent_and_returns_only_its_answer() {
     assert_eq!(reqs[1].messages.len(), 1, "child starts with an empty conversation");
     assert!(format_outcome(&TaskOutcome { answer: "  ".into(), turns: 1, tool_calls: 0, input_tokens: 1, output_tokens: 2 }).starts_with("(the sub-agent gave no final answer)"));
 }
+
+/// Fails `failures` times with `error`, then answers like `ScriptedProvider`.
+struct FlakyProvider {
+    failures: Mutex<usize>,
+    error: String,
+    calls: Mutex<usize>,
+    streamed_before_failing: bool,
+    inner: Arc<ScriptedProvider>,
+}
+
+#[async_trait]
+impl Provider for FlakyProvider {
+    fn name(&self) -> &str {
+        "flaky"
+    }
+    fn default_model(&self) -> &str {
+        "mock"
+    }
+    async fn list_models(&self) -> anyhow::Result<Vec<ModelInfo>> {
+        self.inner.list_models().await
+    }
+    async fn complete(&self, req: ProviderRequest) -> anyhow::Result<ProviderResponse> {
+        *self.calls.lock().unwrap() += 1;
+        let fail = {
+            let mut left = self.failures.lock().unwrap();
+            let fail = *left > 0;
+            if fail {
+                *left -= 1;
+            }
+            fail
+        };
+        if fail {
+            anyhow::bail!("{}", self.error);
+        }
+        self.inner.complete(req).await
+    }
+    async fn complete_stream(
+        &self,
+        req: ProviderRequest,
+        on_text: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    ) -> anyhow::Result<ProviderResponse> {
+        if self.streamed_before_failing && *self.failures.lock().unwrap() > 0 {
+            on_text("partial ");
+        }
+        let resp = self.complete(req).await?;
+        on_text(&resp.message.text());
+        Ok(resp)
+    }
+}
+
+fn flaky(failures: usize, error: &str, streamed_before_failing: bool, responses: Vec<ProviderResponse>) -> Arc<FlakyProvider> {
+    Arc::new(FlakyProvider {
+        failures: Mutex::new(failures),
+        error: error.into(),
+        calls: Mutex::new(0),
+        streamed_before_failing,
+        inner: ScriptedProvider::new(responses),
+    })
+}
+
+fn flaky_agent(p: Arc<FlakyProvider>, max_retries: usize) -> Agent {
+    let config = AgentConfig { model: "mock".into(), max_retries, ..Default::default() };
+    Agent::new(p, ToolRegistry::new(), Arc::new(DenyMutating), config, ToolContext { cwd: std::env::temp_dir() })
+}
+
+#[test]
+fn transient_provider_errors_are_retried_with_a_retry_event() {
+    let p = flaky(1, "Anthropic 529 Service Overloaded (overloaded_error): Overloaded", false, vec![text("after retry")]);
+    let mut a = flaky_agent(p.clone(), 3);
+    let (res, events) = collect(&mut a, "hi");
+    res.unwrap();
+    assert_eq!(*p.calls.lock().unwrap(), 2);
+    let retries: Vec<_> = events.iter().filter_map(|e| match e {
+        AgentEvent::Retry { attempt, max_retries, delay_ms, error } => Some((*attempt, *max_retries, *delay_ms, error.clone())),
+        _ => None,
+    }).collect();
+    assert_eq!(retries.len(), 1);
+    assert_eq!((retries[0].0, retries[0].1, retries[0].2), (1, 3, 1000));
+    assert!(retries[0].3.contains("529"));
+    assert!(events.iter().any(|e| matches!(e, AgentEvent::AssistantText(t) if t == "after retry")));
+    assert_eq!(a.usage().requests, 1, "a failed attempt is not counted as a request");
+}
+
+#[test]
+fn retries_stop_at_max_retries_and_the_error_is_reported() {
+    let p = flaky(2, "openai 503 Service Unavailable : down", false, vec![text("never")]);
+    let mut a = flaky_agent(p.clone(), 1);
+    let (res, events) = collect(&mut a, "hi");
+    let err = format!("{:#}", res.unwrap_err());
+    assert!(err.contains("503"), "{err}");
+    assert_eq!(*p.calls.lock().unwrap(), 2);
+    assert_eq!(events.iter().filter(|e| matches!(e, AgentEvent::Retry { .. })).count(), 1);
+}
+
+#[test]
+fn permanent_errors_and_zero_retries_fail_at_once() {
+    let p = flaky(1, "Anthropic 401 Unauthorized (authentication_error): bad key", false, vec![text("never")]);
+    let mut a = flaky_agent(p.clone(), 3);
+    assert!(collect(&mut a, "hi").0.is_err());
+    assert_eq!(*p.calls.lock().unwrap(), 1);
+
+    let p = flaky(1, "Anthropic 529 Service Overloaded", false, vec![text("never")]);
+    let mut a = flaky_agent(p.clone(), 0);
+    assert!(collect(&mut a, "hi").0.is_err());
+    assert_eq!(*p.calls.lock().unwrap(), 1);
+}
+
+#[test]
+fn a_failure_after_streamed_text_is_not_retried() {
+    let p = flaky(1, "reading Anthropic stream: connection reset by peer", true, vec![text("never")]);
+    let mut a = flaky_agent(p.clone(), 3);
+    let (res, events) = collect(&mut a, "hi");
+    assert!(res.is_err());
+    assert_eq!(*p.calls.lock().unwrap(), 1);
+    assert!(!events.iter().any(|e| matches!(e, AgentEvent::Retry { .. })));
+}

@@ -259,6 +259,7 @@ Options:
   -m, --model <MODEL>                Model id to use. Defaults to the last model used with this provider (~/.agentiloop/settings.json), then the provider's default [env: AGENTILOOP_MODEL=]
       --yes                          Skip all permission prompts (dangerous; intended for CI). Never remembered [env: AGENTILOOP_YES=]
       --max-turns <MAX_TURNS>        Max provider round-trips per prompt [default: last used, then 50]
+      --max-retries <N>              Retries of a provider call that fails transiently (rate limit, overloaded, 5xx, dropped connection) before the error is reported; 0 = never retry [env: AGENTILOOP_MAX_RETRIES=] [default: 3]
       --compact-at <COMPACT_AT>      Summarize the conversation once a request reaches this many input tokens (0 = never) [default: last used, then 80% of the model's context window] [env: AGENTILOOP_COMPACT_AT=]
   -C, --cwd <CWD>                    Working directory the agent operates in (defaults to cwd)
   -r, --resume <RESUME>              Resume a saved session by id (see /sessions)
@@ -273,7 +274,7 @@ Options:
       --deny-tool <NAME>             Never run this tool; the model is told it was denied (same name rules). Beats --allow-tool and --yes
       --append-system-prompt <TEXT>  Extra text added to the end of the system prompt for this run (never saved) [env: AGENTILOOP_APPEND_SYSTEM_PROMPT=]
       --json                         One-shot only: print the answer as one JSON object on stdout (result, is_error, session_id, provider, model, usage) instead of streaming text. Tool activity still goes to stderr
-      --stream-json                  One-shot only: print every event as one JSON object per line on stdout as it happens (text_delta, text, tool_call, tool_result, turn, compacted, done), then the same result object as --json with "type": "result". Nothing else is printed
+      --stream-json                  One-shot only: print every event as one JSON object per line on stdout as it happens (text_delta, text, tool_call, tool_result, turn, compacted, retry, done), then the same result object as --json with "type": "result". Nothing else is printed
   -h, --help                         Print help
   -V, --version                      Print version
 ```
@@ -445,10 +446,11 @@ agentiloop --new          # 새 대화 시작 (이전 대화는 저장된 채로
 | `--no-mcp` | `AGENTILOOP_NO_MCP` | MCP 서버를 시작하지 않아요 (아래 참고) |
 | `--append-system-prompt <text>` | `AGENTILOOP_APPEND_SYSTEM_PROMPT` | 이번 실행에만 시스템 프롬프트 끝에 덧붙이는 텍스트 (저장되지 않아요) |
 | `--json` | | 원샷 프롬프트에서 답변을 JSON 객체 하나(`result`, `is_error`, `session_id`, `provider`, `model`, `usage`)로 stdout에 출력해요. 도구 활동은 stderr에 남아요 |
-| `--stream-json` | | 원샷 프롬프트에서: 이벤트가 일어날 때마다 stdout에 한 줄에 JSON 객체 하나씩 출력하고 (`text_delta`, `text`, `tool_call`, `tool_result`, `turn`, `compacted`, `done`), 마지막에 `--json`과 같은 결과 객체를 `"type": "result"`와 함께 출력해요. 그 밖에는 아무것도 출력하지 않아요. 진행 상황을 보고 싶은 편집기와 스크립트용 |
+| `--stream-json` | | 원샷 프롬프트에서: 이벤트가 일어날 때마다 stdout에 한 줄에 JSON 객체 하나씩 출력하고 (`text_delta`, `text`, `tool_call`, `tool_result`, `turn`, `compacted`, `retry`, `done`), 마지막에 `--json`과 같은 결과 객체를 `"type": "result"`와 함께 출력해요. 그 밖에는 아무것도 출력하지 않아요. 진행 상황을 보고 싶은 편집기와 스크립트용 |
 | `--setup` | | 첫 설정 마법사를 다시 실행해요 (프로바이더, 키, 모델). `--tui`와 함께 쓰면 전체 화면 안에서 실행돼요 |
 | `--reset` | | 처음 상태로: `~/.agentiloop`, 셸 프로파일의 agentiloop 블록, 마법사가 만든 키체인 항목 (Windows에서는 마법사가 설정한 사용자 환경 변수)을 삭제해요. 직접 작성한 `export` 줄은 주석 처리만 되고, 그것도 동의할 때만이에요. `--yes`를 붙이면 질문을 건너뛰어요 |
 | `--max-turns <n>` | | 요청 하나당 에이전트가 수행할 수 있는 최대 단계 수 (기본값 50) |
+| `--max-retries <n>` | `AGENTILOOP_MAX_RETRIES` | 일시적인 이유 (속도 제한, 과부하, 서버 오류, 끊긴 연결) 로 실패한 요청을 오류를 보여주기 전에 다시 보내는 횟수입니다. 1초, 2초, 4초… 기다린 뒤 다시 보냅니다 (기본값 3, `0` = 재시도 안 함). 각 시도는 `⟳ retry 1/3` 줄로 표시됩니다. 답변 스트리밍이 시작된 뒤에는 재시도하지 않습니다 |
 | `--compact-at <tokens>` | `AGENTILOOP_COMPACT_AT` | 긴 대화를 요약할 시점 (기본값 150000, `0` = 요약 안 함) |
 | `-h` / `-V` | | 도움말 / 버전 |
 
