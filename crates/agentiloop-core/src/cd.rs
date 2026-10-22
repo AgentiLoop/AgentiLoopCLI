@@ -16,10 +16,9 @@ pub fn resolve_dir(cwd: &Path, path: &str) -> Result<PathBuf, String> {
     if path.is_empty() {
         return Err("no directory given".into());
     }
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    let expanded = match (path.strip_prefix('~'), home) {
+    let expanded = match (path.strip_prefix('~'), dirs::home_dir()) {
         (Some(""), Some(h)) => h,
-        (Some(rest), Some(h)) if rest.starts_with('/') => h.join(&rest[1..]),
+        (Some(rest), Some(h)) if rest.starts_with(['/', '\\']) => h.join(&rest[1..]),
         _ => PathBuf::from(path),
     };
     let full = if expanded.is_absolute() { expanded } else { cwd.join(expanded) };
@@ -61,7 +60,7 @@ mod tests {
         std::fs::create_dir_all(&sub).unwrap();
         assert_eq!(resolve_dir(&tmp, "agentiloop-cd-test").unwrap(), sub);
         assert_eq!(resolve_dir(&sub, "..").unwrap(), tmp);
-        let home = PathBuf::from(std::env::var("HOME").unwrap()).canonicalize().unwrap();
+        let home = dirs::home_dir().unwrap().canonicalize().unwrap();
         assert_eq!(resolve_dir(&sub, "~").unwrap(), home);
         let file = sub.join("f.txt");
         std::fs::write(&file, "x").unwrap();

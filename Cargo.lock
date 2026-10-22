@@ -41,6 +41,7 @@ version = "0.0.7"
 dependencies = [
  "anyhow",
  "async-trait",
+ "dirs",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
