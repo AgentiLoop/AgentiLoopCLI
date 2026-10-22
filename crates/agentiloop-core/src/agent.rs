@@ -169,6 +169,9 @@ pub struct Agent {
     cache_key: Option<String>,
     /// Plan mode: tools that change something are refused and the model is asked for a plan.
     plan_mode: bool,
+    /// Bumped whenever the history is replaced (`clear`, `compact`), so `/rewind` positions
+    /// recorded against an older history are not used against the new one.
+    epoch: u64,
 }
 
 impl Agent {
@@ -179,7 +182,7 @@ impl Agent {
         config: AgentConfig,
         ctx: ToolContext,
     ) -> Self {
-        Self { provider, tools, policy, config, ctx, history: Vec::new(), last_input_tokens: 0, usage: Usage::default(), pending_text: String::new(), limits: None, cache_key: None, plan_mode: false }
+        Self { provider, tools, policy, config, ctx, history: Vec::new(), last_input_tokens: 0, usage: Usage::default(), pending_text: String::new(), limits: None, cache_key: None, plan_mode: false, epoch: 0 }
     }
 
     /// Plan mode on/off: while on, every mutating tool and `task` refuse to run and
@@ -190,6 +193,11 @@ impl Agent {
 
     pub fn plan_mode(&self) -> bool {
         self.plan_mode
+    }
+
+    /// The history epoch: changes every time the history is replaced (see `clear`, `compact`).
+    pub fn epoch(&self) -> u64 {
+        self.epoch
     }
 
     /// Key the provider's prompt cache on this conversation (see `ProviderRequest::cache_key`).
@@ -284,6 +292,7 @@ impl Agent {
     /// Drop all conversation context and tool history.
     pub fn clear(&mut self) {
         self.history.clear();
+        self.epoch += 1;
         self.pending_text.clear();
         self.last_input_tokens = 0;
     }
@@ -357,6 +366,7 @@ impl Agent {
             },
         ];
         self.last_input_tokens = 0;
+        self.epoch += 1;
         Ok(Some(AgentEvent::Compacted { before_tokens: before, messages_dropped: dropped }))
     }
 

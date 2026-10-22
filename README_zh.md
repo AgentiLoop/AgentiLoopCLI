@@ -499,6 +499,7 @@ agentiloop --yes "run the tests and fix any failures"        # 无人值守，�
 | `/resume <n or id>` | 重新打开其中一个对话 |
 | `/clear` | 清除当前对话并开始新对话 |
 | `/undo` | 撤销智能体为你上一条提示所做的文件更改（`bash` 命令造成的更改不会撤销） |
+| `/rewind [n]` | 列出你的提示，或回到第 *n* 条提示之前：撤销智能体从该提示起所做的文件更改，并在此处截断对话（`bash` 命令造成的更改不会撤销） |
 | `/todos` | 显示模型当前的任务清单 |
 | `/diff` | 显示 git 工作树中的更改（状态加 diff，超过 200 行会截断） |
 | `/commands` | 自定义命令：每个 `.agentiloop/commands/<name>.md`（项目）或 `~/.agentiloop/commands/<name>.md` 都会变成 `/<name>`，并把文件内容作为提示发送（`$ARGUMENTS` 会被命令后输入的内容替换，`$1`–`$9` 为其中的各个词）。此命令列出它们 |

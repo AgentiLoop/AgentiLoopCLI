@@ -499,6 +499,7 @@ Escríbelos en el prompt, en la TUI o en el chat:
 | `/resume <n or id>` | Vuelve a abrir una de ellas |
 | `/clear` | Borra la conversación y empieza una nueva |
 | `/undo` | Revierte los cambios en archivos que hizo el agente para tu último mensaje (los cambios hechos con `bash` no se deshacen) |
+| `/rewind [n]` | Lista tus mensajes o vuelve a antes del mensaje *n*: se deshacen los cambios en archivos que hizo el agente desde ese mensaje y la conversación se corta ahí (los cambios hechos con `bash` no se deshacen) |
 | `/todos` | Muestra la lista de tareas actual del modelo |
 | `/diff` | Muestra qué cambió en el árbol de trabajo de git (estado más diff, cortado a 200 líneas) |
 | `/commands` | Tus propios comandos: cada `.agentiloop/commands/<name>.md` (proyecto) o `~/.agentiloop/commands/<name>.md` pasa a ser `/<name>` y envía el archivo como prompt (`$ARGUMENTS` se sustituye por lo que escribas después, `$1`–`$9` por sus palabras). Los lista |

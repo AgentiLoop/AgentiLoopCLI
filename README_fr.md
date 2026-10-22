@@ -498,6 +498,7 @@ Tapez-les à l'invite, dans la TUI ou dans le chat :
 | `/resume <n or id>` | Rouvre l'une d'elles |
 | `/clear` | Efface la conversation et en démarre une nouvelle |
 | `/undo` | Annule les modifications de fichiers faites par l'agent pour votre dernier message (celles faites par `bash` ne sont pas annulées) |
+| `/rewind [n]` | Liste vos messages, ou revient avant le message *n* : les modifications de fichiers faites par l'agent à partir de ce message sont annulées et la conversation est coupée là (celles faites par `bash` ne sont pas annulées) |
 | `/todos` | Affiche la liste de tâches actuelle du modèle |
 | `/diff` | Affiche ce qui a changé dans l'arbre de travail git (état plus diff, coupé à 200 lignes) |
 | `/commands` | Vos propres commandes : chaque `.agentiloop/commands/<name>.md` (projet) ou `~/.agentiloop/commands/<name>.md` devient `/<name>` et envoie le fichier comme prompt (`$ARGUMENTS` est remplacé par ce qui suit, `$1`–`$9` par chaque mot). Les liste |

@@ -499,6 +499,7 @@ Tipp diese an der Eingabeaufforderung ein, in der TUI oder im Chat:
 | `/resume <n or id>` | Öffnet eine davon erneut |
 | `/clear` | Leert die Unterhaltung und beginnt eine neue |
 | `/undo` | Macht die Dateiänderungen des Agenten für deinen letzten Prompt rückgängig (Änderungen durch `bash`-Befehle nicht) |
+| `/rewind [n]` | Listet deine Prompts oder springt zurück vor Prompt *n*: Die Dateiänderungen des Agenten ab diesem Prompt werden rückgängig gemacht und das Gespräch dort abgeschnitten (Änderungen durch `bash`-Befehle nicht) |
 | `/todos` | Zeigt die aktuelle Aufgaben-Checkliste des Modells |
 | `/diff` | Zeigt, was sich im Git-Arbeitsverzeichnis geändert hat (Status plus Diff, nach 200 Zeilen gekürzt) |
 | `/commands` | Eigene Befehle: Jede `.agentiloop/commands/<name>.md` (Projekt) oder `~/.agentiloop/commands/<name>.md` wird zu `/<name>` und sendet die Datei als Prompt (`$ARGUMENTS` wird durch das Folgende ersetzt, `$1`–`$9` durch die einzelnen Wörter). Zeigt die Liste |

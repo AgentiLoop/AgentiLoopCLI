@@ -404,6 +404,7 @@ Type these at the prompt, in the TUI or the chat:
 | `/resume <n or id>` | Reopen one of them |
 | `/clear` | Clear the conversation and start a new one |
 | `/undo` | Revert the file changes the agent made for your last prompt (files changed by `bash` commands are not undone) |
+| `/rewind [n]` | List your prompts, or go back to before prompt *n*: the agent's file changes from that prompt on are undone and the conversation is cut there (`bash` changes are not undone) |
 | `/todos` | Show the model's current task checklist |
 | `/diff` | Show what changed in the git working tree (status plus diff, cut at 200 lines) |
 | `/commands` | Your own commands: every `.agentiloop/commands/<name>.md` (project) or `~/.agentiloop/commands/<name>.md` becomes `/<name>`, which sends the file as the prompt (`$ARGUMENTS` is replaced by what you type after it; `$1`–`$9` by its individual words). This lists them |

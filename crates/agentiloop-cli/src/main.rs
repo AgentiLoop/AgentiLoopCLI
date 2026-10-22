@@ -408,8 +408,8 @@ async fn main() -> Result<()> {
                     out.push(s)
                 })
                 .await;
-                // /resume and /clear switch sessions: show the new one's conversation.
-                if session.id != before {
+                // /resume and /clear switch sessions, /rewind cuts this one: show the conversation now.
+                if session.id != before || line.starts_with("/rewind ") {
                     tracker = diff::Tracker::new(cwd.clone());
                     let _ = ui_tx.send(tui::UiMsg::Clear);
                     replay_tui(&ui_tx, &agent.history);
@@ -425,7 +425,7 @@ async fn main() -> Result<()> {
             } else {
                 let tx = ui_tx.clone();
                 let tracker = &mut tracker;
-                agentiloop_tools::undo::begin_turn();
+                agentiloop_tools::undo::begin_prompt(agent.epoch(), agent.history.len(), &line);
                 let (line, attached) = agentiloop_core::mentions::expand(&line, &cwd);
                 for a in &attached {
                     let _ = ui_tx.send(tui::UiMsg::Line(agentiloop_core::mentions::describe(a)));
@@ -546,7 +546,7 @@ async fn main() -> Result<()> {
         }
         // Line mode has no raw keyboard during a run, so Ctrl-C is its cancel key:
         // a signal while the agent works, or Ctrl-C at a permission prompt.
-        agentiloop_tools::undo::begin_turn();
+        agentiloop_tools::undo::begin_prompt(agent.epoch(), agent.history.len(), line);
         let (line, attached) = agentiloop_core::mentions::expand(line, &cwd);
         for a in &attached {
             eprintln!("{}", agentiloop_core::mentions::describe(a));
@@ -834,6 +834,38 @@ async fn slash_command(
             }
             None => say("nothing to undo".into()),
         },
+        "/rewind" => {
+            let prompts = agentiloop_tools::undo::prompts(agent.epoch());
+            if prompts.is_empty() {
+                say("nothing to rewind (prompts sent since the session was opened, cleared or compacted can be rewound)".into());
+                return Ok(());
+            }
+            if arg.is_empty() {
+                say(rewind_listing(&prompts));
+                return Ok(());
+            }
+            let n = match arg.parse::<usize>() {
+                Ok(n) if (1..=prompts.len()).contains(&n) => n,
+                _ => {
+                    say(format!("usage: /rewind <1-{}>  (/rewind lists the prompts)", prompts.len()));
+                    return Ok(());
+                }
+            };
+            let p = &prompts[n - 1];
+            for l in agentiloop_tools::undo::rewind(agent.epoch(), p.index) {
+                say(l);
+            }
+            let dropped = agent.history.len().saturating_sub(p.index);
+            agent.history.truncate(p.index);
+            // Saved even when nothing is left, so /resume can't bring the dropped messages back.
+            session.history = agent.history.clone();
+            if let Some(dir) = sessions_dir {
+                if let Err(e) = session.save(dir) {
+                    say(format!("warning: could not save session: {e:#}"));
+                }
+            }
+            say(format!("rewound to before prompt {n} \"{}\": {dropped} message(s) dropped (shell commands are not undone)", prompt_title(&p.text)));
+        }
         "/model" => {
             let models = fetch_models(provider).await;
             // `/model 2` picks entry #2 directly; `/model <id>` sets an id.
@@ -961,6 +993,7 @@ const HELP: &str = "!<command>      run a shell command here; its output joins t
 /diff           show what changed in the git working tree\n\
 /todos          show the model's current task checklist\n\
 /undo           revert the file changes from the last prompt\n\
+/rewind [n]     list your prompts, or go back to before prompt #n (its file changes and everything after it are undone)\n\
 /compact        summarize the conversation to free context\n\
 /sessions       list saved sessions (newest first)\n\
 /resume <id|n>  load a saved session into this REPL\n\
@@ -1088,6 +1121,43 @@ mod status_tests {
         assert!(t.contains("hooks:         2 (/hooks lists them)") && t.contains("instructions:  /p/AGENTS.md"), "{t}");
         info.limits = Some(agentiloop_core::ModelLimits { max_tokens: 8192, context_window: None, compact_at_tokens: 0 });
         assert!(status_text(&info).contains("model:         m  (max output 8192 tokens, compaction off)"));
+    }
+}
+
+/// A prompt shortened to its first line, at most 60 characters.
+pub(crate) fn prompt_title(text: &str) -> String {
+    let line = text.trim().lines().next().unwrap_or("");
+    if line.chars().count() > 60 { format!("{}…", line.chars().take(59).collect::<String>()) } else { line.to_string() }
+}
+
+/// What `/rewind` without a number shows: the prompts it can go back to, oldest first.
+pub(crate) fn rewind_listing(prompts: &[agentiloop_tools::undo::Prompt]) -> String {
+    let mut out = vec!["/rewind <n> goes back to before prompt n: its file changes and everything after it are undone".to_string()];
+    for (i, p) in prompts.iter().enumerate() {
+        let files = match p.files {
+            0 => String::new(),
+            1 => "  (1 file changed)".into(),
+            n => format!("  ({n} files changed)"),
+        };
+        out.push(format!("{:>3}. {}{files}", i + 1, prompt_title(&p.text)));
+    }
+    out.join("\n")
+}
+
+#[cfg(test)]
+mod rewind_tests {
+    use super::{prompt_title, rewind_listing};
+    use agentiloop_tools::undo::Prompt;
+
+    #[test]
+    fn listing_numbers_prompts_and_counts_changed_files() {
+        let p = |text: &str, files| Prompt { index: 0, text: text.into(), files };
+        let long = "x".repeat(70);
+        assert_eq!(prompt_title(&format!("  {long}\nmore")), format!("{}…", "x".repeat(59)));
+        assert_eq!(
+            rewind_listing(&[p("fix the bug\nin main", 2), p("what is this?", 0), p("add a test", 1)]),
+            "/rewind <n> goes back to before prompt n: its file changes and everything after it are undone\n  1. fix the bug  (2 files changed)\n  2. what is this?\n  3. add a test  (1 file changed)"
+        );
     }
 }
 
