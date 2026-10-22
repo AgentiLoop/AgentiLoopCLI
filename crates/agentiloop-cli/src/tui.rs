@@ -2,7 +2,7 @@
 //! and a status bar. The agent loop runs on the tokio runtime and talks to the
 //! UI thread over channels; permission prompts appear as a modal.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
@@ -201,6 +201,10 @@ pub struct App {
     pane_rows: Vec<(Vec<Vec<Span<'static>>>, Vec<Style>)>,
     /// Ctrl-F toggles the files pane.
     show_files: bool,
+    /// Wheel offset of the files pane from its default view (the selected file's top).
+    files_scroll: Cell<isize>,
+    /// Where the files pane was drawn last frame, so the wheel over it scrolls the pane.
+    files_area: RefCell<Option<Rect>>,
     /// `Some(secret)` while the setup wizard waits for an answer on the input line.
     asking: Option<bool>,
 }
@@ -290,6 +294,8 @@ impl App {
             files_sel: 0,
             pane_rows: Vec::new(),
             show_files: true,
+            files_scroll: Cell::new(0),
+            files_area: RefCell::new(None),
             asking: None,
         }
     }
@@ -362,6 +368,7 @@ impl App {
     }
 
     fn refresh_pane(&mut self) {
+        self.files_scroll.set(0);
         self.pane_rows = self.files.iter().map(|f| diff_rows(f, PANE_MAX, false)).collect();
     }
 
@@ -557,19 +564,29 @@ impl App {
         self.cursor = self.input.len();
     }
 
-    /// Wheel scrolls the transcript; a left click on a link opens it; a
-    /// left drag selects text and copies it on release (mouse capture hides
-    /// the terminal's own selection, so the TUI provides one).
+    /// Wheel scrolls the transcript (or the files pane when over it); a left
+    /// click on a link opens it; a left drag selects text and copies it on
+    /// release (mouse capture hides the terminal's own selection, so the TUI
+    /// provides one).
     pub fn handle_mouse(&mut self, m: MouseEvent) -> Option<Action> {
         let pos = (m.column, m.row);
+        let over_files = self.files_area.borrow().is_some_and(|a| a.contains(pos.into()));
         match m.kind {
             MouseEventKind::ScrollUp => {
                 self.selection = None;
-                self.scroll = self.scroll.saturating_add(3);
+                if over_files {
+                    self.files_scroll.set(self.files_scroll.get() - 3);
+                } else {
+                    self.scroll = self.scroll.saturating_add(3);
+                }
             }
             MouseEventKind::ScrollDown => {
                 self.selection = None;
-                self.scroll = self.scroll.saturating_sub(3);
+                if over_files {
+                    self.files_scroll.set(self.files_scroll.get() + 3);
+                } else {
+                    self.scroll = self.scroll.saturating_sub(3);
+                }
             }
             MouseEventKind::Down(MouseButton::Left) if self.modal.is_none() => {
                 let url = self
@@ -619,8 +636,10 @@ impl App {
             let [left, right] = Layout::horizontal([Constraint::Min(40), Constraint::Length(pane_w)]).areas(transcript);
             self.draw_files(frame, right);
             self.sel_areas.borrow_mut().push(right);
+            *self.files_area.borrow_mut() = Some(right);
             left
         } else {
+            *self.files_area.borrow_mut() = None;
             transcript
         };
         self.draw_transcript(frame, transcript);
@@ -753,7 +772,7 @@ impl App {
 
     /// Right-hand pane: every changed file with its +/- counts, then every
     /// file's diff stacked below. When they don't all fit, the view starts at
-    /// the most recently changed file (the rest is a Ctrl-F / wider window away).
+    /// the most recently changed file; the mouse wheel over the pane scrolls it.
     fn draw_files(&self, frame: &mut Frame, area: Rect) {
         let (added, removed) = self.files.iter().fold((0, 0), |(a, r), f| (a + f.added, r + f.removed));
         let n = self.files.len();
@@ -804,7 +823,10 @@ impl App {
             }
         }
         let room = (inner.height as usize).saturating_sub(lines.len());
-        let start = sel_start.min(stack.len().saturating_sub(room));
+        let max_start = stack.len().saturating_sub(room);
+        let start = (sel_start as isize + self.files_scroll.get()).clamp(0, max_start as isize) as usize;
+        // Keep the offset within range so the wheel reverses direction immediately.
+        self.files_scroll.set(start as isize - sel_start as isize);
         lines.extend(stack.into_iter().skip(start).take(room));
         frame.render_widget(Paragraph::new(lines), inner);
     }
@@ -1394,6 +1416,34 @@ mod tests {
         assert!(screen(&app, 120, 20).contains("1 file changed +3 -0"));
         app.apply(UiMsg::Clear);
         assert!(!screen(&app, 120, 20).contains("changed"));
+    }
+
+    #[test]
+    fn wheel_over_files_pane_scrolls_the_pane_not_the_transcript() {
+        let mut app = App::new("s");
+        let after: String = (1..=30).map(|i| format!("line{i}\n")).collect();
+        app.apply(change("big.txt", "", &after));
+        // The transcript shows the same diff, so only look at the pane (right 48 columns).
+        let pane = |app: &App| -> String { screen(app, 120, 16).lines().map(|l| l.chars().skip(72).collect::<String>() + "\n").collect() };
+        // 12 rows of pane can't hold 30 added lines, so the diff is cut off at the bottom.
+        let p = pane(&app);
+        assert!(p.contains("1 + line1") && !p.contains("+ line30"), "{p}");
+        let wheel = |kind, col| MouseEvent { kind, column: col, row: 2, modifiers: KeyModifiers::NONE };
+        for _ in 0..10 {
+            app.handle_mouse(wheel(MouseEventKind::ScrollDown, 100));
+        }
+        let p = pane(&app);
+        assert!(p.contains("+ line30") && !p.contains("1 + line1"), "{p}");
+        assert_eq!(app.scroll, 0, "transcript must not move");
+        // Clamped at the end, so one notch back up moves immediately.
+        app.handle_mouse(wheel(MouseEventKind::ScrollUp, 100));
+        assert!(!pane(&app).contains("+ line30"));
+        // Over the transcript the wheel still scrolls the transcript.
+        app.handle_mouse(wheel(MouseEventKind::ScrollUp, 10));
+        assert_eq!(app.scroll, 3);
+        // A new change snaps the pane back to the top of that file's diff.
+        app.apply(change("big.txt", "", &format!("{after}line31\n")));
+        assert!(pane(&app).contains("1 + line1"));
     }
 
     #[test]
