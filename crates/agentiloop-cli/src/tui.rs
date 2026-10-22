@@ -270,6 +270,8 @@ pub enum Action {
     OpenUrl(String),
     /// A mouse drag ended; copy the selection from the frame on screen.
     CopySelection,
+    /// Ctrl-V / Alt-V: attach the image on the clipboard to the prompt.
+    PasteImage,
 }
 
 impl App {
@@ -479,6 +481,9 @@ impl App {
                 self.input.clear();
                 self.cursor = 0;
             }
+            // Cmd-V never reaches a terminal program (the terminal pastes text itself), so the
+            // image key is Ctrl-V, like Claude Code — and Alt-V for terminals that take Ctrl-V.
+            KeyCode::Char('v') if ctrl || key.modifiers.contains(KeyModifiers::ALT) => return Some(Action::PasteImage),
             KeyCode::Enter => {
                 let line = self.input.trim().to_string();
                 if self.busy || (line.is_empty() && self.asking.is_none()) {
@@ -546,6 +551,12 @@ impl App {
 
     fn prev_boundary(&self) -> Option<usize> {
         self.input[..self.cursor].char_indices().next_back().map(|(i, _)| i)
+    }
+
+    /// Insert `text` at the cursor (a pasted image's `@path` mention).
+    pub fn insert_text(&mut self, text: &str) {
+        self.input.insert_str(self.cursor, text);
+        self.cursor += text.len();
     }
 
     fn next_boundary(&self) -> Option<usize> {
@@ -993,6 +1004,10 @@ pub fn run(
                         Ok(()) => app.apply(UiMsg::Line(format!("↗ {url}"))),
                         Err(e) => app.apply(UiMsg::Error(format!("could not open {url}: {e}"))),
                     },
+                    Some(Action::PasteImage) => match paste_image() {
+                        Ok(path) => app.insert_text(&format!("@{} ", path.display())),
+                        Err(e) => app.apply(UiMsg::Error(format!("could not paste an image: {e}"))),
+                    },
                     None => {}
                 }
             }
@@ -1107,6 +1122,54 @@ fn copy_to_clipboard(text: &str) -> std::io::Result<()> {
         write!(out, "\x1b]52;c;{b64}\x07")?;
         out.flush()
     }
+}
+
+/// Pasted images so far, for unique file names.
+static PASTE_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Save the image on the clipboard as a PNG under the temp folder and return its path
+/// (a copied image *file* is used as is). macOS: osascript; Linux: wl-paste / xclip;
+/// Windows: PowerShell. "No image" is an error the caller shows.
+fn paste_image() -> std::io::Result<PathBuf> {
+    use std::io::{Error, ErrorKind, Write};
+    use std::process::{Command, Stdio};
+    let dir = std::env::temp_dir().join("agentiloop");
+    std::fs::create_dir_all(&dir)?;
+    let n = PASTE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    let path = dir.join(format!("paste-{}-{n}.png", std::process::id()));
+    let no_image = || Error::new(ErrorKind::NotFound, "no image on the clipboard");
+    let ok = if cfg!(target_os = "macos") {
+        // A file copied in the Finder: use it directly when it is an image.
+        let file = Command::new("osascript").args(["-e", "POSIX path of (the clipboard as «class furl»)"]).stderr(Stdio::null()).output()?;
+        if file.status.success() {
+            let p = PathBuf::from(String::from_utf8_lossy(&file.stdout).trim());
+            if agentiloop_core::mentions::image_media_type(&p).is_some() && p.is_file() {
+                return Ok(p);
+            }
+        }
+        let script = format!(
+            "set f to open for access POSIX file \"{}\" with write permission\ntry\n\tset eof f to 0\n\twrite (the clipboard as «class PNGf») to f\n\tclose access f\non error e\n\tclose access f\n\terror e\nend try\n",
+            path.display()
+        );
+        let mut child = Command::new("osascript").arg("-").stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
+        child.stdin.take().expect("piped stdin").write_all(script.as_bytes())?;
+        child.wait()?.success()
+    } else if cfg!(target_os = "windows") {
+        let script = format!("$i = Get-Clipboard -Format Image; if ($i -eq $null) {{ exit 1 }}; $i.Save('{}')", path.display());
+        Command::new("powershell").args(["-NoProfile", "-Command", &script]).stdout(Stdio::null()).stderr(Stdio::null()).status()?.success()
+    } else {
+        let out = if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+            Command::new("wl-paste").args(["-t", "image/png"]).stderr(Stdio::null()).output()?
+        } else {
+            Command::new("xclip").args(["-selection", "clipboard", "-t", "image/png", "-o"]).stderr(Stdio::null()).output()?
+        };
+        out.status.success() && !out.stdout.is_empty() && std::fs::write(&path, &out.stdout).is_ok()
+    };
+    if !ok || std::fs::metadata(&path).map(|m| m.len() == 0).unwrap_or(true) {
+        let _ = std::fs::remove_file(&path);
+        return Err(no_image());
+    }
+    Ok(path)
 }
 
 #[cfg(test)]
@@ -1515,6 +1578,20 @@ mod tests {
         let s = screen(&app, 40, 8);
         assert!(s.contains("> •••••••••") && !s.contains("sk-secret"), "{s}");
         assert_eq!(app.history, vec!["/setup".to_string()]);
+    }
+
+    #[test]
+    fn ctrl_v_and_alt_v_ask_for_an_image_paste_and_the_mention_lands_at_the_cursor() {
+        let mut app = App::new("s");
+        type_str(&mut app, "look: ");
+        assert!(matches!(app.handle_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL)), Some(Action::PasteImage)));
+        assert!(matches!(app.handle_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::ALT)), Some(Action::PasteImage)));
+        app.insert_text("@/tmp/agentiloop/paste-1.png ");
+        type_str(&mut app, "ok");
+        assert_eq!(app.input, "look: @/tmp/agentiloop/paste-1.png ok");
+        // A plain v still types.
+        assert!(app.handle_key(key(KeyCode::Char('v'))).is_none());
+        assert_eq!(app.input, "look: @/tmp/agentiloop/paste-1.png okv");
     }
 
     #[test]

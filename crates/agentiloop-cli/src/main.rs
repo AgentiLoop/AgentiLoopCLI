@@ -321,7 +321,7 @@ async fn main() -> Result<()> {
                     eprintln!("{}", agentiloop_core::mentions::describe(a));
                 }
                 agent
-                    .run(&prompt, |ev| {
+                    .run_content(agentiloop_core::mentions::content(prompt, &attached), |ev| {
                         if json {
                             match &ev {
                                 AgentEvent::TurnComplete { .. } => last_text.clear(),
@@ -431,7 +431,7 @@ async fn main() -> Result<()> {
                     let _ = ui_tx.send(tui::UiMsg::Line(agentiloop_core::mentions::describe(a)));
                 }
                 let res = {
-                    let run = agent.run(&line, move |ev| {
+                    let run = agent.run_content(agentiloop_core::mentions::content(line, &attached), move |ev| {
                         // Snapshot/diff before the event crosses to the UI thread:
                         // the tool runs right after ToolCall returns.
                         let change = tracker.observe(&ev);
@@ -552,7 +552,7 @@ async fn main() -> Result<()> {
             eprintln!("{}", agentiloop_core::mentions::describe(a));
         }
         let res = tokio::select! {
-            res = agent.run(&line, |ev| render_tracked(&mut tracker, ev)) => Some(res),
+            res = agent.run_content(agentiloop_core::mentions::content(line, &attached), |ev| render_tracked(&mut tracker, ev)) => Some(res),
             _ = tokio::signal::ctrl_c() => None,
             _ = repl_io.cancel.notified() => None,
         };
@@ -599,6 +599,8 @@ fn replay(history: &[Message], mut user: impl FnMut(String), mut event: impl FnM
                     output: content.clone(),
                     is_error: *is_error,
                 }),
+                // The prompt text keeps the `@path` mention; the pixels aren't shown.
+                ContentBlock::Image { .. } => {}
             }
         }
     }

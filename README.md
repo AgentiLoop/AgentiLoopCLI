@@ -266,13 +266,15 @@ Still stuck? [Open an issue](https://github.com/AgentiLoop/AgentiLoopCLI/issues)
 | **One-shot** | `agentiloop "explain this project"` | One question: it answers, then exits. Handy in scripts |
 | **Piped** | `git diff \| agentiloop "review this" -` | Pipe text in with a `-` in the prompt: it is replaced by what was piped. Handy for diffs and logs |
 
-Keys in the TUI: **Enter** sends · **↑ / ↓** go through earlier prompts · **PgUp / PgDn** or the mouse wheel scrolls · **Ctrl-F** shows or hides the *files changed* pane (the wheel over it scrolls the pane; drag its left edge to resize it) · **Esc** stops the running request (the session is kept) · **Ctrl-U** clears the line · **Ctrl-C** quits.
+Keys in the TUI: **Enter** sends · **↑ / ↓** go through earlier prompts · **PgUp / PgDn** or the mouse wheel scrolls · **Ctrl-F** shows or hides the *files changed* pane (the wheel over it scrolls the pane; drag its left edge to resize it) · **Esc** stops the running request (the session is kept) · **Ctrl-U** clears the line · **Ctrl-V** (or **Alt-V**) attaches the image on the clipboard · **Ctrl-C** quits.
 
 ---
 
 ## Mention files with @
 
 Type `@` followed by a path anywhere in a prompt and AgentiLoop attaches that file to what the model receives: `explain @src/main.rs` sends your sentence plus the file's text with line numbers. A folder (`@src`) attaches its listing. Paths are relative to the project folder (or absolute, or `~/…`); a word that names nothing is left alone, so e-mail addresses are safe. Files are cut at 64 KB, folders at 200 entries, and a 📎 line shows what was attached. Works in the TUI, the chat and one-shot prompts.
+
+Images work the same way: `@shot.png` (png, jpeg, gif or webp, up to 5 MB) goes to the model as a picture, not as text. In the TUI, press **Ctrl-V** with an image on the clipboard (a screenshot, an image copied from a browser, or an image file copied in the Finder) and AgentiLoop saves it to a temp file and inserts its `@path` at the cursor; then describe what you want and press Enter. It is **Ctrl-V**, not Cmd-V: Cmd-V belongs to the terminal app, which pastes text and never tells the program about an image (the same reason Claude Code uses Ctrl-V). On Windows, where the terminal takes Ctrl-V, press **Alt-V**.
 
 
 ---

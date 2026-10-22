@@ -271,13 +271,21 @@ struct WireFunction<'a> {
 #[serde(tag = "role", rename_all = "lowercase")]
 enum WireMessage<'a> {
     System { content: &'a str },
-    User { content: &'a str },
+    User { content: UserContent<'a> },
     Assistant {
         content: Option<String>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         tool_calls: Vec<WireToolCall>,
     },
     Tool { tool_call_id: &'a str, content: &'a str },
+}
+
+/// A user message's `content`: a plain string, or `text` / `image_url` parts when images are attached.
+#[derive(Serialize)]
+#[serde(untagged)]
+enum UserContent<'a> {
+    Text(&'a str),
+    Parts(Vec<Value>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -306,14 +314,24 @@ fn to_wire_messages<'a>(system: &'a str, history: &'a [Message]) -> Vec<WireMess
     for m in history {
         match m.role {
             Role::User => {
+                let has_image = m.content.iter().any(|b| matches!(b, ContentBlock::Image { .. }));
+                let mut parts: Vec<Value> = Vec::new();
                 for block in &m.content {
                     match block {
-                        ContentBlock::Text { text } => out.push(WireMessage::User { content: text }),
+                        ContentBlock::Text { text } if has_image => parts.push(serde_json::json!({"type": "text", "text": text})),
+                        ContentBlock::Text { text } => out.push(WireMessage::User { content: UserContent::Text(text) }),
+                        ContentBlock::Image { source } => parts.push(serde_json::json!({
+                            "type": "image_url",
+                            "image_url": {"url": format!("data:{};base64,{}", source.media_type, source.data)}
+                        })),
                         ContentBlock::ToolResult { tool_use_id, content, .. } => {
                             out.push(WireMessage::Tool { tool_call_id: tool_use_id, content })
                         }
                         ContentBlock::ToolUse { .. } => {}
                     }
+                }
+                if !parts.is_empty() {
+                    out.push(WireMessage::User { content: UserContent::Parts(parts) });
                 }
             }
             Role::Assistant => {

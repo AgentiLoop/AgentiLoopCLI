@@ -386,7 +386,15 @@ impl Agent {
     }
 
     /// The core agentic loop: send → if tool_use, execute tools, append results, repeat.
-    pub async fn run<F>(&mut self, user_input: &str, mut on_event: F) -> anyhow::Result<()>
+    pub async fn run<F>(&mut self, user_input: &str, on_event: F) -> anyhow::Result<()>
+    where
+        F: FnMut(AgentEvent) + Send,
+    {
+        self.run_content(vec![ContentBlock::Text { text: user_input.into() }], on_event).await
+    }
+
+    /// `run` with a prepared user turn — the prompt text plus any pasted or `@mentioned` images.
+    pub async fn run_content<F>(&mut self, content: Vec<ContentBlock>, mut on_event: F) -> anyhow::Result<()>
     where
         F: FnMut(AgentEvent) + Send,
     {
@@ -397,7 +405,7 @@ impl Agent {
                 on_event(ev);
             }
         }
-        self.history.push(Message::user_text(user_input));
+        self.history.push(Message::user(content));
 
         for _ in 0..self.config.max_turns {
             let system = if self.plan_mode { format!("{}\n\n{PLAN_MODE_PROMPT}", self.config.system_prompt) } else { self.config.system_prompt.clone() };
@@ -668,6 +676,7 @@ pub fn transcript(history: &[Message]) -> String {
                     };
                     out.push_str(&format!("{tag}: {body}\n"));
                 }
+                ContentBlock::Image { source } => out.push_str(&format!("{role}: [image {}]\n", source.media_type)),
             }
         }
     }

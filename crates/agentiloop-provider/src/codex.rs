@@ -243,6 +243,9 @@ pub(crate) fn to_input(history: &[Message]) -> Vec<Value> {
                 ContentBlock::ToolResult { tool_use_id, content, .. } => {
                     json!({"type": "function_call_output", "call_id": tool_use_id, "output": content})
                 }
+                ContentBlock::Image { source } => json!({"type": "message", "role": role, "content": [
+                    {"type": "input_image", "image_url": format!("data:{};base64,{}", source.media_type, source.data)}
+                ]}),
             });
         }
     }

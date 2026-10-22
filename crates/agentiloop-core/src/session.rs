@@ -105,6 +105,7 @@ impl Session {
                         let label = if *is_error { "Error" } else { "Result" };
                         out.push_str(&format!("\n**{label}**\n\n{}\n", fenced("", &body)));
                     }
+                    ContentBlock::Image { source } => out.push_str(&format!("\n*[image {}]*\n", source.media_type)),
                 }
             }
         }
