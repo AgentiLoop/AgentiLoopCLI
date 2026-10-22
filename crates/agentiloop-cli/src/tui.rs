@@ -681,8 +681,10 @@ impl App {
 
         let title = if self.busy {
             self.busy_title()
+        } else if self.asking.is_some() {
+            Line::from(" setup ")
         } else {
-            Line::from(if self.asking.is_some() { " setup " } else { " prompt " })
+            Line::from("")
         };
         // Claude Code-style input: thin dim rules above and below, no side borders, a ">" gutter.
         // Rules are rows of underlined spaces: the terminal draws underline as one continuous
