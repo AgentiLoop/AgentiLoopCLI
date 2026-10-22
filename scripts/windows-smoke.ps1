@@ -32,7 +32,13 @@ $py = Join-Path ([IO.Path]::GetTempPath()) 'agentiloop-fake-models.py'
 Set-Content -Path $py -Value $server
 $proc = Start-Process python -ArgumentList $py -PassThru -WindowStyle Hidden
 try {
-    Start-Sleep -Seconds 2
+    # Wait (up to 30s) until the fake server actually answers; a fixed sleep raced on CI.
+    $ready = $false
+    for ($i = 0; $i -lt 60 -and -not $ready; $i++) {
+        try { Invoke-RestMethod -Uri 'http://127.0.0.1:18434/v1/models' -TimeoutSec 2 | Out-Null; $ready = $true }
+        catch { Start-Sleep -Milliseconds 500 }
+    }
+    Assert $ready "fake /models server did not start on 127.0.0.1:18434"
 
     # --setup: provider 3 (local server), URL, no key, model 2, save option 2 = user env var (setx).
     $answers = "3`nhttp://127.0.0.1:18434/v1`n`n2`n2`n"
