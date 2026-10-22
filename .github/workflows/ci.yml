@@ -31,3 +31,25 @@ jobs:
         run: |
           cargo build -p agentiloop
           pwsh scripts/windows-smoke.ps1 -Binary .\target\debug\agentiloop.exe
+
+  # Builds this repo and its Go twin (AgentiLoopGo, main) and runs scripts/parity.py:
+  # flags, /help, provider requests, --json/--stream-json output and session files
+  # must match, and each binary must resume the other's sessions.
+  parity:
+    name: parity (Rust ↔ Go)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: AgentiLoop/AgentiLoopGo
+          path: AgentiLoopGo
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: AgentiLoopGo/go.mod
+          cache-dependency-path: AgentiLoopGo/go.sum
+      - run: cargo build -p agentiloop
+      - run: cd AgentiLoopGo && go build -o agentiloop ./cmd/agentiloop
+      - run: python3 scripts/parity.py --rust target/debug/agentiloop --go AgentiLoopGo/agentiloop --go-src AgentiLoopGo
