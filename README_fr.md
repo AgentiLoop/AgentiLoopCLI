@@ -506,6 +506,7 @@ Tapez-les à l'invite, dans la TUI ou dans le chat :
 | `/plan [on\|off]` | Active ou désactive le mode plan (sans argument : bascule). Tant qu'il est actif, les outils qui modifient quelque chose refusent de s'exécuter et le modèle répond par un plan ; la TUI affiche **PLAN** dans la ligne d'état |
 | `/init` | Crée un `AGENTS.md` de départ pour le projet courant (n'écrase jamais) |
 | `/export [file]` | Enregistre la conversation en fichier Markdown (`/export notes.md`, ou un nom par défaut dans le dossier du projet) |
+| `/copy [n]` | Copie la dernière réponse (ou la *n*-ième en partant de la fin) dans le presse-papiers : `pbcopy`, `clip`, `wl-copy`/`xclip`/`xsel`, sinon une séquence OSC 52 pour que le terminal la copie (y compris via SSH) |
 | `/compact` | Résume la conversation maintenant pour libérer de la place |
 | `/usage` | Affiche les tokens utilisés depuis le démarrage et le remplissage du contexte |
 | `/status` | Où vous en êtes : dossier, fournisseur, modèle et ses limites, session, mode plan, outils (et combien viennent de MCP), hooks, fichiers d'instructions, réglages et consommation de tokens |

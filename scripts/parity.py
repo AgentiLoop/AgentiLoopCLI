@@ -10,7 +10,7 @@ see differs:
   * every request body sent to the provider (system prompt, tools, history)
   * --json and --stream-json output, the saved session file and settings.json
   * sessions round-trip: Go resumes a Rust session and Rust resumes a Go one
-  * the line REPL: /rewind lists prompts, restores their files and cuts the session
+  * the line REPL: /rewind lists prompts, restores their files and cuts the session; /copy messages
   * README headings per language
 
 Usage:
@@ -145,6 +145,12 @@ def repl_rewind(run, work):
     return norm_repl(p.stderr), reqs, notes.read_text() if notes.exists() else None, norm_session(run.sessions()[-1])
 
 
+def repl_copy(run, work):
+    """/copy before any reply and with bad arguments (nothing reaches the clipboard); returns the REPL output."""
+    p, _ = run("-p", "openai", "-m", "fake-model", "-C", str(work), "--no-tui", "--new", stdin="/copy\n/copy 0\n/copy x\n/copy 2\n/exit\n")
+    return norm_repl(p.stderr)
+
+
 def flags(help_text):
     return set(re.findall(r"(?<![\w-])--?[a-zA-Z][\w-]*", help_text.split("Options:", 1)[-1]))
 
@@ -230,6 +236,9 @@ def main():
         check("/rewind requests to the provider", r[1], g[1])
         check("/rewind leaves notes.txt as before the first prompt", (r[2], g[2]), (None, None))
         check("/rewind saved session", r[3], g[3])
+
+        print("REPL /copy")
+        check("/copy output", repl_copy(rs, root / "repl"), repl_copy(go, root / "repl"))
     finally:
         server.shutdown()
         shutil.rmtree(root, ignore_errors=True)

@@ -414,6 +414,7 @@ Type these at the prompt, in the TUI or the chat:
 | `/plan [on\|off]` | Plan mode on or off (no argument toggles). While it is on, tools that change something refuse to run and the model answers with a plan; the TUI shows **PLAN** in the status line |
 | `/init` | Create a starter `AGENTS.md` for the current project (never overwrites) |
 | `/export [file]` | Save the conversation as a Markdown file (`/export notes.md`, or a default name in the project folder) |
+| `/copy [n]` | Copy the last reply (or the *n*th from the end) to the clipboard: `pbcopy`, `clip`, `wl-copy`/`xclip`/`xsel`, else an OSC 52 escape so the terminal copies it (also over SSH) |
 | `/compact` | Summarize the conversation now to free up space |
 | `/usage` | Show the tokens used since start and how full the context is |
 | `/status` | Where you are: folder, provider, model and its limits, session, plan mode, tools (and how many come from MCP), hooks, instruction files, settings and token usage |

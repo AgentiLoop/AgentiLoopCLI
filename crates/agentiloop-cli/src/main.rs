@@ -1,3 +1,4 @@
+mod clipboard;
 mod diff;
 mod highlight;
 mod markdown;
@@ -808,6 +809,20 @@ async fn slash_command(
                 }
             }
         }
+        "/copy" => {
+            let n = if arg.is_empty() { Ok(1) } else { arg.parse::<usize>() };
+            match n {
+                Ok(n) if n >= 1 => match agentiloop_core::message::nth_reply(&agent.history, n) {
+                    Some(text) => {
+                        let via = clipboard::copy(&text);
+                        say(copied_line(n, text.chars().count(), &via));
+                    }
+                    None if n == 1 => say("no reply to copy yet".into()),
+                    None => say(format!("there is no reply #{n} from the end")),
+                },
+                _ => say("usage: /copy [n]  (1 = the last reply, 2 = the one before, …)".into()),
+            }
+        }
         "/init" => match agentiloop_core::instructions::init(&session.cwd) {
             Ok(path) => say(format!("created {}; edit it, then restart agentiloop to load it", path.display())),
             Err(e) => say(e),
@@ -1027,6 +1042,7 @@ const HELP: &str = "!<command>      run a shell command here; its output joins t
 /mcp            list MCP servers and their tools\n\
 /usage          tokens used since start and how full the context is\n\
 /export [file]  save the conversation as Markdown\n\
+/copy [n]       copy the last reply (or the nth from the end) to the clipboard\n\
 /init           create a starter AGENTS.md for this project\n\
 /commands       list your custom commands (.agentiloop/commands/*.md)\n\
 /hooks          list the hooks loaded from .agentiloop/hooks.json\n\
@@ -1043,6 +1059,12 @@ const HELP: &str = "!<command>      run a shell command here; its output joins t
 /clear          clear context and start a new session\n\
 /setup          run the setup wizard again (provider, key, model)\n\
 /exit           quit";
+
+/// What `/copy` reports after copying reply `n` (1 = the last) of `chars` characters.
+pub(crate) fn copied_line(n: usize, chars: usize, via: &str) -> String {
+    let which = if n == 1 { "the last reply".to_string() } else { format!("reply #{n} from the end") };
+    format!("copied {which} ({chars} characters) to the clipboard via {via}")
+}
 
 /// `/usage` first line: tokens spent since agentiloop started.
 pub(crate) fn usage_line(u: agentiloop_core::Usage) -> String {
@@ -1424,6 +1446,12 @@ mod usage_tests {
         let u = Usage { requests: 3, input_tokens: 1200, output_tokens: 340, ..Default::default() };
         assert_eq!(super::usage_line(u), "3 request(s) since start: 1200 input + 340 output = 1540 tokens");
         assert_eq!(super::usage_line(Usage { cache_read_tokens: 900, cache_write_tokens: 50, ..u }), "3 request(s) since start: 1200 input + 340 output = 1540 tokens (prompt cache: 900 read, 50 written)");
+    }
+
+    #[test]
+    fn copied_line_names_the_reply_and_how_it_was_copied() {
+        assert_eq!(super::copied_line(1, 42, "pbcopy"), "copied the last reply (42 characters) to the clipboard via pbcopy");
+        assert_eq!(super::copied_line(3, 7, "the terminal (OSC 52)"), "copied reply #3 from the end (7 characters) to the clipboard via the terminal (OSC 52)");
     }
 }
 

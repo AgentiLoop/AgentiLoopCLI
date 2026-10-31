@@ -507,6 +507,7 @@ Tipp diese an der Eingabeaufforderung ein, in der TUI oder im Chat:
 | `/plan [on\|off]` | Planmodus ein oder aus (ohne Argument: umschalten). Solange er an ist, verweigern Tools, die etwas verändern, die Ausführung, und das Modell antwortet mit einem Plan; die TUI zeigt **PLAN** in der Statuszeile |
 | `/init` | Erstellt eine `AGENTS.md`-Vorlage für das aktuelle Projekt (überschreibt nie) |
 | `/export [file]` | Speichert die Unterhaltung als Markdown-Datei (`/export notes.md` oder ein Standardname im Projektordner) |
+| `/copy [n]` | Kopiert die letzte Antwort (oder die *n*-te von hinten) in die Zwischenablage: `pbcopy`, `clip`, `wl-copy`/`xclip`/`xsel`, sonst per OSC-52-Sequenz über das Terminal (auch per SSH) |
 | `/compact` | Fasst die Unterhaltung jetzt zusammen, um Platz zu schaffen |
 | `/usage` | Zeigt die seit dem Start verbrauchten Tokens und wie voll der Kontext ist |
 | `/status` | Wo du stehst: Ordner, Anbieter, Modell und seine Limits, Sitzung, Planmodus, Tools (und wie viele davon von MCP kommen), Hooks, Instruktionsdateien, Einstellungen und Token-Verbrauch |
