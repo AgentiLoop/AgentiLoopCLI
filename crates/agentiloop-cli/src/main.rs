@@ -405,6 +405,13 @@ async fn main() -> Result<()> {
                 let _ = ui_tx.send(tui::UiMsg::Idle);
                 continue;
             }
+            // `/history [text]` searches the saved prompts (the TUI writes the file on every prompt).
+            if let Some(q) = agentiloop_core::history::history_query(&line) {
+                let entries = settings::history_path().map(|p| tui::load_history(&p)).unwrap_or_default();
+                let _ = ui_tx.send(tui::UiMsg::Line(agentiloop_core::history::history_listing(&entries, q)));
+                let _ = ui_tx.send(tui::UiMsg::Idle);
+                continue;
+            }
             if line.starts_with('/') {
                 // Collect the command's output into one transcript entry so
                 // multi-line output (the /model list) isn't double-spaced.
@@ -549,6 +556,13 @@ async fn main() -> Result<()> {
         }
         if line.trim() == "/memory" {
             eprintln!("{}", reload_memory(&mut agent, &cwd, cli.append_system_prompt.as_deref()));
+            continue;
+        }
+        // `/history [text]` searches the line editor's prompts (saved to the file only on exit).
+        if let Some(q) = agentiloop_core::history::history_query(line) {
+            let entries: Vec<String> =
+                repl_io.editor.lock().unwrap().as_ref().map(|rl| rl.history().iter().cloned().collect()).unwrap_or_default();
+            eprintln!("{}", agentiloop_core::history::history_listing(&entries, q));
             continue;
         }
         if line.starts_with('/') {
@@ -1077,6 +1091,7 @@ const HELP: &str = "!<command>      run a shell command here; its output joins t
 /todos          show the model's current task checklist\n\
 /undo           revert the file changes from the last prompt\n\
 /rewind [n]     list your prompts, or go back to before prompt #n (its file changes and everything after it are undone)\n\
+/history [text] search your saved prompts (newest 20; all sessions)\n\
 /compact        summarize the conversation to free context\n\
 /sessions       list saved sessions (newest first)\n\
 /resume <id|n>  load a saved session into this REPL\n\

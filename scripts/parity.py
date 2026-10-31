@@ -12,7 +12,8 @@ see differs:
   * sessions round-trip: Go resumes a Rust session and Rust resumes a Go one
   * the line REPL: /rewind lists prompts, restores their files and cuts the session; /copy messages;
     /context sizes before and after a prompt
-    /memory with no instructions file, then after a # note created AGENTS.md
+    /memory with no instructions file, then after a # note created AGENTS.md;
+    /history lists and searches the saved prompts
   * README headings per language
 
 Usage:
@@ -165,6 +166,11 @@ def repl_memory(run, work):
     return norm_repl(p.stderr), (work / "AGENTS.md").read_text()
 
 
+def repl_history(run, work):
+    """/history with the prompts of the earlier runs, then searches after two more; returns the REPL output."""
+    stdin = "/history\nhello\nHello again\n/history HELLO\n/history nope\n/exit\n"
+    p, _ = run("-p", "openai", "-m", "fake-model", "-C", str(work), "--no-tui", "--new", stdin=stdin)
+    return norm_repl(p.stderr)
 def flags(help_text):
     return set(re.findall(r"(?<![\w-])--?[a-zA-Z][\w-]*", help_text.split("Options:", 1)[-1]))
 
@@ -259,6 +265,8 @@ def main():
         r, g = repl_memory(rs, root / "repl"), repl_memory(go, root / "repl")
         check("/memory output", r[0], g[0])
         check("/memory AGENTS.md", r[1], g[1])
+        print("REPL /history")
+        check("/history output", repl_history(rs, root / "repl"), repl_history(go, root / "repl"))
     finally:
         server.shutdown()
         shutil.rmtree(root, ignore_errors=True)

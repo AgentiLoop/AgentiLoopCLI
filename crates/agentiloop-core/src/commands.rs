@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 pub const BUILTIN: &[&str] = &[
     "clear", "usage", "export", "init", "diff", "todos", "undo", "model", "compact", "sessions", "resume", "mcp", "commands",
     "hooks", "help", "setup", "exit", "quit", "status", "cd", "plan", "copy", "rewind", "context",
-    "memory",
+    "memory", "history",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]

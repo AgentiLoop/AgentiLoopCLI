@@ -13,6 +13,7 @@ pub mod mentions;
 pub mod subagent;
 pub mod cd;
 pub mod context;
+pub mod history;
 
 pub use agent::{is_transient, retry_delay, shell_note, shell_passthrough, Agent, AgentConfig, AgentEvent, ModelLimits, Usage, DEFAULT_MAX_RETRIES, PLAN_MODE_PROMPT};
 pub use hooks::Hooks;

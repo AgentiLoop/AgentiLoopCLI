@@ -1055,7 +1055,7 @@ const HISTORY_MAX: usize = 1000;
 
 /// Read rustyline's `#V2` history format (`\\` and `\n` escaped); plain
 /// one-entry-per-line files are accepted too. Missing file → empty.
-fn load_history(path: &Path) -> Vec<String> {
+pub(crate) fn load_history(path: &Path) -> Vec<String> {
     let Ok(text) = std::fs::read_to_string(path) else { return Vec::new() };
     let mut lines = text.lines().peekable();
     let v2 = lines.peek() == Some(&"#V2");
