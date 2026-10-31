@@ -12,6 +12,7 @@ see differs:
   * sessions round-trip: Go resumes a Rust session and Rust resumes a Go one
   * the line REPL: /rewind lists prompts, restores their files and cuts the session; /copy messages;
     /context sizes before and after a prompt
+    /memory with no instructions file, then after a # note created AGENTS.md
   * README headings per language
 
 Usage:
@@ -156,6 +157,14 @@ def repl_context(run, work):
     """/context before and after a prompt (same system prompt, tools and history sizes); returns the REPL output."""
     p, _ = run("-p", "openai", "-m", "fake-model", "-C", str(work), "--no-tui", "--new", stdin="/context\nhello\n/context\n/exit\n")
     return norm_repl(p.stderr)
+def repl_memory(run, work):
+    """/memory before and after a `# note` creates AGENTS.md; returns the REPL output and the file."""
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir()
+    p, _ = run("-p", "openai", "-m", "fake-model", "-C", str(work), "--no-tui", "--new", stdin="/memory\n# use tabs\n/memory\n/exit\n")
+    return norm_repl(p.stderr), (work / "AGENTS.md").read_text()
+
+
 def flags(help_text):
     return set(re.findall(r"(?<![\w-])--?[a-zA-Z][\w-]*", help_text.split("Options:", 1)[-1]))
 
@@ -246,6 +255,10 @@ def main():
         check("/copy output", repl_copy(rs, root / "repl"), repl_copy(go, root / "repl"))
         print("REPL /context")
         check("/context output", repl_context(rs, root / "repl"), repl_context(go, root / "repl"))
+        print("REPL /memory")
+        r, g = repl_memory(rs, root / "repl"), repl_memory(go, root / "repl")
+        check("/memory output", r[0], g[0])
+        check("/memory AGENTS.md", r[1], g[1])
     finally:
         server.shutdown()
         shutil.rmtree(root, ignore_errors=True)

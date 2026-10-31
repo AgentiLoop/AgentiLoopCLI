@@ -115,6 +115,20 @@ pub fn append_to_prompt(base: &str, found: &[Instructions]) -> String {
     out
 }
 
+/// What `/memory` shows after reloading: each instructions file now in the system prompt with its
+/// size (lines, bytes, ~tokens at 4 bytes each, as `/context` estimates), or how to make one.
+pub fn listing(found: &[Instructions]) -> String {
+    if found.is_empty() {
+        return "no AGENTS.md or CLAUDE.md found (in ~/.agentiloop, or from here up to the repo root); /init creates one, # <note> adds a note".into();
+    }
+    let mut out = format!("reloaded {} instructions file(s) into the system prompt:", found.len());
+    for i in found {
+        let bytes = i.text.len();
+        out.push_str(&format!("\n  {}  ({} lines, {bytes} bytes, ~{} tokens)", i.path.display(), i.text.lines().count(), bytes.div_ceil(4)));
+    }
+    out
+}
+
 /// Starter `AGENTS.md` text for the project in `dir`, with build/test commands guessed from the files present.
 pub fn init_template(dir: &Path) -> String {
     let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "this project".into());
@@ -316,6 +330,19 @@ mod tests {
         assert!(init_template(&empty).contains("(add the commands"));
         let _ = std::fs::remove_dir_all(&d);
         let _ = std::fs::remove_dir_all(&empty);
+    }
+
+    #[test]
+    fn listing_shows_each_file_with_its_size_or_how_to_make_one() {
+        assert!(listing(&[]).starts_with("no AGENTS.md or CLAUDE.md found"));
+        let found = [
+            Instructions { path: PathBuf::from("/h/AGENTS.md"), text: "a\nb\n".into() },
+            Instructions { path: PathBuf::from("/p/CLAUDE.md"), text: "x".repeat(9) },
+        ];
+        assert_eq!(
+            listing(&found),
+            "reloaded 2 instructions file(s) into the system prompt:\n  /h/AGENTS.md  (2 lines, 4 bytes, ~1 tokens)\n  /p/CLAUDE.md  (1 lines, 9 bytes, ~3 tokens)"
+        );
     }
 
     #[test]

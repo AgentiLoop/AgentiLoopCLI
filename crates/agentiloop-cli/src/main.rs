@@ -399,6 +399,12 @@ async fn main() -> Result<()> {
                 let _ = ui_tx.send(tui::UiMsg::Idle);
                 continue;
             }
+            // `/memory` reloads the instructions files (the system prompt needs the startup flag).
+            if line.trim() == "/memory" {
+                let _ = ui_tx.send(tui::UiMsg::Line(reload_memory(&mut agent, &cwd, cli.append_system_prompt.as_deref())));
+                let _ = ui_tx.send(tui::UiMsg::Idle);
+                continue;
+            }
             if line.starts_with('/') {
                 // Collect the command's output into one transcript entry so
                 // multi-line output (the /model list) isn't double-spaced.
@@ -539,6 +545,10 @@ async fn main() -> Result<()> {
         }
         if let Some(text) = agentiloop_core::instructions::note_line(line) {
             eprintln!("{}", remember_note(&mut agent, &cwd, text, cli.append_system_prompt.as_deref()));
+            continue;
+        }
+        if line.trim() == "/memory" {
+            eprintln!("{}", reload_memory(&mut agent, &cwd, cli.append_system_prompt.as_deref()));
             continue;
         }
         if line.starts_with('/') {
@@ -692,6 +702,14 @@ fn remember_note(agent: &mut Agent, cwd: &Path, text: &str, extra: Option<&str>)
     }
 }
 
+/// `/memory`: read AGENTS.md / CLAUDE.md again (edited outside, or by the model) into the running
+/// agent's system prompt, and list what is in it now.
+fn reload_memory(agent: &mut Agent, cwd: &Path, extra: Option<&str>) -> String {
+    let (prompt, found) = system_prompt(cwd, extra);
+    agent.set_system_prompt(prompt);
+    agentiloop_core::instructions::listing(&found)
+}
+
 /// Runs a `!cmd` line through the `bash` tool (same shell, timeout and output cap as the
 /// model's commands); a failure is returned as its message.
 async fn run_shell(cwd: &Path, command: &str) -> String {
@@ -828,7 +846,7 @@ async fn slash_command(
             }
         }
         "/init" => match agentiloop_core::instructions::init(&session.cwd) {
-            Ok(path) => say(format!("created {}; edit it, then restart agentiloop to load it", path.display())),
+            Ok(path) => say(format!("created {}; edit it, then /memory to load it", path.display())),
             Err(e) => say(e),
         },
         "/diff" => match git_changes(&session.cwd) {
@@ -1049,6 +1067,7 @@ const HELP: &str = "!<command>      run a shell command here; its output joins t
 /export [file]  save the conversation as Markdown\n\
 /copy [n]       copy the last reply (or the nth from the end) to the clipboard\n\
 /init           create a starter AGENTS.md for this project\n\
+/memory         reload AGENTS.md / CLAUDE.md into the system prompt and list them\n\
 /commands       list your custom commands (.agentiloop/commands/*.md)\n\
 /hooks          list the hooks loaded from .agentiloop/hooks.json\n\
 /status         where you are: folder, provider, model and its limits, session, tools, hooks, settings\n\

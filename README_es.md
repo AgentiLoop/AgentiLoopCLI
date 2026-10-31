@@ -511,6 +511,7 @@ Escríbelos en el prompt, en la TUI o en el chat:
 | `/compact` | Resume la conversación ahora para liberar espacio |
 | `/usage` | Muestra los tokens usados desde el inicio y cuánto contexto está ocupado |
 | `/context` | Estima qué llena el contexto, por partes: prompt de sistema, definiciones de herramientas, tus mensajes, respuestas, llamadas a herramientas y sus resultados (unos 4 bytes por token), frente a la ventana de contexto del modelo |
+| `/memory` | Vuelve a cargar `AGENTS.md` / `CLAUDE.md` en el prompt de sistema (después de que tú o el modelo los hayáis editado) y lista cada archivo con su tamaño |
 | `/status` | Dónde estás: carpeta, proveedor, modelo y sus límites, sesión, modo plan, herramientas (y cuántas vienen de MCP), hooks, archivos de instrucciones, ajustes y consumo de tokens |
 | `/mcp` | Muestra los servidores MCP conectados y sus herramientas |
 | `/help` | Lista estos comandos |

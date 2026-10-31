@@ -418,6 +418,7 @@ Type these at the prompt, in the TUI or the chat:
 | `/compact` | Summarize the conversation now to free up space |
 | `/usage` | Show the tokens used since start and how full the context is |
 | `/context` | Estimate what fills the context, part by part: system prompt, tool definitions, your messages, replies, tool calls and tool results (about 4 bytes per token), against the model's context window |
+| `/memory` | Reload `AGENTS.md` / `CLAUDE.md` into the system prompt (after you or the model edited them) and list each file with its size |
 | `/status` | Where you are: folder, provider, model and its limits, session, plan mode, tools (and how many come from MCP), hooks, instruction files, settings and token usage |
 | `/mcp` | Show connected MCP servers and their tools |
 | `/setup` | Run the setup wizard again (works in the TUI too). A new key or provider takes effect after a restart |

@@ -510,6 +510,7 @@ Tapez-les à l'invite, dans la TUI ou dans le chat :
 | `/compact` | Résume la conversation maintenant pour libérer de la place |
 | `/usage` | Affiche les tokens utilisés depuis le démarrage et le remplissage du contexte |
 | `/context` | Estime ce qui remplit le contexte, partie par partie : prompt système, définitions des outils, vos messages, réponses, appels d'outils et leurs résultats (environ 4 octets par token), par rapport à la fenêtre de contexte du modèle |
+| `/memory` | Recharge `AGENTS.md` / `CLAUDE.md` dans le prompt système (après que vous ou le modèle les avez modifiés) et liste chaque fichier avec sa taille |
 | `/status` | Où vous en êtes : dossier, fournisseur, modèle et ses limites, session, mode plan, outils (et combien viennent de MCP), hooks, fichiers d'instructions, réglages et consommation de tokens |
 | `/mcp` | Affiche les serveurs MCP connectés et leurs outils |
 | `/help` | Liste ces commandes |
