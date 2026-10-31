@@ -797,6 +797,10 @@ async fn slash_command(
                 }
             }
         }
+        "/context" => {
+            let window = agent.limits().and_then(|l| l.context_window);
+            say(agentiloop_core::context::render(&agent.context_breakdown(), window, agent.last_input_tokens()));
+        }
         "/export" => {
             session.history = agent.history.clone();
             if session.history.is_empty() {
@@ -1041,6 +1045,7 @@ const HELP: &str = "!<command>      run a shell command here; its output joins t
 /model [n|id]   show picker, or pick #n / set id directly\n\
 /mcp            list MCP servers and their tools\n\
 /usage          tokens used since start and how full the context is\n\
+/context        estimate what fills the context: system prompt, tools, messages, tool results\n\
 /export [file]  save the conversation as Markdown\n\
 /copy [n]       copy the last reply (or the nth from the end) to the clipboard\n\
 /init           create a starter AGENTS.md for this project\n\

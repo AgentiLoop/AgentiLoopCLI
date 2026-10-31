@@ -510,6 +510,7 @@ agentiloop --yes "run the tests and fix any failures"        # 无人值守，�
 | `/copy [n]` | 将最后一条回复（或倒数第 *n* 条）复制到剪贴板：使用 `pbcopy`、`clip`、`wl-copy`/`xclip`/`xsel`，都没有时用 OSC 52 转义序列让终端复制（SSH 下也可用） |
 | `/compact` | 立即总结对话以释放空间 |
 | `/usage` | 显示启动以来使用的 token 数以及上下文的占用情况 |
+| `/context` | 按部分估算是什么占满了上下文：系统提示词、工具定义、你的消息、回复、工具调用和工具结果（约 4 字节一个 token），并与模型的上下文窗口对比 |
 | `/status` | 当前状态：文件夹、提供方、模型及其限制、会话、计划模式、工具（其中多少来自 MCP）、钩子、指令文件、设置和 token 用量 |
 | `/mcp` | 显示已连接的 MCP 服务器及其工具 |
 | `/help` | 列出这些命令 |

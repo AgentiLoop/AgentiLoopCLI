@@ -238,6 +238,12 @@ impl Agent {
         self.tools.iter().map(|t| t.name()).collect()
     }
 
+    /// What the next request would send, part by part (for `/context`).
+    pub fn context_breakdown(&self) -> crate::context::ContextBreakdown {
+        let system = if self.plan_mode { format!("{}\n\n{PLAN_MODE_PROMPT}", self.config.system_prompt) } else { self.config.system_prompt.clone() };
+        crate::context::breakdown(&system, &self.tool_specs(), &self.history)
+    }
+
     pub fn hooks(&self) -> &Hooks {
         &self.config.hooks
     }

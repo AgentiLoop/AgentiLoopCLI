@@ -417,6 +417,7 @@ Type these at the prompt, in the TUI or the chat:
 | `/copy [n]` | Copy the last reply (or the *n*th from the end) to the clipboard: `pbcopy`, `clip`, `wl-copy`/`xclip`/`xsel`, else an OSC 52 escape so the terminal copies it (also over SSH) |
 | `/compact` | Summarize the conversation now to free up space |
 | `/usage` | Show the tokens used since start and how full the context is |
+| `/context` | Estimate what fills the context, part by part: system prompt, tool definitions, your messages, replies, tool calls and tool results (about 4 bytes per token), against the model's context window |
 | `/status` | Where you are: folder, provider, model and its limits, session, plan mode, tools (and how many come from MCP), hooks, instruction files, settings and token usage |
 | `/mcp` | Show connected MCP servers and their tools |
 | `/setup` | Run the setup wizard again (works in the TUI too). A new key or provider takes effect after a restart |

@@ -510,6 +510,7 @@ Tipp diese an der Eingabeaufforderung ein, in der TUI oder im Chat:
 | `/copy [n]` | Kopiert die letzte Antwort (oder die *n*-te von hinten) in die Zwischenablage: `pbcopy`, `clip`, `wl-copy`/`xclip`/`xsel`, sonst per OSC-52-Sequenz über das Terminal (auch per SSH) |
 | `/compact` | Fasst die Unterhaltung jetzt zusammen, um Platz zu schaffen |
 | `/usage` | Zeigt die seit dem Start verbrauchten Tokens und wie voll der Kontext ist |
+| `/context` | Schätzt, was den Kontext füllt, aufgeteilt in System-Prompt, Tool-Definitionen, deine Nachrichten, Antworten, Tool-Aufrufe und Tool-Ergebnisse (etwa 4 Bytes pro Token), gemessen am Kontextfenster des Modells |
 | `/status` | Wo du stehst: Ordner, Anbieter, Modell und seine Limits, Sitzung, Planmodus, Tools (und wie viele davon von MCP kommen), Hooks, Instruktionsdateien, Einstellungen und Token-Verbrauch |
 | `/mcp` | Zeigt die verbundenen MCP-Server und ihre Tools |
 | `/help` | Listet diese Befehle auf |

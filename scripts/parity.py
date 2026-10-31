@@ -10,7 +10,8 @@ see differs:
   * every request body sent to the provider (system prompt, tools, history)
   * --json and --stream-json output, the saved session file and settings.json
   * sessions round-trip: Go resumes a Rust session and Rust resumes a Go one
-  * the line REPL: /rewind lists prompts, restores their files and cuts the session; /copy messages
+  * the line REPL: /rewind lists prompts, restores their files and cuts the session; /copy messages;
+    /context sizes before and after a prompt
   * README headings per language
 
 Usage:
@@ -151,6 +152,10 @@ def repl_copy(run, work):
     return norm_repl(p.stderr)
 
 
+def repl_context(run, work):
+    """/context before and after a prompt (same system prompt, tools and history sizes); returns the REPL output."""
+    p, _ = run("-p", "openai", "-m", "fake-model", "-C", str(work), "--no-tui", "--new", stdin="/context\nhello\n/context\n/exit\n")
+    return norm_repl(p.stderr)
 def flags(help_text):
     return set(re.findall(r"(?<![\w-])--?[a-zA-Z][\w-]*", help_text.split("Options:", 1)[-1]))
 
@@ -239,6 +244,8 @@ def main():
 
         print("REPL /copy")
         check("/copy output", repl_copy(rs, root / "repl"), repl_copy(go, root / "repl"))
+        print("REPL /context")
+        check("/context output", repl_context(rs, root / "repl"), repl_context(go, root / "repl"))
     finally:
         server.shutdown()
         shutil.rmtree(root, ignore_errors=True)
