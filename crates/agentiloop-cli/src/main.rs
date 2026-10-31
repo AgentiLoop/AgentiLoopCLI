@@ -384,6 +384,26 @@ async fn main() -> Result<()> {
             };
             // A custom command (`.agentiloop/commands/<name>.md`) turns into its prompt.
             let line = agentiloop_core::commands::resolve(&line, &session.cwd, settings::home().as_deref()).unwrap_or(line);
+            // `/retry` undoes the last prompt (files and messages), shows the cut conversation and sends it again.
+            let line = if line == "/retry" {
+                match retry_last(&mut agent, &mut session, sessions_dir.as_deref()) {
+                    Ok((text, lines)) => {
+                        tracker = diff::Tracker::new(cwd.clone());
+                        let _ = ui_tx.send(tui::UiMsg::Clear);
+                        replay_tui(&ui_tx, &agent.history);
+                        let _ = ui_tx.send(tui::UiMsg::Line(lines.join("\n")));
+                        let _ = ui_tx.send(tui::UiMsg::User(text.clone()));
+                        text
+                    }
+                    Err(e) => {
+                        let _ = ui_tx.send(tui::UiMsg::Line(e));
+                        let _ = ui_tx.send(tui::UiMsg::Idle);
+                        continue;
+                    }
+                }
+            } else {
+                line
+            };
             // `!cmd` runs here, not through the model; the output joins the conversation.
             if let Some(cmd) = agentiloop_core::shell_passthrough(&line) {
                 let output = run_shell(&cwd, cmd).await;
@@ -543,6 +563,25 @@ async fn main() -> Result<()> {
         let line = mcp_prompt.as_deref().unwrap_or(line);
         let expanded = agentiloop_core::commands::resolve(line, &session.cwd, settings::home().as_deref());
         let line = expanded.as_deref().unwrap_or(line);
+        // `/retry` undoes the last prompt (files and messages) and sends it again.
+        let retried;
+        let line = if line == "/retry" {
+            match retry_last(&mut agent, &mut session, sessions_dir.as_deref()) {
+                Ok((text, lines)) => {
+                    for l in lines {
+                        eprintln!("{l}");
+                    }
+                    retried = text;
+                    retried.as_str()
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    continue;
+                }
+            }
+        } else {
+            line
+        };
         if let Some(cmd) = agentiloop_core::shell_passthrough(line) {
             let output = run_shell(&cwd, cmd).await;
             eprintln!("{}", shell_line(cmd, &output));
@@ -945,17 +984,9 @@ async fn slash_command(
                 }
             };
             let p = &prompts[n - 1];
-            for l in agentiloop_tools::undo::rewind(agent.epoch(), p.index) {
+            let (lines, dropped) = cut_to_prompt(agent, session, sessions_dir, p);
+            for l in lines {
                 say(l);
-            }
-            let dropped = agent.history.len().saturating_sub(p.index);
-            agent.history.truncate(p.index);
-            // Saved even when nothing is left, so /resume can't bring the dropped messages back.
-            session.history = agent.history.clone();
-            if let Some(dir) = sessions_dir {
-                if let Err(e) = session.save(dir) {
-                    say(format!("warning: could not save session: {e:#}"));
-                }
             }
             say(format!("rewound to before prompt {n} \"{}\": {dropped} message(s) dropped (shell commands are not undone)", prompt_title(&p.text)));
         }
@@ -1090,6 +1121,7 @@ const HELP: &str = "!<command>      run a shell command here; its output joins t
 /diff           show what changed in the git working tree\n\
 /todos          show the model's current task checklist\n\
 /undo           revert the file changes from the last prompt\n\
+/retry          undo the last prompt (its file changes and the reply) and send it again\n\
 /rewind [n]     list your prompts, or go back to before prompt #n (its file changes and everything after it are undone)\n\
 /history [text] search your saved prompts (newest 20; all sessions)\n\
 /compact        summarize the conversation to free context\n\
@@ -1234,6 +1266,39 @@ pub(crate) fn prompt_title(text: &str) -> String {
     if line.chars().count() > 60 { format!("{}…", line.chars().take(59).collect::<String>()) } else { line.to_string() }
 }
 
+/// Cuts the conversation back to before prompt `p` (`/rewind`, `/retry`): the file changes of `p` and
+/// every later prompt are undone and the session is saved — even when nothing is left, so /resume
+/// can't bring the dropped messages back. Returns the lines to show and how many messages were dropped.
+fn cut_to_prompt(agent: &mut Agent, session: &mut Session, sessions_dir: Option<&Path>, p: &agentiloop_tools::undo::Prompt) -> (Vec<String>, usize) {
+    let mut lines = agentiloop_tools::undo::rewind(agent.epoch(), p.index);
+    let dropped = agent.history.len().saturating_sub(p.index);
+    agent.history.truncate(p.index);
+    session.history = agent.history.clone();
+    if let Some(dir) = sessions_dir {
+        if let Err(e) = session.save(dir) {
+            lines.push(format!("warning: could not save session: {e:#}"));
+        }
+    }
+    (lines, dropped)
+}
+
+/// `/retry`: cut the conversation back to before the last prompt, as `/rewind <last>` does, and
+/// return that prompt's text to send again, with the lines to show first.
+fn retry_last(agent: &mut Agent, session: &mut Session, sessions_dir: Option<&Path>) -> Result<(String, Vec<String>), String> {
+    let prompts = agentiloop_tools::undo::prompts(agent.epoch());
+    let Some(p) = prompts.last() else { return Err(NOTHING_TO_RETRY.into()) };
+    let (mut lines, dropped) = cut_to_prompt(agent, session, sessions_dir, p);
+    lines.push(retrying_line(prompts.len(), &p.text, dropped));
+    Ok((p.text.clone(), lines))
+}
+
+const NOTHING_TO_RETRY: &str = "nothing to retry (prompts sent since the session was opened, cleared or compacted can be retried)";
+
+/// What `/retry` shows before it sends prompt `n` again.
+pub(crate) fn retrying_line(n: usize, text: &str, dropped: usize) -> String {
+    format!("retrying prompt {n} \"{}\": {dropped} message(s) dropped (shell commands are not undone)", prompt_title(text))
+}
+
 /// What `/rewind` without a number shows: the prompts it can go back to, oldest first.
 pub(crate) fn rewind_listing(prompts: &[agentiloop_tools::undo::Prompt]) -> String {
     let mut out = vec!["/rewind <n> goes back to before prompt n: its file changes and everything after it are undone".to_string()];
@@ -1261,6 +1326,14 @@ mod rewind_tests {
         assert_eq!(
             rewind_listing(&[p("fix the bug\nin main", 2), p("what is this?", 0), p("add a test", 1)]),
             "/rewind <n> goes back to before prompt n: its file changes and everything after it are undone\n  1. fix the bug  (2 files changed)\n  2. what is this?\n  3. add a test  (1 file changed)"
+        );
+    }
+
+    #[test]
+    fn retrying_line_names_the_prompt_and_what_was_dropped() {
+        assert_eq!(
+            super::retrying_line(3, "add a test\nfor main", 4),
+            "retrying prompt 3 \"add a test\": 4 message(s) dropped (shell commands are not undone)"
         );
     }
 }

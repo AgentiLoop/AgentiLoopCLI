@@ -13,7 +13,7 @@ see differs:
   * the line REPL: /rewind lists prompts, restores their files and cuts the session; /copy messages;
     /context sizes before and after a prompt
     /memory with no instructions file, then after a # note created AGENTS.md;
-    /history lists and searches the saved prompts
+    /history lists and searches the saved prompts; /retry undoes the last prompt and sends it again
   * README headings per language
 
 Usage:
@@ -171,6 +171,15 @@ def repl_history(run, work):
     stdin = "/history\nhello\nHello again\n/history HELLO\n/history nope\n/exit\n"
     p, _ = run("-p", "openai", "-m", "fake-model", "-C", str(work), "--no-tui", "--new", stdin=stdin)
     return norm_repl(p.stderr)
+def repl_retry(run, work):
+    """/retry with nothing to retry, then after a prompt that writes notes.txt; returns what to compare."""
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir()
+    p, reqs = run("-p", "openai", "-m", "fake-model", "-C", str(work), "--no-tui", "--new", stdin="/retry\nwrite once\n/retry\n/rewind\n/exit\n")
+    notes = work / "notes.txt"
+    return norm_repl(p.stderr), reqs, notes.read_text() if notes.exists() else None, norm_session(run.sessions()[-1])
+
+
 def flags(help_text):
     return set(re.findall(r"(?<![\w-])--?[a-zA-Z][\w-]*", help_text.split("Options:", 1)[-1]))
 
@@ -267,6 +276,12 @@ def main():
         check("/memory AGENTS.md", r[1], g[1])
         print("REPL /history")
         check("/history output", repl_history(rs, root / "repl"), repl_history(go, root / "repl"))
+        print("REPL /retry")
+        r, g = repl_retry(rs, root / "repl"), repl_retry(go, root / "repl")
+        check("/retry output", r[0], g[0])
+        check("/retry requests to the provider", r[1], g[1])
+        check("/retry rewrites notes.txt", (r[2], g[2]), ("write once", "write once"))
+        check("/retry saved session", r[3], g[3])
     finally:
         server.shutdown()
         shutil.rmtree(root, ignore_errors=True)

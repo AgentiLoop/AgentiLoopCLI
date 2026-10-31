@@ -512,6 +512,7 @@ Tapez-les à l'invite, dans la TUI ou dans le chat :
 | `/context` | Estime ce qui remplit le contexte, partie par partie : prompt système, définitions des outils, vos messages, réponses, appels d'outils et leurs résultats (environ 4 octets par token), par rapport à la fenêtre de contexte du modèle |
 | `/memory` | Recharge `AGENTS.md` / `CLAUDE.md` dans le prompt système (après que vous ou le modèle les avez modifiés) et liste chaque fichier avec sa taille |
 | `/history [texte]` | Cherche dans vos prompts enregistrés de toutes les sessions (sans tenir compte de la casse) et liste les 20 résultats les plus récents ; sans texte, les 20 derniers prompts |
+| `/retry` | Annule votre dernier message (ses modifications de fichiers et la réponse, comme `/rewind`) et le renvoie — pour une réponse en échec, annulée ou non voulue |
 | `/status` | Où vous en êtes : dossier, fournisseur, modèle et ses limites, session, mode plan, outils (et combien viennent de MCP), hooks, fichiers d'instructions, réglages et consommation de tokens |
 | `/mcp` | Affiche les serveurs MCP connectés et leurs outils |
 | `/help` | Liste ces commandes |

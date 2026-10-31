@@ -513,6 +513,7 @@ Tipp diese an der Eingabeaufforderung ein, in der TUI oder im Chat:
 | `/context` | Schätzt, was den Kontext füllt, aufgeteilt in System-Prompt, Tool-Definitionen, deine Nachrichten, Antworten, Tool-Aufrufe und Tool-Ergebnisse (etwa 4 Bytes pro Token), gemessen am Kontextfenster des Modells |
 | `/memory` | Lädt `AGENTS.md` / `CLAUDE.md` neu in den System-Prompt (nachdem du oder das Modell sie bearbeitet habt) und listet jede Datei mit ihrer Größe auf |
 | `/history [text]` | Durchsucht deine gespeicherten Prompts aus allen Sitzungen (ohne Groß-/Kleinschreibung) und listet die neuesten 20 Treffer; ohne Text die letzten 20 Prompts |
+| `/retry` | Macht deinen letzten Prompt rückgängig (Dateiänderungen und Antwort, wie `/rewind`) und schickt ihn erneut – bei einer fehlgeschlagenen, abgebrochenen oder unpassenden Antwort |
 | `/status` | Wo du stehst: Ordner, Anbieter, Modell und seine Limits, Sitzung, Planmodus, Tools (und wie viele davon von MCP kommen), Hooks, Instruktionsdateien, Einstellungen und Token-Verbrauch |
 | `/mcp` | Zeigt die verbundenen MCP-Server und ihre Tools |
 | `/help` | Listet diese Befehle auf |
