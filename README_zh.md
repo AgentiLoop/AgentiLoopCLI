@@ -1,4 +1,4 @@
-<a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_zh.svg" width="900" alt="Sidrune AI，银牌赞助商： 一个 API 即可使用 GPT、Claude 及其他领先 AI 模型。 注册即得 $3 API 额度。" /></a>
+<!-- <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_zh.svg" width="900" alt="Sidrune AI，银牌赞助商： 一个 API 即可使用 GPT、Claude 及其他领先 AI 模型。 注册即得 $3 API 额度。" /></a> -->
 
 # AgentiLoopCLI
 
@@ -685,7 +685,7 @@ cargo run -p agentiloop-mcp --example mcp-example-server -- --http 8791   # 或 
 
 ---
 
-<a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_zh.svg" width="900" alt="Sidrune AI，银牌赞助商： 一个 API 即可使用 GPT、Claude 及其他领先 AI 模型。 注册即得 $3 API 额度。" /></a>
+<!-- <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_zh.svg" width="900" alt="Sidrune AI，银牌赞助商： 一个 API 即可使用 GPT、Claude 及其他领先 AI 模型。 注册即得 $3 API 额度。" /></a> -->
 
 ---
 

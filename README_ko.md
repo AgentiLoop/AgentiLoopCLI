@@ -1,4 +1,4 @@
-<a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_ko.svg" width="900" alt="Sidrune AI, 실버 스폰서: GPT, Claude 및 기타 주요 AI 모델을 하나의 API로. 가입하고 $3 API 크레딧 받기." /></a>
+<!-- <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_ko.svg" width="900" alt="Sidrune AI, 실버 스폰서: GPT, Claude 및 기타 주요 AI 모델을 하나의 API로. 가입하고 $3 API 크레딧 받기." /></a> -->
 
 # AgentiLoopCLI
 
@@ -684,7 +684,7 @@ cargo run -p agentiloop-mcp --example mcp-example-server -- --http 8791   # 또�
 
 ---
 
-<a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_ko.svg" width="900" alt="Sidrune AI, 실버 스폰서: GPT, Claude 및 기타 주요 AI 모델을 하나의 API로. 가입하고 $3 API 크레딧 받기." /></a>
+<!-- <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_ko.svg" width="900" alt="Sidrune AI, 실버 스폰서: GPT, Claude 및 기타 주요 AI 모델을 하나의 API로. 가입하고 $3 API 크레딧 받기." /></a> -->
 
 ---
 

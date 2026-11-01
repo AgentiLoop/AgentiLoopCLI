@@ -1,4 +1,4 @@
-<a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_ru.svg" width="900" alt="Sidrune AI, серебряный спонсор: Один API для GPT, Claude и других ведущих моделей ИИ. Зарегистрируйтесь и получите $3 в API-кредитах." /></a>
+<!-- <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_ru.svg" width="900" alt="Sidrune AI, серебряный спонсор: Один API для GPT, Claude и других ведущих моделей ИИ. Зарегистрируйтесь и получите $3 в API-кредитах." /></a> -->
 
 # AgentiLoopCLI
 
@@ -684,7 +684,7 @@ cargo run -p agentiloop-mcp --example mcp-example-server -- --http 8791   # ил
 
 ---
 
-<a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_ru.svg" width="900" alt="Sidrune AI, серебряный спонсор: Один API для GPT, Claude и других ведущих моделей ИИ. Зарегистрируйтесь и получите $3 в API-кредитах." /></a>
+<!-- <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-agentiloop-agent&promo=SDRAGENTLOOP"><img src="docs/sponsors/sidrune-ai-silver-ad_ru.svg" width="900" alt="Sidrune AI, серебряный спонсор: Один API для GPT, Claude и других ведущих моделей ИИ. Зарегистрируйтесь и получите $3 в API-кредитах." /></a> -->
 
 ---
 
