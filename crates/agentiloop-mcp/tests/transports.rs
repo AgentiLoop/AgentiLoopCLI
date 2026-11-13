@@ -13,9 +13,11 @@ use tokio::process::{Child, Command};
 
 /// `examples/mcp-example-server.rs`, which `cargo test` builds into target/<profile>/examples/.
 fn example() -> String {
-    let exe = std::env::current_exe().unwrap(); // target/<profile>/deps/transports-<hash>
-    let p = exe.parent().unwrap().parent().unwrap().join("examples").join(format!("mcp-example-server{}", std::env::consts::EXE_SUFFIX));
-    assert!(p.is_file(), "{} missing; run `cargo build -p agentiloop-mcp --example mcp-example-server`", p.display());
+    // The test binary sits below target/<profile>/: in deps/ up to Cargo 1.99, in build/<crate>/<hash>/out/ since 1.100.
+    let exe = std::env::current_exe().unwrap();
+    let name = format!("mcp-example-server{}", std::env::consts::EXE_SUFFIX);
+    let found = exe.ancestors().map(|dir| dir.join("examples").join(&name)).find(|p| p.is_file());
+    let p = found.unwrap_or_else(|| panic!("examples/{name} not found above {}; run `cargo build -p agentiloop-mcp --example mcp-example-server`", exe.display()));
     p.display().to_string()
 }
 
