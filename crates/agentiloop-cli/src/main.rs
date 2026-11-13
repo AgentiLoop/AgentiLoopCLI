@@ -489,6 +489,9 @@ async fn main() -> Result<()> {
                 match res {
                     Some(Ok(())) => {}
                     Some(Err(e)) => {
+                        if new_session_if_refused(&e, &mut agent, &mut session, &*provider) {
+                            let _ = ui_tx.send(tui::UiMsg::Status(status(&agent, &session)));
+                        }
                         let _ = ui_tx.send(tui::UiMsg::Error(format!("{e:#}")));
                     }
                     None => {
@@ -633,7 +636,10 @@ async fn main() -> Result<()> {
         };
         match res {
             Some(Ok(())) => {}
-            Some(Err(e)) => eprintln!("error: {e:#}"),
+            Some(Err(e)) => {
+                new_session_if_refused(&e, &mut agent, &mut session, &*provider);
+                eprintln!("error: {e:#}");
+            }
             None => {
                 agent.interrupt();
                 eprintln!("\ncancelled; session kept");
@@ -717,6 +723,17 @@ fn persist(session: &mut Session, agent: &Agent, dir: Option<&Path>) {
     }
 }
 
+/// After a run the provider refused, the agent has dropped the conversation: carry on in a new
+/// session, as `/clear` does, so the saved one is not overwritten. True when that happened.
+fn new_session_if_refused(err: &anyhow::Error, agent: &mut Agent, session: &mut Session, provider: &dyn Provider) -> bool {
+    let refused = err.is::<agentiloop_core::Refused>();
+    if refused {
+        *session = Session::new(session.cwd.clone(), provider.name(), agent.model());
+        agent.set_cache_key(session.id.clone());
+    }
+    refused
+}
+
 /// The system prompt for `cwd`: the default, the AGENTS.md / CLAUDE.md instructions found
 /// (returned too, for the startup notes), then any `--append-system-prompt` text.
 fn system_prompt(cwd: &Path, extra: Option<&str>) -> (String, Vec<agentiloop_core::instructions::Instructions>) {
@@ -782,6 +799,7 @@ pub(crate) fn shell_line(command: &str, output: &str) -> String {
 
 /// Fallback catalog used when `/v1/models` can't be reached (newest first).
 const FALLBACK_MODELS: &[(&str, &str)] = &[
+    ("claude-fable-5-2", "Claude Fable 5.2"),
     ("claude-fable-5-1", "Claude Fable 5.1"),
     ("claude-opus-5", "Claude Opus 5"),
     ("claude-sonnet-5", "Claude Sonnet 5"),
@@ -1671,6 +1689,7 @@ mod json_tests {
         );
         assert_eq!(event_json(&AgentEvent::Compacted { before_tokens: 100, messages_dropped: 4 }), r#"{"before_tokens":100,"messages_dropped":4,"type":"compacted"}"#);
         assert_eq!(event_json(&AgentEvent::Done { stop_reason: StopReason::EndTurn }), r#"{"stop_reason":"end_turn","type":"done"}"#);
+        assert_eq!(event_json(&AgentEvent::Done { stop_reason: StopReason::Refusal }), r#"{"stop_reason":"refusal","type":"done"}"#);
         assert_eq!(
             event_json(&AgentEvent::Retry { attempt: 1, max_retries: 3, delay_ms: 1000, error: "Anthropic 529".into() }),
             r#"{"attempt":1,"delay_ms":1000,"error":"Anthropic 529","max_retries":3,"type":"retry"}"#

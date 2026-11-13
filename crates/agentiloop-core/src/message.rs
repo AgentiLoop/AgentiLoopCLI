@@ -120,5 +120,7 @@ pub enum StopReason {
     ToolUse,
     MaxTokens,
     StopSequence,
+    /// The provider refused the turn (Anthropic `stop_reason: "refusal"`).
+    Refusal,
     Other,
 }

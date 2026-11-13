@@ -8,9 +8,12 @@ use serde_json::Value;
 const DEFAULT_BASE_URL: &str = "https://api.anthropic.com";
 const API_VERSION: &str = "2023-06-01";
 const OAUTH_PREFIX: &str = "sk-ant-oat01-";
-const OAUTH_BETA: &str = "oauth-2025-04-20,prompt-caching-2024-07-31";
-/// OAuth tokens (from `claude setup-token`) are gated at the API to requests
-/// whose first system block is exactly this string.
+/// The Claude Code client profile sent with an OAuth token (from `claude setup-token`), the
+/// same one Agent! sends: beta flags, client headers and two leading system blocks. A client
+/// version older than the model asks for is turned away (`claude_code_version_too_old`).
+const OAUTH_BETA: &str = "claude-code-20250219,oauth-2025-04-20,prompt-caching-2024-07-31,extended-cache-ttl-2025-04-11";
+const CLAUDE_CODE_USER_AGENT: &str = "claude-cli/2.1.999 (external, cli)";
+const CLAUDE_CODE_BILLING: &str = "x-anthropic-billing-header: cc_version=2.1.999.391; cc_entrypoint=sdk-cli;";
 const CLAUDE_CODE_IDENTITY: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
 
 pub struct AnthropicProvider {
@@ -187,6 +190,7 @@ fn parse_stop_reason(raw: Option<&str>) -> StopReason {
         Some("tool_use") => StopReason::ToolUse,
         Some("max_tokens") => StopReason::MaxTokens,
         Some("stop_sequence") => StopReason::StopSequence,
+        Some("refusal") => StopReason::Refusal,
         _ => StopReason::Other,
     }
 }
@@ -214,8 +218,9 @@ impl AnthropicProvider {
     }
 
     async fn send_messages(&self, req: &ProviderRequest, stream: bool) -> anyhow::Result<reqwest::Response> {
-        let mut system = Vec::with_capacity(2);
+        let mut system = Vec::with_capacity(3);
         if self.is_oauth() {
+            system.push(WireSystem { kind: "text", text: CLAUDE_CODE_BILLING, cache_control: None });
             system.push(WireSystem { kind: "text", text: CLAUDE_CODE_IDENTITY, cache_control: None });
         }
         system.push(WireSystem { kind: "text", text: &req.system, cache_control: Some(cache_control()) });
@@ -239,6 +244,10 @@ impl AnthropicProvider {
             .header("anthropic-version", API_VERSION);
         http = if self.is_oauth() {
             http.header("authorization", format!("Bearer {}", self.credential))
+                .header("user-agent", CLAUDE_CODE_USER_AGENT)
+                .header("x-app", "cli")
+                .header("accept", "application/json")
+                .header("anthropic-dangerous-direct-browser-access", "true")
                 .header("anthropic-beta", OAUTH_BETA)
         } else {
             http.header("x-api-key", &self.credential)
@@ -510,6 +519,91 @@ data: {\"type\":\"message_stop\"}
         assert_eq!(tools[0].0, "toolu_1");
         assert_eq!(tools[0].1, "read_file");
         assert_eq!(tools[0].2, &serde_json::json!({"path": "a.rs"}));
+    }
+
+    /// Serve one canned JSON reply to `POST /v1/messages` and hand back the request
+    /// (head lower-cased, then the body) once it has been read in full.
+    async fn serve_capture(reply: &'static str) -> (String, tokio::sync::oneshot::Receiver<(String, Value)>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut req = Vec::new();
+            let (head, body) = loop {
+                let mut chunk = vec![0u8; 8192];
+                let n = sock.read(&mut chunk).await.unwrap();
+                req.extend_from_slice(&chunk[..n]);
+                let Some(end) = req.windows(4).position(|w| w == b"\r\n\r\n") else { continue };
+                let head = String::from_utf8_lossy(&req[..end]).to_lowercase();
+                let len: usize = head.lines().find_map(|l| l.strip_prefix("content-length:")).map_or(0, |v| v.trim().parse().unwrap());
+                if req.len() >= end + 4 + len {
+                    break (head, serde_json::from_slice(&req[end + 4..end + 4 + len]).unwrap());
+                }
+            };
+            let resp = format!("HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{reply}", reply.len());
+            sock.write_all(resp.as_bytes()).await.unwrap();
+            sock.shutdown().await.unwrap();
+            let _ = tx.send((head, body));
+        });
+        (format!("http://{addr}"), rx)
+    }
+
+    fn request() -> ProviderRequest {
+        ProviderRequest { model: "m".into(), system: "s".into(), messages: vec![Message::user_text("hi")], tools: vec![], max_tokens: 16, cache_key: None }
+    }
+
+    #[tokio::test]
+    async fn an_oauth_token_sends_the_claude_code_profile() {
+        let (base_url, sent) = serve_capture(r#"{"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}"#).await;
+        let provider = AnthropicProvider { client: reqwest::Client::new(), credential: sanitize(" sk-ant-oat01-abc\n"), base_url };
+        let resp = provider.complete(request()).await.unwrap();
+        assert_eq!(resp.message.text(), "ok");
+
+        let (head, body) = sent.await.unwrap();
+        let header = |name: &str| head.lines().find_map(|l| l.strip_prefix(&format!("{name}: "))).unwrap_or_default().to_string();
+        assert_eq!(header("authorization"), "bearer sk-ant-oat01-abc");
+        assert_eq!(header("user-agent"), "claude-cli/2.1.999 (external, cli)");
+        assert_eq!(header("x-app"), "cli");
+        assert_eq!(header("accept"), "application/json");
+        assert_eq!(header("anthropic-dangerous-direct-browser-access"), "true");
+        assert_eq!(header("anthropic-beta"), "claude-code-20250219,oauth-2025-04-20,prompt-caching-2024-07-31,extended-cache-ttl-2025-04-11");
+        assert_eq!(header("x-api-key"), "");
+        assert_eq!(
+            body["system"],
+            serde_json::json!([
+                {"type": "text", "text": "x-anthropic-billing-header: cc_version=2.1.999.391; cc_entrypoint=sdk-cli;"},
+                {"type": "text", "text": "You are Claude Code, Anthropic's official CLI for Claude."},
+                {"type": "text", "text": "s", "cache_control": {"type": "ephemeral"}},
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn an_api_key_sends_no_claude_code_profile_and_a_refusal_is_reported() {
+        let (base_url, sent) = serve_capture(r#"{"content":[],"stop_reason":"refusal","usage":{"input_tokens":1,"output_tokens":0}}"#).await;
+        let provider = AnthropicProvider { client: reqwest::Client::new(), credential: "sk-ant-api-test".into(), base_url };
+        let resp = provider.complete(request()).await.unwrap();
+        assert_eq!(resp.stop_reason, StopReason::Refusal);
+        assert!(resp.message.content.is_empty());
+
+        let (head, body) = sent.await.unwrap();
+        assert!(head.contains("x-api-key: sk-ant-api-test"), "{head}");
+        for name in ["authorization:", "anthropic-beta:", "x-app:", "claude-cli", "anthropic-dangerous-direct-browser-access:"] {
+            assert!(!head.contains(name), "{name} in {head}");
+        }
+        assert_eq!(body["system"], serde_json::json!([{"type": "text", "text": "s", "cache_control": {"type": "ephemeral"}}]));
+    }
+
+    #[test]
+    fn stop_reasons_map_to_the_core_enum() {
+        assert_eq!(parse_stop_reason(Some("end_turn")), StopReason::EndTurn);
+        assert_eq!(parse_stop_reason(Some("tool_use")), StopReason::ToolUse);
+        assert_eq!(parse_stop_reason(Some("max_tokens")), StopReason::MaxTokens);
+        assert_eq!(parse_stop_reason(Some("stop_sequence")), StopReason::StopSequence);
+        assert_eq!(parse_stop_reason(Some("refusal")), StopReason::Refusal);
+        assert_eq!(parse_stop_reason(Some("pause_turn")), StopReason::Other);
+        assert_eq!(parse_stop_reason(None), StopReason::Other);
     }
 
     /// Serve `GET /v1/models/{id}` twice: a known model with limits, then a 404.

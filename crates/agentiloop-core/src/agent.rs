@@ -127,6 +127,23 @@ Do not try to work around that. Instead, work out what needs to be done and repl
 which files you would change and how, which commands you would run, and what could go wrong. \
 Finish by telling the user to turn plan mode off (/plan) when they want you to carry it out.";
 
+/// Shown when the provider refuses a turn (see `Refused`).
+pub const REFUSAL_MESSAGE: &str = "The model refused this request. The conversation was reset — rephrase or start a new task.";
+
+/// The error `Agent::run` ends with when the provider refuses a turn. The conversation
+/// is already dropped by then: a refused turn left in the history would be sent again
+/// with every later prompt and refused again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Refused;
+
+impl std::fmt::Display for Refused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(REFUSAL_MESSAGE)
+    }
+}
+
+impl std::error::Error for Refused {}
+
 /// Tool output longer than this is trimmed in the compaction transcript.
 const TRANSCRIPT_RESULT_LIMIT: usize = 2_000;
 
@@ -465,6 +482,15 @@ impl Agent {
                 elapsed_ms: elapsed.as_millis() as u64,
                 first_token_ms: first_token.map(|d| d.as_millis() as u64),
             });
+
+            // A refusal carries no usable content and asking again only earns another one:
+            // end the run and drop the conversation instead of keeping the refused turn.
+            if resp.stop_reason == StopReason::Refusal {
+                self.clear();
+                on_event(AgentEvent::Done { stop_reason: StopReason::Refusal });
+                self.config.hooks.run_stop(&self.ctx.cwd, "refusal").await;
+                return Err(Refused.into());
+            }
 
             let text = resp.message.text();
             if !text.is_empty() {

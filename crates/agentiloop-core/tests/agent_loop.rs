@@ -790,3 +790,30 @@ fn plan_mode_refuses_mutating_tools_and_task_and_adds_the_plan_prompt() {
     assert!(events.iter().any(|e| matches!(e, AgentEvent::ToolResult { output, is_error: false, .. } if output == "echo:y")));
     assert!(!p.requests.lock().unwrap().last().unwrap().system.contains(agentiloop_core::PLAN_MODE_PROMPT));
 }
+
+#[test]
+fn a_refusal_ends_the_run_and_drops_the_conversation() {
+    let refused = ProviderResponse { stop_reason: StopReason::Refusal, ..text("I can't") };
+    let p = ScriptedProvider::new(vec![text("hello"), tool_call("t1", "echo", json!({"msg": "x"})), refused, text("fresh")]);
+    let mut a = agent(p.clone(), Arc::new(agentiloop_core::permission::AllowAll), 5);
+    collect(&mut a, "hi").0.unwrap();
+    let epoch = a.epoch();
+
+    // Refused in the middle of a task, after a tool call already ran.
+    let (res, events) = collect(&mut a, "do it");
+    let err = res.unwrap_err();
+    assert!(err.is::<agentiloop_core::Refused>(), "{err:#}");
+    assert_eq!(err.to_string(), agentiloop_core::REFUSAL_MESSAGE);
+    assert!(a.history.is_empty(), "the refused conversation must not be sent again");
+    assert_ne!(a.epoch(), epoch);
+    assert!(matches!(events.last(), Some(AgentEvent::Done { stop_reason: StopReason::Refusal })));
+    assert!(!events.iter().any(|e| matches!(e, AgentEvent::AssistantText(_))), "a refusal is not a reply");
+
+    // The next prompt starts from nothing.
+    collect(&mut a, "again").0.unwrap();
+    let reqs = p.requests.lock().unwrap();
+    assert_eq!(reqs.len(), 4);
+    assert_eq!(reqs[3].messages.len(), 1);
+    assert_eq!(reqs[3].messages[0].text(), "again");
+    assert_eq!(a.history.len(), 2);
+}
